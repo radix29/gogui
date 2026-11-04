@@ -1,0 +1,233 @@
+{
+  "name": "Sequoia",
+  "comment": "macOS 14/15 (Sonoma/Sequoia) look, PLAN.md §5.2.",
+  "colors": {
+    "ColorLabel": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "contrastLight": [0, 0, 0], "contrastDark": [255, 255, 255], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorSecondaryLabel": {"light": [0, 0, 0, 128], "dark": [255, 255, 255, 140], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorTertiaryLabel": {"light": [0, 0, 0, 66], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorQuaternaryLabel": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 77], "contrastDark": [255, 255, 255, 77], "source": "memory", "note": "from provisional.go (S2.2c)"},
+
+    "ColorText": {"light": [0, 0, 0], "dark": [255, 255, 255], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorPlaceholderText": {"light": [0, 0, 0, 63], "dark": [255, 255, 255, 63], "contrastLight": [0, 0, 0, 128], "contrastDark": [255, 255, 255, 128], "source": "memory"},
+    "ColorSelectedText": {"light": [0, 0, 0], "dark": [255, 255, 255], "source": "memory"},
+    "ColorTextBackground": {"light": [255, 255, 255], "dark": [30, 30, 30], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorSelectedTextBackground": {"light": [179, 215, 255], "dark": [63, 99, 139], "source": "memory", "note": "reference only: the accent rules compute it (Theme.Selection)"},
+    "ColorUnemphasizedSelectedTextBackground": {"light": [220, 220, 220], "dark": [70, 70, 70], "source": "memory"},
+
+    "ColorWindowBackground": {"light": [236, 236, 236], "dark": [50, 50, 50], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorUnderPageBackground": {"light": [150, 150, 150, 230], "dark": [40, 40, 40], "source": "memory"},
+    "ColorControlBackground": {"light": [255, 255, 255], "dark": [30, 30, 30], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorSelectedContentBackground": {"light": [0, 99, 225], "dark": [0, 88, 208], "source": "memory", "note": "the aqua driver resolves it to Appearance.Accent"},
+    "ColorUnemphasizedSelectedContentBackground": {"light": [220, 220, 220], "dark": [70, 70, 70], "source": "memory"},
+    "ColorSeparator": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorGrid": {"light": [230, 230, 230], "dark": [26, 26, 26], "contrastLight": [150, 150, 150], "contrastDark": [110, 110, 110], "source": "memory"},
+    "ColorLink": {"light": [0, 104, 218], "dark": [65, 156, 255], "contrastLight": [0, 70, 165], "contrastDark": [120, 185, 255], "source": "memory"},
+    "ColorFindHighlight": {"light": [255, 255, 0], "dark": [255, 255, 0], "source": "memory"},
+
+    "ColorControl": {"light": [255, 255, 255], "dark": [255, 255, 255, 64], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorControlText": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "contrastLight": [0, 0, 0], "contrastDark": [255, 255, 255], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorDisabledControlText": {"light": [0, 0, 0, 64], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 128], "contrastDark": [255, 255, 255, 128], "source": "memory", "note": "from provisional.go (S2.2c)"},
+    "ColorSelectedControl": {"light": [179, 215, 255], "dark": [63, 99, 139], "source": "memory", "note": "reference only: the accent rules compute it (Theme.Selection)"},
+    "ColorSelectedControlText": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "source": "memory"},
+    "ColorControlAccent": {"light": [0, 122, 255], "dark": [10, 132, 255], "source": "memory", "note": "the aqua driver resolves it to Appearance.Accent"},
+    "ColorKeyboardFocusIndicator": {"light": [0, 122, 255, 128], "dark": [10, 132, 255, 128], "source": "memory", "note": "reference only: the accent rules compute it (Theme.FocusRing)"},
+
+    "ColorSystemRed": {"light": [255, 59, 48], "dark": [255, 69, 58], "source": "memory"},
+    "ColorSystemOrange": {"light": [255, 149, 0], "dark": [255, 159, 10], "source": "memory"},
+    "ColorSystemYellow": {"light": [255, 204, 0], "dark": [255, 214, 10], "source": "memory"},
+    "ColorSystemGreen": {"light": [40, 205, 65], "dark": [50, 215, 75], "source": "memory"},
+    "ColorSystemMint": {"light": [0, 199, 190], "dark": [102, 212, 207], "source": "memory"},
+    "ColorSystemTeal": {"light": [89, 173, 196], "dark": [106, 196, 220], "source": "memory"},
+    "ColorSystemCyan": {"light": [85, 190, 240], "dark": [90, 200, 245], "source": "memory"},
+    "ColorSystemBlue": {"light": [0, 122, 255], "dark": [10, 132, 255], "source": "memory", "note": "the aqua driver resolves it to Appearance.Accent"},
+    "ColorSystemIndigo": {"light": [88, 86, 214], "dark": [94, 92, 230], "source": "memory"},
+    "ColorSystemPurple": {"light": [175, 82, 222], "dark": [191, 90, 242], "source": "memory"},
+    "ColorSystemPink": {"light": [255, 45, 85], "dark": [255, 55, 95], "source": "memory"},
+    "ColorSystemBrown": {"light": [162, 132, 94], "dark": [172, 142, 104], "source": "memory"},
+    "ColorSystemGray": {"light": [142, 142, 147], "dark": [152, 152, 157], "source": "memory"}
+  },
+  "chrome": {
+    "colors": {
+      "TitleBar": {"light": [229, 229, 229], "dark": [56, 56, 56], "source": "memory", "note": "key window; from provisional.go (S2.2c)"},
+      "TitleBarInactive": {"light": [243, 243, 243], "dark": [43, 43, 43], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "TitleBarSeparator": {"light": [0, 0, 0, 26], "dark": [0, 0, 0], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "light: ColorSeparator; dark: a black hairline (chrome.go, S2.2c)"},
+
+      "CloseFill": {"light": [255, 95, 87], "dark": [255, 95, 87], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "CloseBorder": {"light": [224, 68, 62], "dark": [224, 68, 62], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "CloseGlyph": {"light": [77, 0, 0], "dark": [77, 0, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "MinimizeFill": {"light": [254, 188, 46], "dark": [254, 188, 46], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "MinimizeBorder": {"light": [222, 161, 35], "dark": [222, 161, 35], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "MinimizeGlyph": {"light": [153, 87, 0], "dark": [153, 87, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "ZoomFill": {"light": [40, 200, 64], "dark": [40, 200, 64], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "ZoomBorder": {"light": [26, 171, 41], "dark": [26, 171, 41], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "ZoomGlyph": {"light": [0, 101, 0], "dark": [0, 101, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
+
+      "LightInactiveFill": {"light": [220, 220, 220], "dark": [84, 84, 84], "source": "memory", "note": "inactive window or disabled light; from provisional.go (S2.2c)"},
+      "LightInactiveBorder": {"light": [201, 201, 201], "dark": [74, 74, 74], "contrastLight": [128, 128, 128], "contrastDark": [140, 140, 140], "source": "memory", "note": "from provisional.go (S2.2c)"}
+    },
+    "numbers": {
+      "LightPressedShade": {"value": 0.82, "source": "memory", "note": "channel factor of a pressed light; from chrome.go (S2.2c)"},
+      "LightDisabledAlpha": {"value": 0.5, "source": "memory", "note": "alpha of a disabled light; from chrome.go (S2.2c)"},
+      "TitleBarHeight": {"value": 28, "source": "memory", "note": "from window.go (S2.2c)"},
+      "LightSize": {"value": 12, "source": "memory", "note": "diameter of a traffic light; from chrome.go (S2.2c)"},
+      "LightStep": {"value": 20, "source": "memory", "note": "centre to centre; from chrome.go (S2.2c)"},
+      "LightInset": {"value": 8, "source": "memory", "note": "x of the close light; from chrome.go (S2.2c)"},
+      "TitleGap": {"value": 8, "source": "memory", "note": "least space between the lights and the title; from chrome.go (S2.2c)"},
+      "LightBorderWidth": {"value": 0.5, "source": "memory", "note": "from chrome.go (S2.2c)"},
+      "LightGlyphStroke": {"value": 1.2, "source": "memory", "note": "from chrome.go (S2.2c)"}
+    }
+  },
+  "metrics": {
+    "sizes": {
+      "ControlHeight": {"regular": 20, "small": 17, "mini": 14, "large": 26, "source": "memory", "note": "visible bezel of a push button; the frame adds the shadow"},
+      "ControlPaddingX": {"regular": 12, "small": 10, "mini": 8, "large": 14, "source": "memory"},
+      "ControlCornerRadius": {"regular": 5, "small": 4, "mini": 3, "large": 6, "source": "memory"},
+      "BezelShadowOffsetY": {"regular": 0.5, "small": 0.5, "mini": 0.5, "large": 0.5, "source": "memory"},
+      "BezelShadowBlur": {"regular": 1, "small": 1, "mini": 1, "large": 1, "source": "memory"},
+      "BezelShadowSpread": {"regular": 0, "small": 0, "mini": 0, "large": 0, "source": "memory"}
+    },
+    "colors": {
+      "BezelShadow": {"light": [0, 0, 0, 51], "dark": [0, 0, 0, 77], "contrastLight": [0, 0, 0, 128], "contrastDark": [0, 0, 0, 153], "source": "memory"}
+    },
+    "numbers": {
+      "FocusRingWidth": {"value": 3, "source": "memory"},
+      "FocusRingOffset": {"value": 0, "source": "memory", "note": "the ring starts at the bezel's edge"}
+    }
+  },
+  "typography": {
+    "sizes": {
+      "FontSize": {"regular": 13, "small": 11, "mini": 9, "large": 13, "source": "memory", "note": "NSFont.systemFontSize(for:); equals driver.Font.EffectiveSize"}
+    },
+    "numbers": {
+      "LineHeight": {"value": 1.23, "source": "memory", "note": "times the font size: about 16 pt at 13 pt"}
+    },
+    "weights": {
+      "WindowTitleWeight": {"value": 600, "source": "memory", "note": "semibold; from chrome.go TitleFont (S2.2c)"},
+      "EmphasizedWeight": {"value": 700, "source": "memory", "note": "NSFont.boldSystemFont"}
+    },
+    "tracking": {
+      "steps": [[6, 41], [7, 34], [8, 26], [9, 19], [10, 12], [11, 6], [12, 0], [13, -6], [14, -11], [15, -16], [16, -20], [17, -26], [18, -25], [19, -24], [20, -23], [21, -18], [22, -12], [23, -4], [24, 3], [25, 6], [26, 8], [27, 11], [28, 14], [32, 13], [36, 11], [40, 10], [48, 8], [56, 6], [64, 4], [72, 2], [80, 0]],
+      "source": "memory",
+      "note": "the SF Pro tracking table of the HIG, applied to Inter; linear between rows"
+    }
+  },
+  "accent": {
+    "colors": {
+      "Base": {"light": [255, 255, 255], "dark": [89, 89, 89], "source": "memory", "note": "backdrop of the selection and inactive colors; the default accent at SelectionAlpha over it gives the old selection colors"},
+      "DefaultButtonText": {"light": [255, 255, 255], "dark": [255, 255, 255], "source": "memory", "note": "label on an accent fill"}
+    },
+    "numbers": {
+      "SelectionAlpha": {"value": 0.3, "source": "memory", "note": "accent over Base in the selection colors"},
+      "FocusRingAlpha": {"value": 0.5, "source": "memory", "note": "the half alpha of S2.2c"},
+      "PressedShade": {"value": 0.85, "source": "memory", "note": "channel factor of a pressed accent fill"},
+      "InactiveAlpha": {"value": 0.35, "source": "memory", "note": "the accent's grey over Base in an inactive window"}
+    }
+  },
+  "animation": {
+    "durations": {
+      "DurationFast": {"ms": 100, "source": "memory", "note": "hover and press feedback"},
+      "DurationNormal": {"ms": 250, "source": "memory", "note": "Core Animation's default (PLAN.md §5.5: 0.2-0.25 s)"},
+      "DurationSlow": {"ms": 400, "source": "memory"},
+      "FocusRingDuration": {"ms": 200, "source": "memory", "note": "the ring shrinks onto the control"},
+      "ScrollerFadeDelay": {"ms": 1000, "source": "memory", "note": "overlay scrollers after scrolling stops (§5.6)"},
+      "ScrollerFadeDuration": {"ms": 300, "source": "memory"}
+    },
+    "curves": {
+      "EaseIn": {"value": [0.42, 0, 1, 1], "source": "memory", "note": "kCAMediaTimingFunctionEaseIn"},
+      "EaseOut": {"value": [0, 0, 0.58, 1], "source": "memory", "note": "kCAMediaTimingFunctionEaseOut"},
+      "EaseInOut": {"value": [0.42, 0, 0.58, 1], "source": "memory", "note": "kCAMediaTimingFunctionEaseInEaseOut"},
+      "EaseDefault": {"value": [0.25, 0.1, 0.25, 1], "source": "memory", "note": "kCAMediaTimingFunctionDefault"}
+    },
+    "springs": {
+      "ControlSpring": {"mass": 1, "stiffness": 300, "damping": 30, "source": "memory", "note": "slightly underdamped (ratio about 0.87)"},
+      "RubberBandSpring": {"mass": 1, "stiffness": 200, "damping": 28.28, "source": "memory", "note": "critically damped: no overshoot past the edge"}
+    }
+  },
+  "controls": {
+    "colors": {
+      "BezelFill": {"light": [255, 255, 255], "dark": [255, 255, 255, 64], "source": "memory", "note": "push button bezel, checkbox box and radio circle when off"},
+      "BezelPressedFill": {"light": [222, 222, 222], "dark": [255, 255, 255, 107], "source": "memory", "note": "the same while pressed"},
+      "BezelBorder": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "1 pt, drawn inside the bezel"},
+      "BoxFill": {"light": [0, 0, 0, 10], "dark": [255, 255, 255, 13], "source": "memory", "note": "the rounded group of a Box"},
+      "BoxBorder": {"light": [0, 0, 0, 20], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 115], "contrastDark": [255, 255, 255, 115], "source": "memory"},
+
+      "SliderTrack": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 38], "contrastLight": [0, 0, 0, 128], "contrastDark": [255, 255, 255, 128], "source": "memory", "note": "the empty part of a slider's track; the filled part is ValueFill"},
+      "SliderKnobFill": {"light": [255, 255, 255], "dark": [217, 217, 217], "source": "memory", "note": "the round knob"},
+      "SliderKnobBorder": {"light": [0, 0, 0, 38], "dark": [0, 0, 0, 64], "contrastLight": [0, 0, 0, 140], "contrastDark": [0, 0, 0, 191], "source": "memory", "note": "drawn inside the knob"},
+      "SliderKnobShadow": {"light": [0, 0, 0, 77], "dark": [0, 0, 0, 102], "contrastLight": [0, 0, 0, 128], "contrastDark": [0, 0, 0, 153], "source": "memory"},
+      "SliderTickMark": {"light": [0, 0, 0, 64], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 153], "contrastDark": [255, 255, 255, 153], "source": "memory"},
+      "ProgressTrack": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "the empty track of a progress bar; the filled part and the indeterminate band are ValueFill"},
+      "SpinnerSpoke": {"light": [0, 0, 0, 140], "dark": [255, 255, 255, 140], "contrastLight": [0, 0, 0, 217], "contrastDark": [255, 255, 255, 217], "source": "memory", "note": "the leading spoke; the trailing ones fade towards SpinnerTailAlpha"}
+    },
+    "numbers": {
+      "BoxCornerRadius": {"value": 6, "source": "memory"},
+      "BoxBorderWidth": {"value": 1, "source": "memory"},
+      "BoxTitleSize": {"value": 11, "source": "memory", "note": "the small system font"},
+      "BoxTitleGap": {"value": 4, "source": "memory", "note": "between the title and the group"},
+      "BoxContentInsetX": {"value": 10, "source": "memory"},
+      "BoxContentInsetY": {"value": 8, "source": "memory"},
+      "SeparatorThickness": {"value": 1, "source": "memory", "note": "a hairline, pixel-aligned by the separator"},
+      "ToggleDisabledAlpha": {"value": 0.5, "source": "memory", "note": "opacity of a disabled checkbox's box or radio's circle"},
+      "SliderKnobBorderWidth": {"value": 0.5, "source": "memory"},
+      "ProgressBandFraction": {"value": 0.25, "source": "memory", "note": "width of the indeterminate band as a fraction of the track"},
+      "SpinnerSpokes": {"value": 12, "source": "memory", "note": "the number of spokes, a whole number"},
+      "SpinnerTailAlpha": {"value": 0.25, "source": "memory", "note": "opacity of the faintest spoke relative to SpinnerSpoke"},
+      "ValueDisabledAlpha": {"value": 0.5, "source": "memory", "note": "opacity of a disabled slider or progress indicator (ValueFill applies it to the filled part)"}
+    },
+    "sizes": {
+      "ButtonMinWidth": {"regular": 70, "small": 60, "mini": 50, "large": 80, "source": "memory", "note": "least bezel width of a push button"},
+      "CheckboxSize": {"regular": 14, "small": 12, "mini": 10, "large": 16, "source": "memory", "note": "side of the box"},
+      "CheckboxRadius": {"regular": 3.5, "small": 3, "mini": 2.5, "large": 4, "source": "memory"},
+      "CheckboxMarkStroke": {"regular": 1.75, "small": 1.5, "mini": 1.25, "large": 2, "source": "memory", "note": "the check and the dash of mixed"},
+      "CheckboxGap": {"regular": 6, "small": 5, "mini": 4, "large": 7, "source": "memory", "note": "box to title"},
+      "RadioSize": {"regular": 14, "small": 12, "mini": 10, "large": 16, "source": "memory", "note": "diameter of the circle"},
+      "RadioDotSize": {"regular": 6, "small": 5, "mini": 4, "large": 7, "source": "memory", "note": "diameter of the dot of an on radio"},
+      "RadioGap": {"regular": 6, "small": 5, "mini": 4, "large": 7, "source": "memory", "note": "circle to title"},
+      "SliderTrackThickness": {"regular": 4, "small": 3.5, "mini": 3, "large": 5, "source": "memory"},
+      "SliderTrackRadius": {"regular": 2, "small": 1.75, "mini": 1.5, "large": 2.5, "source": "memory", "note": "a pill: half the thickness"},
+      "SliderKnobSize": {"regular": 20, "small": 14, "mini": 11, "large": 24, "source": "memory", "note": "diameter of the round knob"},
+      "SliderKnobShadowOffsetY": {"regular": 0.5, "small": 0.5, "mini": 0.5, "large": 0.5, "source": "memory"},
+      "SliderKnobShadowBlur": {"regular": 1.5, "small": 1, "mini": 1, "large": 2, "source": "memory"},
+      "SliderTickLength": {"regular": 6, "small": 5, "mini": 4, "large": 7, "source": "memory"},
+      "SliderTickWidth": {"regular": 1.5, "small": 1.5, "mini": 1, "large": 2, "source": "memory"},
+      "SliderTickGap": {"regular": 2, "small": 2, "mini": 1, "large": 3, "source": "memory", "note": "knob edge to the tick marks"},
+      "ProgressThickness": {"regular": 6, "small": 4, "mini": 3, "large": 8, "source": "memory", "note": "of a progress bar's track"},
+      "ProgressRadius": {"regular": 3, "small": 2, "mini": 1.5, "large": 4, "source": "memory", "note": "a pill: half the thickness"},
+      "SpinnerSize": {"regular": 32, "small": 16, "mini": 10, "large": 32, "source": "memory", "note": "diameter of a spinner"},
+      "SpinnerSpokeLength": {"regular": 9, "small": 4.5, "mini": 2.75, "large": 9, "source": "memory", "note": "from the outer edge inwards"},
+      "SpinnerSpokeWidth": {"regular": 2.5, "small": 1.5, "mini": 1, "large": 2.5, "source": "memory", "note": "with round caps"}
+    },
+    "weights": {
+      "ButtonTitleWeight": {"value": 400, "source": "memory", "note": "regular, on a default button too"},
+      "BoxTitleWeight": {"value": 400, "source": "memory"}
+    },
+    "durations": {
+      "ProgressBandPeriod": {"ms": 1200, "source": "memory", "note": "the indeterminate band crosses the track once"},
+      "SpinnerPeriod": {"ms": 1000, "source": "memory", "note": "one turn of the leading spoke"}
+    }
+  },
+  "scroll": {
+    "colors": {
+      "ScrollerKnob": {"light": [0, 0, 0, 115], "dark": [255, 255, 255, 115], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "the knob of an overlay or legacy scroller"},
+      "LegacyScrollerTrack": {"light": [250, 250, 250], "dark": [43, 43, 43], "source": "memory", "note": "the always-visible track of a legacy scroller"},
+      "LegacyScrollerBorder": {"light": [0, 0, 0, 20], "dark": [255, 255, 255, 20], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "the hairline between the content and a legacy track"}
+    },
+    "numbers": {
+      "ScrollerThickness": {"value": 6, "source": "memory", "note": "width of an idle overlay knob"},
+      "ScrollerHoverThickness": {"value": 9, "source": "memory", "note": "width of a hovered overlay knob, and of a legacy knob"},
+      "ScrollerInset": {"value": 2, "source": "memory", "note": "space between the knob and the viewport's edge (or the legacy track's edges)"},
+      "ScrollerMinKnobLength": {"value": 18, "source": "memory", "note": "least knob length, before rubber-band shortening"},
+      "LegacyScrollerThickness": {"value": 15, "source": "memory", "note": "width of a legacy track, taken from the viewport"},
+      "WheelLineHeight": {"value": 16, "source": "memory", "note": "points per wheel line (NSScrollView's line scroll is 10; Windows sends 3 lines per notch)"},
+      "MomentumDecayRate": {"value": 2, "source": "memory", "note": "per second: v(t) = v0·e^(-k t); UIScrollView's 0.998 per ms"},
+      "MomentumStopVelocity": {"value": 20, "source": "memory", "note": "points per second below which momentum stops"},
+      "RubberBandFraction": {"value": 0.55, "source": "memory", "note": "the rubber-band constant c as a fraction of the viewport's length (§5.6)"},
+      "PageOverlap": {"value": 10, "source": "memory", "note": "points of the old page kept visible on Page Up/Down (NSScrollView's page scroll)"}
+    },
+    "durations": {
+      "ScrollerHoverDuration": {"ms": 150, "source": "memory", "note": "an overlay knob widening on hover"},
+      "WheelStepDuration": {"ms": 150, "source": "memory", "note": "the smooth animation of one wheel notch or key step"},
+      "VelocityWindow": {"ms": 80, "source": "memory", "note": "the precise samples before release that set the momentum velocity"}
+    }
+  }
+}

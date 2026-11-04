@@ -1,0 +1,55 @@
+## vertical only
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000014
+fillRRect (148,40,9,24) r=4.5 solid #00000073
+## both scrollers
+fillRRect (145,123,15,15) solid #fafafa
+fillRRect (10,123,135,15) solid #fafafa
+fillRRect (10,123,135,1) solid #00000014
+fillRRect (12,126,118,9) r=4.5 solid #00000073
+fillRRect (145,38,15,85) solid #fafafa
+fillRRect (145,38,1,85) solid #00000014
+fillRRect (148,40,9,18) r=4.5 solid #00000073
+## both scrollers, scale 2
+fillRRect (145,123,15,15) solid #fafafa
+fillRRect (10,123,135,15) solid #fafafa
+fillRRect (10,123,135,0.5) solid #00000014
+fillRRect (12,126,118,9) r=4.5 solid #00000073
+fillRRect (145,38,15,85) solid #fafafa
+fillRRect (145,38,0.5,85) solid #00000014
+fillRRect (148,40,9,18) r=4.5 solid #00000073
+## no knob (document fits)
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000014
+## at max offset
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000014
+fillRRect (148,112,9,24) r=4.5 solid #00000073
+## both at max offset
+fillRRect (145,123,15,15) solid #fafafa
+fillRRect (10,123,135,15) solid #fafafa
+fillRRect (10,123,135,1) solid #00000014
+fillRRect (25,126,118,9) r=4.5 solid #00000073
+fillRRect (145,38,15,85) solid #fafafa
+fillRRect (145,38,1,85) solid #00000014
+fillRRect (148,103,9,18) r=4.5 solid #00000073
+## dark
+fillRRect (145,38,15,100) solid #2b2b2b
+fillRRect (145,38,1,100) solid #ffffff14
+fillRRect (148,40,9,24) r=4.5 solid #ffffff73
+## dark, both scrollers
+fillRRect (145,123,15,15) solid #2b2b2b
+fillRRect (10,123,135,15) solid #2b2b2b
+fillRRect (10,123,135,1) solid #ffffff14
+fillRRect (12,126,118,9) r=4.5 solid #ffffff73
+fillRRect (145,38,15,85) solid #2b2b2b
+fillRRect (145,38,1,85) solid #ffffff14
+fillRRect (148,40,9,18) r=4.5 solid #ffffff73
+## increased contrast
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000066
+fillRRect (148,40,9,24) r=4.5 solid #000000bf
+## dark, increased contrast
+fillRRect (145,38,15,100) solid #2b2b2b
+fillRRect (145,38,1,100) solid #ffffff66
+fillRRect (148,40,9,24) r=4.5 solid #ffffffbf

@@ -1,0 +1,158 @@
+## plain, normal unfocused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## pressed, pressed unfocused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #dedede
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## default, normal unfocused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #007aff
+text (53,40,14,16) "OK" 13pt #ffffff
+## default pressed, pressed unfocused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #0068d9
+text (53,40,14,16) "OK" 13pt #ffffff
+## disabled, normal unfocused disabled key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #00000040
+## disabled default, normal unfocused disabled key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #00000040
+## focused, normal focused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+strokeRRect (8.5,36.5,103,23) r=6.5 w=3 solid #007aff80
+## focused default, normal focused key light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #007aff
+text (53,40,14,16) "OK" 13pt #ffffff
+strokeRRect (8.5,36.5,103,23) r=6.5 w=3 solid #007aff80
+## plain, normal unfocused inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## pressed, pressed unfocused inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #dedede
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## default, normal unfocused inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## default pressed, pressed unfocused inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #dedede
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## disabled, normal unfocused disabled inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #00000040
+## disabled default, normal unfocused disabled inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #00000040
+## focused, normal focused-inactive inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## focused default, normal focused-inactive inactive light
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (10,38,100,20) r=5 solid #ffffff
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #00000026
+text (53,40,14,16) "OK" 13pt #000000d9
+## plain, normal unfocused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## pressed, pressed unfocused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff6b
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## default, normal unfocused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #007aff
+text (53,40,14,16) "OK" 13pt #ffffff
+## default pressed, pressed unfocused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #0068d9
+text (53,40,14,16) "OK" 13pt #ffffff
+## disabled, normal unfocused disabled key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffff40
+## disabled default, normal unfocused disabled key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffff40
+## focused, normal focused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+strokeRRect (8.5,36.5,103,23) r=6.5 w=3 solid #007aff80
+## focused default, normal focused key dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #007aff
+text (53,40,14,16) "OK" 13pt #ffffff
+strokeRRect (8.5,36.5,103,23) r=6.5 w=3 solid #007aff80
+## plain, normal unfocused inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## pressed, pressed unfocused inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff6b
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## default, normal unfocused inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## default pressed, pressed unfocused inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff6b
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## disabled, normal unfocused disabled inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffff40
+## disabled default, normal unfocused disabled inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffff40
+## focused, normal focused-inactive inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9
+## focused default, normal focused-inactive inactive dark
+shadow (10,38,100,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (10,38,100,20) r=5 solid #ffffff40
+strokeRRect (10.5,38.5,99,19) r=4.5 w=1 solid #ffffff1a
+text (53,40,14,16) "OK" 13pt #ffffffd9

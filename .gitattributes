@@ -1,0 +1,3 @@
+# LF everywhere: gofmt rejects CRLF, and bash can't run scripts/check.sh with CRLF.
+* text=auto eol=lf
+*.png binary

@@ -1,0 +1,31 @@
+## idle
+
+## visible (wheel)
+fillRRect (152,44,6,24) r=3 solid #00000073
+## visible (swipe)
+fillRRect (152,76,6,24) r=3 solid #00000073
+## fading
+fillRRect (152,44,6,24) r=3 solid #0000003a
+## overscroll top
+fillRRect (152,40,6,16) r=3 solid #00000073
+## overscroll top far (round knob)
+fillRRect (152,40,6,6) r=3 solid #00000073
+## overscroll bottom
+fillRRect (152,120,6,16) r=3 solid #00000073
+## dark (window)
+fillRRect (152,44,6,24) r=3 solid #ffffff73
+## dark (system)
+fillRRect (152,44,6,24) r=3 solid #ffffff73
+## increased contrast (window)
+fillRRect (152,44,6,24) r=3 solid #000000bf
+## increased contrast (system)
+fillRRect (152,44,6,24) r=3 solid #000000bf
+## dark, increased contrast (window)
+fillRRect (152,44,6,24) r=3 solid #ffffffbf
+## dark, increased contrast (system)
+fillRRect (152,44,6,24) r=3 solid #ffffffbf
+## both scrollers
+fillRRect (12,130,67,6) r=3 solid #00000073
+fillRRect (152,43,6,21) r=3 solid #00000073
+## both scrollers, horizontal cannot scroll
+fillRRect (152,44,6,24) r=3 solid #00000073

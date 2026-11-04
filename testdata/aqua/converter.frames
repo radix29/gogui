@@ -1,0 +1,11 @@
+Stack 0,0 380x220
+  Form 20,20 340x52
+    Label 21,3 56x16
+    TextField 85,0 255x22
+    Label 0,33 77x16
+    TextField 85,30 255x22
+  Slider 20,84 340x20
+  Separator 20,116 340x1
+  Stack 20,129 340x16
+    ProgressBar 0,5 206x6
+    Label 214,0 126x16
