@@ -3,3 +3,23 @@ Stack 0,0 360x180
   TextField 20,50.46153846153846 320x22
   Stack 20,84.46153846153845 320x20
     Button 250,0 70x20
+titlebar
+  titlebar "Hello" @0,0 360x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "Hello" 162.5,6 35x16
+  region caption 0,0 360x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12
+titlebar at 136x208
+  titlebar "Hello" @0,0 136x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "" 0,0 0x0
+  region caption 0,0 136x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12

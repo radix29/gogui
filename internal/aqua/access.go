@@ -54,13 +54,51 @@ func accessibleChildren(b *Base, out []*a11y.Node) []*a11y.Node {
 		if cb.hidden {
 			continue
 		}
+		if ov, ok := c.(accessibleOverlay); ok {
+			out = append(out, ov.overlayNodes()...)
+			continue
+		}
 		n := accessibleNode(c)
 		if n.Role == a11y.RoleNone {
 			out = accessibleChildren(cb, out)
 			continue
 		}
 		n.Children = accessibleChildren(cb, nil)
+		if ai, ok := c.(accessibleItems); ok {
+			n.Children = append(n.Children, itemNodes(c, ai)...)
+		}
 		out = append(out, n)
+	}
+	return out
+}
+
+// accessibleOverlay is implemented by an element that shows a tree of its
+// own in place of itself: the window's sheet layer (S5.7c). overlayNodes
+// returns the nodes of that tree's exposed elements, in the window's
+// coordinates; the layer itself is not exposed.
+type accessibleOverlay interface {
+	overlayNodes() []*a11y.Node
+}
+
+// accessibleItems is implemented by an element whose exposed children are
+// not elements of their own: the menu's items (S5.6c). AccessibleItems
+// returns their nodes with frames in the element's own points and without
+// children; the tree appends them after the element's child elements, in
+// window coordinates.
+type accessibleItems interface {
+	AccessibleItems() []a11y.Node
+}
+
+// itemNodes returns e's item nodes in window coordinates.
+func itemNodes(e Element, ai accessibleItems) []*a11y.Node {
+	origin := ToRoot(e, driver.Point{})
+	items := ai.AccessibleItems()
+	out := make([]*a11y.Node, len(items))
+	for i := range items {
+		n := items[i]
+		n.Frame = n.Frame.Offset(origin)
+		n.Children = nil
+		out[i] = &n
 	}
 	return out
 }

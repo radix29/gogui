@@ -91,9 +91,9 @@ func newSurface(t *testing.T, s *Shell, cfg shell.SurfaceConfig, r *recorder) *s
 }
 
 // clientPx returns the window's client size in pixels.
-func clientPx(t *testing.T, sf *surface) (w, h int32) {
+func clientPx(t *testing.T, win window) (w, h int32) {
 	t.Helper()
-	rc, err := w32.GetClientRect(sf.hwnd)
+	rc, err := w32.GetClientRect(win.swap().hwnd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,22 +197,29 @@ func TestSurfaceMinMax(t *testing.T) {
 		if sf.Size() != (driver.Size{W: 200, H: 600}) {
 			t.Errorf("SetSize clamped to %v, want 200 × 600", sf.Size())
 		}
-		sf.SetMinSize(driver.Size{W: 300, H: 100})
+		sf.SetSizeLimits(driver.Size{W: 300, H: 100}, cfg.MaxSize)
 		if sf.Size() != (driver.Size{W: 300, H: 600}) || r.resized[len(r.resized)-1] != sf.Size() {
-			t.Errorf("after SetMinSize: %v, Resized %v", sf.Size(), r.resized)
+			t.Errorf("after a new min: %v, Resized %v", sf.Size(), r.resized)
 		}
-		sf.SetMaxSize(driver.Size{W: 500, H: 400})
+		sf.SetSizeLimits(driver.Size{W: 300, H: 100}, driver.Size{W: 500, H: 400})
 		if sf.Size() != (driver.Size{W: 300, H: 400}) {
-			t.Errorf("after SetMaxSize: %v", sf.Size())
+			t.Errorf("after a new max: %v", sf.Size())
 		}
+		// Both limits at once: one clamp against both, one Resized.
 		n := len(r.resized)
-		sf.SetMaxSize(driver.Size{}) // no limit: no resize
+		sf.SetSizeLimits(driver.Size{W: 600, H: 500}, driver.Size{W: 700, H: 550})
+		if sf.Size() != (driver.Size{W: 600, H: 500}) || len(r.resized) != n+1 {
+			t.Errorf("after both limits: %v, Resized %v", sf.Size(), r.resized[n:])
+		}
+		sf.SetSizeLimits(driver.Size{W: 300, H: 100}, driver.Size{W: 700, H: 550})
+		n = len(r.resized)
+		sf.SetSizeLimits(driver.Size{W: 300, H: 100}, driver.Size{}) // no max: no resize
 		if len(r.resized) != n {
 			t.Error("Resized after removing the max size")
 		}
 
 		// The OS clamps a direct resize through WM_GETMINMAXINFO.
-		sf.SetMaxSize(driver.Size{W: 500, H: 400})
+		sf.SetSizeLimits(driver.Size{W: 300, H: 100}, driver.Size{W: 500, H: 400})
 		if err := w32.SetWindowPos(sf.hwnd, 0, 0, 0, 10, 10, w32.SWP_NOMOVE|w32.SWP_NOZORDER|w32.SWP_NOACTIVATE); err != nil {
 			t.Fatal(err)
 		}
@@ -469,6 +476,13 @@ func TestSurfaceCursorTitleCenter(t *testing.T) {
 		sf.SetChromeRegions([]shell.ChromeRegion{{Rect: driver.Rect{W: 300, H: 28}, Kind: shell.RegionCaption}})
 		if len(sf.regions) != 1 {
 			t.Error("regions not kept")
+		}
+		// The text input is kept (ime_test.go covers the context).
+		ti := shell.TextInput{Enabled: true, Caret: driver.Rect{X: 4, Y: 5, W: 1, H: 16}}
+		sf.SetTextInput(ti)
+		sf.CancelComposition()
+		if sf.ime.input != ti {
+			t.Errorf("text input %+v not kept", sf.ime.input)
 		}
 		sf.Minimize() // hidden: nothing
 		if w32.IsIconic(sf.hwnd) {

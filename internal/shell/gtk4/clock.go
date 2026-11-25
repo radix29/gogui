@@ -30,11 +30,18 @@ import (
 //     frame callbacks to a minimized or hidden window (Wayland), and the
 //     frame function drives more than painting. The watchdog is armed once
 //     and re-arms itself while ticks keep coming, so a running animation
-//     costs no GLib source per frame.
+//     costs no GLib source per frame. Once it has run a frame, and until
+//     the next tick, it runs them hiddenInterval apart: a surface whose
+//     ticks stopped is off screen as far as the clock can tell (S6.2b).
 //   - Without one (before the first surface, or with every surface
 //     hidden), from a one-shot g_timeout_add source on a 60 Hz grid: the
 //     frame starts at its hold, at least half a period after the previous
-//     frame's start, as on Win32 without a pacing surface.
+//     frame's start, as on Win32 without a pacing surface. With open
+//     surfaces and none of them pacing (each hidden or known to be
+//     minimized: Shell.offScreen) the hold is at least hiddenInterval after
+//     the previous frame's start (S6.2b), so a running animation costs 4
+//     frames a second and its time keeps moving; a surface shown or
+//     restored (surfacesChanged) moves the request to its tick at once.
 //
 // A frame runs the frame function, then the paint pass, with the frame's
 // target time. Requests are coalesced; a request from inside the frame is
@@ -52,6 +59,10 @@ const defaultPeriod = time.Second / 60
 // stallTimeout is how long requested frames wait for a tick before the
 // watchdog runs one.
 const stallTimeout = 100 * time.Millisecond
+
+// hiddenInterval is the shortest time between two frame starts while no
+// surface is on screen (S6.2b): 4 Hz, as on Win32.
+const hiddenInterval = time.Second / 4
 
 // clockLoop is the part of the loop the frame clock uses. Every method
 // runs on the GTK thread.
@@ -77,6 +88,14 @@ type clockLoop interface {
 	// timeline. GDK reports its default interval (16667 µs) and no
 	// presentation time (0) without recent presentation feedback.
 	frameInfo(frameClock uintptr) (frameTime, interval, presentation int64)
+	// frameCounter returns the frame clock's current frame counter
+	// (gdk_frame_clock_get_frame_counter).
+	frameCounter(frameClock uintptr) int64
+	// presentation returns an earlier frame's presentation time (0: none)
+	// and refresh interval in microseconds (gdk_frame_timings_*); complete
+	// reports that they are final, gone that GDK's history no longer has
+	// the frame.
+	presentation(frameClock uintptr, counter int64) (presented, interval int64, complete, gone bool)
 }
 
 // clock is the shell's shell.FrameClock.
@@ -95,6 +114,7 @@ type clock struct {
 
 	requested bool // a frame is requested
 	inFrame   bool // the frame function or the paint pass runs
+	inFn      bool // the frame function or the momentum step runs: Invalidate requests no frame
 
 	last     time.Duration // start of the last frame; -1 before the first
 	target   time.Duration // target time of the last frame; -1 before the first
@@ -117,10 +137,20 @@ type clock struct {
 	timeoutID uint32
 	timeoutH  ffi.Handle
 	stall     bool
+	// stalled: the watchdog ran the last frame and no tick has come since,
+	// so it waits hiddenInterval (S6.2b).
+	stalled bool
 
 	// Counters (tests): frames run, those run from a tick, from the
 	// fallback timeout and from the watchdog, and tick callbacks added.
 	frames, tickFrames, timeoutFrames, stalls, ticksAdded int
+
+	// frameTimer measures each frame for the observer (SetFrameObserver):
+	// the paint pass expects a paint per queued draw, which the snapshots
+	// report (surface.go).
+	frameTimer shell.FrameTimer
+	// fb is the presentation feedback (SetPresentObserver, pacing.go).
+	fb feedback
 }
 
 var (
@@ -171,6 +201,12 @@ func (c *clock) SetFrameFunc(fn func(frameTime time.Duration)) {
 	c.fn = fn
 }
 
+// SetFrameObserver implements shell.FrameClock.
+func (c *clock) SetFrameObserver(fn func(shell.FrameTiming)) {
+	c.s.q.Check("gtk4.Clock.SetFrameObserver")
+	c.frameTimer.SetObserver(fn)
+}
+
 // RequestFrame implements shell.FrameClock.
 func (c *clock) RequestFrame() {
 	c.s.q.Check("gtk4.Clock.RequestFrame")
@@ -219,7 +255,11 @@ func (c *clock) schedule() {
 			c.cancelTimeout()
 		}
 		if c.timeoutID == 0 {
-			c.addTimeout(stallTimeout, true)
+			d := stallTimeout
+			if c.stalled {
+				d = max(d, c.last+hiddenInterval-c.now())
+			}
+			c.addTimeout(d, true)
 		}
 		return
 	}
@@ -227,8 +267,29 @@ func (c *clock) schedule() {
 		c.cancelTimeout()
 	}
 	if c.timeoutID == 0 {
-		c.addTimeout(max(c.hold-c.now(), 0), false)
+		c.addTimeout(max(c.due()-c.now(), 0), false)
 	}
+}
+
+// due returns when the fallback frame may start: the hold, but with open
+// surfaces and none on screen at least hiddenInterval after the previous
+// frame's start (S6.2b).
+func (c *clock) due() time.Duration {
+	if c.last >= 0 && c.s.offScreen() {
+		return max(c.hold, c.last+hiddenInterval)
+	}
+	return c.hold
+}
+
+// watchdogDue returns when the watchdog runs the requested frame:
+// stallTimeout after the later of the last tick and the request, and
+// after a watchdog frame with no tick since, hiddenInterval after it.
+func (c *clock) watchdogDue() time.Duration {
+	d := max(c.lastTick, c.requestedAt) + stallTimeout
+	if c.stalled {
+		d = max(d, c.last+hiddenInterval)
+	}
+	return d
 }
 
 // addTimeout adds the timeout source after d (rounded up to whole ms).
@@ -286,6 +347,7 @@ func (c *clock) tick(_ kind, h ffi.Handle, frameClock uintptr) bool {
 			c.clearTick()
 		}
 	}()
+	c.feedbackTick(frameClock)
 	if c.requested && !c.inFrame && !c.closed && !c.s.quit {
 		ft, iv, pr := c.l.frameInfo(frameClock)
 		predicted := time.Duration(-1)
@@ -296,8 +358,10 @@ func (c *clock) tick(_ kind, h ffi.Handle, frameClock uintptr) bool {
 			}
 		}
 		c.lastTick = c.now()
+		c.stalled = false
 		c.tickFrames++
 		c.frame(c.at(ft), predicted)
+		c.feedbackFrame(frameClock)
 	}
 	keep := c.requested && !c.closed && !c.s.quit && c.tickH == h && c.s.pacingWidget() == c.tickWidget
 	if !keep && c.tickH == h {
@@ -319,11 +383,12 @@ func (c *clock) source(kind) bool {
 	}
 	now := c.now()
 	if stall && c.tickID != 0 {
-		if wait := max(c.lastTick, c.requestedAt) + stallTimeout - now; wait > 0 {
+		if wait := c.watchdogDue() - now; wait > 0 {
 			c.addTimeout(wait, true)
 			return false
 		}
 	}
+	c.stalled = stall
 	if stall {
 		c.stalls++
 	} else {
@@ -343,13 +408,24 @@ func (c *clock) frame(t, predicted time.Duration) {
 	c.requested = false
 	c.frames++
 	c.inFrame = true
-	defer func() { c.inFrame = false }()
+	defer func() { c.inFrame, c.inFn = false, false }()
+	c.frameTimer.Begin(c.target)
 	if c.fn != nil {
+		var start time.Time
+		if c.frameTimer.Active() {
+			start = time.Now()
+		}
+		c.inFn = true
 		c.fn(c.target)
+		c.inFn = false
+		if c.frameTimer.Active() {
+			c.frameTimer.FrameFunc(time.Since(start))
+		}
 	}
 	if c.paint != nil {
 		c.paint(c.target)
 	}
+	c.frameTimer.End()
 }
 
 // gridAfter returns the first time of the grid anchor + n·period after t.
@@ -397,4 +473,24 @@ func frameTimes(t, predicted, prev, period time.Duration) (target, hold time.Dur
 		target = prev + time.Microsecond
 	}
 	return target, max(target, t+period/2)
+}
+
+// invalidated requests the frame that paints a surface or a popup just
+// invalidated, except while the frame function or the momentum step runs
+// (deferInvalidate): the paint pass of that frame queues its draw, so an
+// animation whose last change invalidates ends without an empty frame
+// after it (PLAN.md S6.2a).
+func (c *clock) invalidated() {
+	if !c.inFn {
+		c.RequestFrame()
+	}
+}
+
+// deferInvalidate runs fn, part of the paint pass before its draws are
+// queued, with Invalidate requesting no frame, as in the frame function.
+func (c *clock) deferInvalidate(fn func()) {
+	was := c.inFn
+	c.inFn = true
+	defer func() { c.inFn = was }()
+	fn()
 }

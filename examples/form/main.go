@@ -59,7 +59,7 @@ func main() {
 			),
 			gogui.Spacer(),
 			gogui.HStack(8, gogui.Spacer(), cancel, create),
-		).Padding(20))
+		).SetPadding(20))
 
 		win.OnClose(app.Quit)
 		win.Show()

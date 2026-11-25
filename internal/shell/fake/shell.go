@@ -8,12 +8,16 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/mainthread"
 	"github.com/radix29/gogui/internal/render"
+	"github.com/radix29/gogui/internal/render/record"
 	"github.com/radix29/gogui/internal/shell"
 )
 
 // ErrRunTwice is returned by Run and Start when the shell has already been
 // started.
 var ErrRunTwice = errors.New("fake: Run or Start called more than once")
+
+// ErrQuit is returned by NewSurface after Quit, as on the real shells.
+var ErrQuit = errors.New("fake: NewSurface after Quit")
 
 // Default screen of a new Shell: the work area Zoom fills, and the scale of
 // new surfaces.
@@ -48,13 +52,39 @@ type Shell struct {
 
 	surfaces []*Surface // open surfaces, in creation order
 	key      *Surface   // the key surface, or nil
-	painting *Surface   // the surface whose Paint is running, or nil
+	modals   []*Surface // open, shown modal surfaces, in first-Show order (modal.go)
+	quitting bool       // closeAll is closing every surface
+	painting bool       // a SurfaceHandler.Paint or PopupHandler.Paint is running
+
+	// The clipboard (clipboard.go): its text, whether it holds any, and
+	// how many reads were asked for.
+	clip      string
+	clipOK    bool
+	clipReads int
+
+	// Popups (popup.go): the open ones in creation order, the grab popup
+	// or nil, the work area they are placed in, whether new ones are
+	// translucent and whether the shell draws their shadow.
+	popups      []*Popup
+	grab        *Popup
+	work        driver.Rect
+	translucent bool
+	noShadow    atomic.Bool // Caps().PopupShadow is false (SetCaps)
+	deferPlaced bool        // Placed is posted (SetDeferPlaced)
+
+	// shiftLayout maps an unshifted character key to its character with
+	// Shift (KeyEvent.Shifted, S5.6h); nil is the US layout.
+	shiftLayout map[driver.Key]driver.Key
+
+	// unchecked turns the UI-goroutine checks off (SetChecks).
+	unchecked atomic.Bool
 }
 
-var _ shell.Shell = (*Shell)(nil)
+var _ shell.PopupShell = (*Shell)(nil)
 
 // New returns a shell that has not been started, with the default
-// appearance (driver.DefaultAppearance), DefaultScreenSize and
+// appearance (driver.DefaultAppearance, so a 1 s caret blink that stops
+// after 10 s), DefaultScreenSize and
 // DefaultScreenScale.
 func New() *Shell {
 	s := &Shell{
@@ -64,13 +94,24 @@ func New() *Shell {
 		appearance:  driver.DefaultAppearance(),
 		screen:      DefaultScreenSize,
 		screenScale: DefaultScreenScale,
+		work:        driver.Rect{W: DefaultScreenSize.W, H: DefaultScreenSize.H},
 	}
-	s.clock = &Clock{check: s.check, afterFunc: s.paintPass}
+	s.clock = &Clock{check: s.check, afterFunc: s.paintPass, offScreen: s.offScreen}
 	return s
 }
 
+// SetChecks turns the shell's UI-goroutine checks on (the default) or
+// off. Each check parses the goroutine ID from a stack trace, about a
+// microsecond, and the shell checks every call, so the frame benchmarks
+// (PLAN.md S6.2c) turn them off to time the aqua driver rather than the
+// checks. Any goroutine may call it.
+func (s *Shell) SetChecks(on bool) { s.unchecked.Store(!on) }
+
 // check panics unless the caller is on the UI goroutine.
 func (s *Shell) check(what string) {
+	if s.unchecked.Load() {
+		return
+	}
 	if !s.q.OnUIThread() {
 		panic("fake: " + what + " called off the UI thread (or before Run or Start)")
 	}
@@ -87,8 +128,8 @@ func (s *Shell) checkReady(what string) {
 
 // notPainting panics while a Paint is running.
 func (s *Shell) notPainting(what string) {
-	if s.painting != nil {
-		panic("fake: " + what + " called during SurfaceHandler.Paint")
+	if s.painting {
+		panic("fake: " + what + " called during SurfaceHandler.Paint or PopupHandler.Paint")
 	}
 }
 
@@ -111,7 +152,7 @@ func (s *Shell) Start(h shell.Handler) error {
 		}
 	})
 	s.ready = true
-	h.Ready()
+	h.Ready(shell.Services{Text: s.text, Clock: s.clock})
 	return nil
 }
 
@@ -153,14 +194,21 @@ func (s *Shell) Flush() bool {
 	return s.clock.Flush()
 }
 
-// Quit implements shell.Shell. It closes every open surface (each gets
-// Closed), closes the queue so later Post calls are dropped, and makes Run
-// return once the current work is done.
+// Quit implements shell.Shell. As on the real shells it marks the shell
+// quitting first (so NewSurface in a Closed handler returns ErrQuit),
+// then closes every open surface (each gets Closed), drops the pending
+// timers (After), closes the queue so later Post calls are dropped, and
+// makes Run return once the current work is done. A second Quit does
+// nothing.
 func (s *Shell) Quit() {
 	s.check("Shell.Quit")
+	if s.quit {
+		return
+	}
 	s.notPainting("Shell.Quit")
-	s.closeAll()
 	s.quit = true
+	s.closeAll()
+	s.clock.dropTimers()
 	s.q.Close()
 	select {
 	case s.wake <- struct{}{}:
@@ -175,6 +223,8 @@ func (s *Shell) Quitting() bool {
 }
 
 func (s *Shell) closeAll() {
+	s.quitting = true
+	defer func() { s.quitting = false }()
 	for len(s.surfaces) > 0 {
 		s.surfaces[len(s.surfaces)-1].Close()
 	}
@@ -189,15 +239,27 @@ func (s *Shell) Queue() *mainthread.Queue { return s.q }
 
 // NewSurface implements shell.Shell. The surface starts hidden and
 // invalidated: its first paint happens at the first frame after Show. The
-// size is clamped to the limits; the scale is the screen scale.
+// size is clamped to the limits; the scale is the screen scale. A modal
+// surface loses StyleResizable and StyleMiniaturizable, and is centered at
+// its first Show (Centered counts that, not SurfaceConfig.Center). After
+// Quit it returns ErrQuit.
 func (s *Shell) NewSurface(cfg shell.SurfaceConfig, h shell.SurfaceHandler) (shell.Surface, error) {
 	s.checkReady("Shell.NewSurface")
 	s.notPainting("Shell.NewSurface")
 	if h == nil {
 		panic("fake: NewSurface with a nil handler")
 	}
+	if s.quit {
+		return nil, ErrQuit
+	}
+	owner, err := s.owner(cfg)
+	if err != nil {
+		return nil, err
+	}
 	sf := &Surface{
 		shell:   s,
+		modal:   cfg.Modal,
+		owner:   owner,
 		h:       h,
 		title:   cfg.Title,
 		min:     cfg.MinSize,
@@ -207,7 +269,9 @@ func (s *Shell) NewSurface(cfg shell.SurfaceConfig, h shell.SurfaceHandler) (she
 		invalid: true,
 	}
 	sf.size = sf.clamp(cfg.Size)
-	if cfg.Center {
+	if cfg.Modal {
+		sf.style &^= driver.StyleResizable | driver.StyleMiniaturizable
+	} else if cfg.Center {
 		sf.centers = 1
 	}
 	s.surfaces = append(s.surfaces, sf)
@@ -234,9 +298,15 @@ func (s *Shell) Deactivate() {
 }
 
 func (s *Shell) setKey(sf *Surface) {
+	if m := s.activeModal(); sf != nil && m != nil {
+		sf = m // the OS refuses a blocked surface's activation
+	}
 	old := s.key
 	if old == sf {
 		return
+	}
+	if old != nil {
+		old.dismissGrab() // the parent of a grab popup stops being key
 	}
 	s.key = sf
 	if old != nil && !old.dead {
@@ -247,7 +317,8 @@ func (s *Shell) setKey(sf *Surface) {
 	}
 }
 
-// TextSystem implements shell.Shell.
+// TextSystem returns the text system handed to Handler.Ready (a
+// test accessor; shell.Shell has none).
 func (s *Shell) TextSystem() render.TextSystem {
 	s.checkReady("Shell.TextSystem")
 	return s.text
@@ -291,8 +362,8 @@ func (s *Shell) SetScreen(size driver.Size, scale float64) {
 	s.screen, s.screenScale = size, scale
 }
 
-// Clock implements shell.Shell. It returns the manual clock; its frames
-// also paint the surfaces.
+// Clock returns the manual clock handed to Handler.Ready (a test
+// accessor; shell.Shell has none). Its frames also paint the surfaces.
 func (s *Shell) Clock() shell.FrameClock {
 	s.checkReady("Shell.Clock")
 	return s.clock
@@ -306,11 +377,60 @@ func (s *Shell) FakeClock() *Clock {
 }
 
 // paintPass runs after the frame function of each frame: every invalidated,
-// visible, not minimized surface is painted once, in creation order.
+// visible, not minimized surface is painted once, in creation order, then
+// every invalidated popup of such a surface whose Placed is not pending
+// (SetDeferPlaced).
 func (s *Shell) paintPass(time.Duration) {
 	for _, sf := range append([]*Surface(nil), s.surfaces...) {
 		if !sf.dead && sf.invalid && sf.visible && !sf.minimized {
 			sf.paint()
 		}
 	}
+	for _, p := range append([]*Popup(nil), s.popups...) {
+		if !p.dead && p.invalid && !p.placedDue && p.parent.visible && !p.parent.minimized {
+			p.paint()
+		}
+	}
+}
+
+// timedPaint runs paint (a handler's Paint on c) with painting set, ends
+// c and returns its contract errors; with a frame observer the two parts
+// are timed (S6.2c: the paint, and the recorder's checks as the submit).
+func (s *Shell) timedPaint(paint func(), c *record.Canvas) error {
+	ft := &s.clock.frameTimer
+	var start, painted time.Time
+	if ft.Active() {
+		start = time.Now()
+	}
+	s.painting = true
+	func() {
+		defer func() { s.painting = false }()
+		paint()
+	}()
+	if ft.Active() {
+		painted = time.Now()
+	}
+	err := c.End()
+	if ft.Active() {
+		ft.Painted(painted.Sub(start), time.Since(painted), 0)
+	}
+	s.clock.presented()
+	return err
+}
+
+// offScreen reports whether the shell has open surfaces and none on
+// screen: each is hidden or minimized (its popups go with it). The clock
+// then runs requested frames at the low rate (HiddenInterval, S6.2b).
+func (s *Shell) offScreen() bool {
+	open := false
+	for _, sf := range s.surfaces {
+		if sf.dead {
+			continue
+		}
+		if sf.visible && !sf.minimized {
+			return false
+		}
+		open = true
+	}
+	return open
 }

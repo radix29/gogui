@@ -44,3 +44,16 @@ func TestReadWriteHeapAlloc(t *testing.T) {
 	checkWordRoundTrip(t, p, 16)
 	checkInt32RoundTrip(t, p, 16)
 }
+
+func TestWriteBytesHeapAlloc(t *testing.T) {
+	p, free := heapAlloc(t, 32)
+	defer free()
+	in := []byte("native bytes, odd offset")
+	WriteBytes(p+1, in)
+	if got := CopyBytes(p+1, len(in)); string(got) != string(in) {
+		t.Errorf("round trip = %q, want %q", got, in)
+	}
+	if got := CopyBytes(p, 1); got[0] != 0 {
+		t.Errorf("byte before the write = %d, want 0", got[0])
+	}
+}

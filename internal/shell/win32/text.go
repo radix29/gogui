@@ -11,7 +11,7 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/mainthread"
 	"github.com/radix29/gogui/internal/render"
-	"github.com/radix29/gogui/internal/shell/fake"
+	"github.com/radix29/gogui/internal/shell/shellkit"
 	"github.com/radix29/gogui/internal/shell/win32/dwrite"
 )
 
@@ -20,13 +20,15 @@ import (
 // Layouts are made in DIPs, which are the logical points, with the natural
 // measuring mode, so measurement is the same at every scale and on every
 // monitor; crispness comes from the device context's DPI (S2.5f). A layout
-// is measured once, in NewLayout, and kept as plain Go data: its native
-// IDWriteTextLayout is released right away, because TextLayout has no
-// Release and nothing may rely on finalizers (PLAN.md §7.2). The line and
-// cluster geometry is read then too (textgeom.go), so HitTest, CaretRect
-// and SelectionRects make no native calls; drawing (S2.5f) rebuilds a
-// native layout from the stored text, font and width. Only the text formats
-// are cached, per resolved font, and live until the shell shuts down.
+// is measured once, in NewLayout, and kept as plain Go data: it owns no
+// native object, because TextLayout has no Release and nothing may rely
+// on finalizers (PLAN.md §7.2). Its native IDWriteTextLayout goes to the
+// bounded drawn-layout cache (textcache.go, S5.4k), which drawing uses and
+// which rebuilds it from the stored text, font and width once evicted
+// (S2.5f). The line and cluster geometry is read in NewLayout too
+// (textgeom.go), so HitTest, CaretRect and SelectionRects make no native
+// calls. The text formats are cached too, per resolved font, and live
+// until the shell shuts down.
 //
 // The embedded fonts (S2.5g) are the .ttf/.otf files of assets/fonts: one
 // in-memory collection is built from all of them with the first layout.
@@ -60,7 +62,7 @@ var errTextReleased = errors.New("win32: text: the text system is released")
 
 // textSystem implements render.TextSystem. It is used on the UI thread. The
 // DirectWrite objects are created with the first layout; when that fails, or
-// after release, layouts come from shell/fake's fixed-width metrics (the
+// after release, layouts come from shellkit.FixedText's fixed-width metrics (the
 // first failure is logged), so text never takes the application down.
 type textSystem struct {
 	q *mainthread.Queue
@@ -72,6 +74,9 @@ type textSystem struct {
 	embedded               dwrite.FontCollection // fonts.Collection, or nil
 	uiFamily               string                // the system UI family
 	formats                map[fontKey]dwrite.TextFormat
+	memo                   map[familyQuery]resolved // resolve's family lookups (review P17)
+	lookups                int                      // family lookups in the collections (tests)
+	drawn                  drawnCache               // the native layouts DrawText draws (textcache.go)
 
 	// fontFiles returns the files of the embedded collection (fonts.Files;
 	// the tests' hook), embeddedUI is the family the empty family resolves
@@ -91,6 +96,19 @@ func newTextSystem(q *mainthread.Queue) *textSystem {
 		ts.debugf = log.Printf
 	}
 	return ts
+}
+
+// familyQuery is the part of a render.Font that resolve's family lookups
+// depend on, and resolved their result: memoized, so that a layout in a
+// family already seen makes no COM call to find its font (review P17).
+type familyQuery struct {
+	family     string
+	monospaced bool
+}
+
+type resolved struct {
+	family   string
+	embedded bool
 }
 
 // fontKey identifies a resolved font.
@@ -155,7 +173,7 @@ func (ts *textSystem) loadEmbedded() {
 // the last one.
 func (ts *textSystem) firstInstalled(names ...string) string {
 	for _, n := range names {
-		if hasFamily(ts.system, n) {
+		if ts.hasFamily(ts.system, n) {
 			return n
 		}
 	}
@@ -163,10 +181,11 @@ func (ts *textSystem) firstInstalled(names ...string) string {
 }
 
 // hasFamily reports whether c (which may be nil) has the family name.
-func hasFamily(c dwrite.FontCollection, name string) bool {
+func (ts *textSystem) hasFamily(c dwrite.FontCollection, name string) bool {
 	if c.IsNil() {
 		return false
 	}
+	ts.lookups++
 	_, ok, err := c.FindFamilyName(name)
 	return err == nil && ok
 }
@@ -178,6 +197,7 @@ func hasFamily(c dwrite.FontCollection, name string) bool {
 // metrics.
 func (ts *textSystem) release(leak func(what string, left uint32)) {
 	ts.closed = true
+	ts.releaseDrawn(leak)
 	if !ts.inited {
 		return
 	}
@@ -186,7 +206,7 @@ func (ts *textSystem) release(leak func(what string, left uint32)) {
 			leak("text format", n)
 		}
 	}
-	ts.formats = nil
+	ts.formats, ts.memo = nil, nil
 	ts.fonts.Release() // after the formats: the loader must outlive them
 	ts.fonts, ts.embedded = nil, dwrite.FontCollection{}
 	ts.system.Release()
@@ -205,19 +225,33 @@ func (ts *textSystem) resolve(f render.Font) fontKey {
 		weight: dwrite.FontWeight(min(max(int(f.EffectiveWeight()), 1), 999)),
 		italic: f.Italic,
 	}
-	switch {
-	case f.Family != "" && hasFamily(ts.embedded, f.Family):
-		k.family, k.embedded = f.Family, true
-	case f.Family != "" && hasFamily(ts.system, f.Family):
-		k.family = f.Family
-	case f.Family == "" && f.Monospaced:
-		k.family = ts.firstInstalled(familyMono, familyMonoLast)
-	case hasFamily(ts.embedded, ts.embeddedUI):
-		k.family, k.embedded = ts.embeddedUI, true
-	default:
-		k.family = ts.uiFamily
+	q := familyQuery{f.Family, f.Monospaced}
+	r, ok := ts.memo[q]
+	if !ok {
+		r = ts.resolveFamily(q)
+		if ts.memo == nil || len(ts.memo) >= maxFormats {
+			ts.memo = make(map[familyQuery]resolved)
+		}
+		ts.memo[q] = r
 	}
+	k.family, k.embedded = r.family, r.embedded
 	return k
+}
+
+// resolveFamily looks the family of q up in the collections (resolve).
+func (ts *textSystem) resolveFamily(q familyQuery) resolved {
+	switch {
+	case q.family != "" && ts.hasFamily(ts.embedded, q.family):
+		return resolved{q.family, true}
+	case q.family != "" && ts.hasFamily(ts.system, q.family):
+		return resolved{q.family, false}
+	case q.family == "" && q.monospaced:
+		return resolved{ts.firstInstalled(familyMono, familyMonoLast), false}
+	case ts.hasFamily(ts.embedded, ts.embeddedUI):
+		return resolved{ts.embeddedUI, true}
+	default:
+		return resolved{ts.uiFamily, false}
+	}
 }
 
 // format returns the cached text format of k.
@@ -259,7 +293,7 @@ func (ts *textSystem) NewLayout(text string, font render.Font, maxWidth float64)
 			log.Printf("win32: text: DirectWrite failed, using fixed-width metrics: %v", err)
 		}
 	}
-	return fake.NewTextSystem().NewLayout(text, font, maxWidth)
+	return shellkit.FixedText{}.NewLayout(text, font, maxWidth)
 }
 
 // wrapWidth returns the layout box width for maxWidth and whether the text
@@ -305,7 +339,12 @@ func (ts *textSystem) layout(text string, font render.Font, maxWidth float64) (*
 	if err != nil {
 		return nil, err
 	}
-	defer dl.Release()
+	kept := false
+	defer func() {
+		if !kept {
+			dl.Release()
+		}
+	}()
 	m, err := dl.Metrics()
 	if err != nil {
 		return nil, err
@@ -334,6 +373,8 @@ func (ts *textSystem) layout(text string, font render.Font, maxWidth float64) (*
 		return nil, err
 	}
 	l.baseline, l.lineHeight = float64(lines[0].Baseline), float64(lines[0].Height)
+	ts.keepDrawn(l, dl) // for its first draw (textcache.go)
+	kept = true
 	return l, nil
 }
 
@@ -369,6 +410,18 @@ func (l *layout) HitTest(p render.Point) (int, bool) {
 // CaretRect implements render.TextLayout.
 func (l *layout) CaretRect(index int) render.Rect {
 	return l.geom.caret(l.geom.clusterStart(l.idx.unit(index)))
+}
+
+// CaretRectUpstream implements render.TextLayout.
+func (l *layout) CaretRectUpstream(index int) render.Rect {
+	return l.geom.caretUpstream(l.geom.clusterStart(l.idx.unit(index)))
+}
+
+// Line implements render.TextLayout: its text ends before the line's break.
+func (l *layout) Line(i int) render.LineMetrics {
+	ln := l.geom.line(i)
+	return render.LineMetrics{Start: l.idx.byteOffset(ln.start), End: l.idx.byteOffset(ln.content),
+		Top: ln.top, Height: ln.height, Baseline: ln.baseline}
 }
 
 // SelectionRects implements render.TextLayout.

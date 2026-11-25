@@ -21,7 +21,7 @@ manual checks; S0.10, and with it phase 0.5, gets its ✅ only after both. There
 (dropped 2026-10-13, PLAN.md §8.4): the user runs `bash scripts/native.sh` on each
 target and brings back `native-logs/<goos>-<goarch>.log`.
 
-Toolchain: Go 1.26.4, purego v0.11.1, `CGO_ENABLED=0` everywhere.
+Toolchain: Go 1.27.3 (go.mod `toolchain go1.27.3`; the spikes first ran on 1.26.4), purego v0.11.1, `CGO_ENABLED=0` everywhere.
 
 ---
 

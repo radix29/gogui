@@ -1,0 +1,238 @@
+## key, light, 700 wide
+fillRRect (0,0,700,28) solid #e5e5e5
+fillRRect (0,27,700,1) solid #0000001a
+text (332.5,6,35,16) "Hello" 13pt w600 #000000d9
+text (79,6,28,16) "Test" 13pt w700 #000000d9
+text (121,6,28,16) "File" 13pt #000000d9
+text (163,6,28,16) "Edit" 13pt #000000d9
+text (205,6,28,16) "View" 13pt #000000d9
+text (247,6,42,16) "Window" 13pt #000000d9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## key, File highlighted, light, 700 wide
+fillRRect (0,0,700,28) solid #e5e5e5
+fillRRect (0,27,700,1) solid #0000001a
+text (332.5,6,35,16) "Hello" 13pt w600 #000000d9
+text (79,6,28,16) "Test" 13pt w700 #000000d9
+fillRRect (114,4,42,20) r=5 solid #0000001a
+text (121,6,28,16) "File" 13pt #000000d9
+text (163,6,28,16) "Edit" 13pt #000000d9
+text (205,6,28,16) "View" 13pt #000000d9
+text (247,6,42,16) "Window" 13pt #000000d9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## inactive, light, 700 wide
+fillRRect (0,0,700,28) solid #f3f3f3
+fillRRect (0,27,700,1) solid #0000001a
+text (332.5,6,35,16) "Hello" 13pt w600 #00000042
+text (79,6,28,16) "Test" 13pt w700 #00000042
+text (121,6,28,16) "File" 13pt #00000042
+text (163,6,28,16) "Edit" 13pt #00000042
+text (205,6,28,16) "View" 13pt #00000042
+text (247,6,42,16) "Window" 13pt #00000042
+fillRRect (8,8,12,12) r=6 solid #dcdcdc
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #c9c9c9
+fillRRect (28,8,12,12) r=6 solid #dcdcdc
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #c9c9c9
+fillRRect (48,8,12,12) r=6 solid #dcdcdc
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #c9c9c9
+## increased contrast, light, 700 wide
+fillRRect (0,0,700,28) solid #e5e5e5
+fillRRect (0,27,700,1) solid #00000066
+text (332.5,6,35,16) "Hello" 13pt w600 #000000
+text (79,6,28,16) "Test" 13pt w700 #000000
+text (121,6,28,16) "File" 13pt #000000
+text (163,6,28,16) "Edit" 13pt #000000
+text (205,6,28,16) "View" 13pt #000000
+text (247,6,42,16) "Window" 13pt #000000
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a62622
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a8700a
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #0c7a18
+## increased contrast, app menu highlighted, light, 700 wide
+fillRRect (0,0,700,28) solid #e5e5e5
+fillRRect (0,27,700,1) solid #00000066
+text (332.5,6,35,16) "Hello" 13pt w600 #000000
+fillRRect (72,4,42,20) r=5 solid #00000040
+text (79,6,28,16) "Test" 13pt w700 #000000
+text (121,6,28,16) "File" 13pt #000000
+text (163,6,28,16) "Edit" 13pt #000000
+text (205,6,28,16) "View" 13pt #000000
+text (247,6,42,16) "Window" 13pt #000000
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a62622
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a8700a
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #0c7a18
+## increased contrast, inactive, light, 700 wide
+fillRRect (0,0,700,28) solid #f3f3f3
+fillRRect (0,27,700,1) solid #00000066
+text (332.5,6,35,16) "Hello" 13pt w600 #0000008c
+text (79,6,28,16) "Test" 13pt w700 #0000008c
+text (121,6,28,16) "File" 13pt #0000008c
+text (163,6,28,16) "Edit" 13pt #0000008c
+text (205,6,28,16) "View" 13pt #0000008c
+text (247,6,42,16) "Window" 13pt #0000008c
+fillRRect (8,8,12,12) r=6 solid #dcdcdc
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #808080
+fillRRect (28,8,12,12) r=6 solid #dcdcdc
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #808080
+fillRRect (48,8,12,12) r=6 solid #dcdcdc
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #808080
+## title truncated, light, 655 wide
+fillRRect (0,0,655,28) solid #e5e5e5
+fillRRect (0,27,655,1) solid #0000001a
+text (313.5,6,28,16) "Hel…" 13pt w600 #000000d9
+text (79,6,28,16) "Test" 13pt w700 #000000d9
+text (121,6,28,16) "File" 13pt #000000d9
+text (163,6,28,16) "Edit" 13pt #000000d9
+text (205,6,28,16) "View" 13pt #000000d9
+text (247,6,42,16) "Window" 13pt #000000d9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## narrow: three titles, no window title, light, 300 wide
+fillRRect (0,0,300,28) solid #e5e5e5
+fillRRect (0,27,300,1) solid #0000001a
+text (79,6,28,16) "Test" 13pt w700 #000000d9
+text (121,6,28,16) "File" 13pt #000000d9
+text (163,6,28,16) "Edit" 13pt #000000d9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## key, dark, 700 wide
+fillRRect (0,0,700,28) solid #383838
+fillRRect (0,27,700,1) solid #000000
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffffd9
+text (79,6,28,16) "Test" 13pt w700 #ffffffd9
+text (121,6,28,16) "File" 13pt #ffffffd9
+text (163,6,28,16) "Edit" 13pt #ffffffd9
+text (205,6,28,16) "View" 13pt #ffffffd9
+text (247,6,42,16) "Window" 13pt #ffffffd9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## key, File highlighted, dark, 700 wide
+fillRRect (0,0,700,28) solid #383838
+fillRRect (0,27,700,1) solid #000000
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffffd9
+text (79,6,28,16) "Test" 13pt w700 #ffffffd9
+fillRRect (114,4,42,20) r=5 solid #ffffff26
+text (121,6,28,16) "File" 13pt #ffffffd9
+text (163,6,28,16) "Edit" 13pt #ffffffd9
+text (205,6,28,16) "View" 13pt #ffffffd9
+text (247,6,42,16) "Window" 13pt #ffffffd9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## inactive, dark, 700 wide
+fillRRect (0,0,700,28) solid #2b2b2b
+fillRRect (0,27,700,1) solid #000000
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffff40
+text (79,6,28,16) "Test" 13pt w700 #ffffff40
+text (121,6,28,16) "File" 13pt #ffffff40
+text (163,6,28,16) "Edit" 13pt #ffffff40
+text (205,6,28,16) "View" 13pt #ffffff40
+text (247,6,42,16) "Window" 13pt #ffffff40
+fillRRect (8,8,12,12) r=6 solid #545454
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #4a4a4a
+fillRRect (28,8,12,12) r=6 solid #545454
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #4a4a4a
+fillRRect (48,8,12,12) r=6 solid #545454
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #4a4a4a
+## increased contrast, dark, 700 wide
+fillRRect (0,0,700,28) solid #383838
+fillRRect (0,27,700,1) solid #ffffff66
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffff
+text (79,6,28,16) "Test" 13pt w700 #ffffff
+text (121,6,28,16) "File" 13pt #ffffff
+text (163,6,28,16) "Edit" 13pt #ffffff
+text (205,6,28,16) "View" 13pt #ffffff
+text (247,6,42,16) "Window" 13pt #ffffff
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a62622
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a8700a
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #0c7a18
+## increased contrast, app menu highlighted, dark, 700 wide
+fillRRect (0,0,700,28) solid #383838
+fillRRect (0,27,700,1) solid #ffffff66
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffff
+fillRRect (72,4,42,20) r=5 solid #ffffff4d
+text (79,6,28,16) "Test" 13pt w700 #ffffff
+text (121,6,28,16) "File" 13pt #ffffff
+text (163,6,28,16) "Edit" 13pt #ffffff
+text (205,6,28,16) "View" 13pt #ffffff
+text (247,6,42,16) "Window" 13pt #ffffff
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a62622
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #a8700a
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #0c7a18
+## increased contrast, inactive, dark, 700 wide
+fillRRect (0,0,700,28) solid #2b2b2b
+fillRRect (0,27,700,1) solid #ffffff66
+text (332.5,6,35,16) "Hello" 13pt w600 #ffffff8c
+text (79,6,28,16) "Test" 13pt w700 #ffffff8c
+text (121,6,28,16) "File" 13pt #ffffff8c
+text (163,6,28,16) "Edit" 13pt #ffffff8c
+text (205,6,28,16) "View" 13pt #ffffff8c
+text (247,6,42,16) "Window" 13pt #ffffff8c
+fillRRect (8,8,12,12) r=6 solid #545454
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #8c8c8c
+fillRRect (28,8,12,12) r=6 solid #545454
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #8c8c8c
+fillRRect (48,8,12,12) r=6 solid #545454
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #8c8c8c
+## title truncated, dark, 655 wide
+fillRRect (0,0,655,28) solid #383838
+fillRRect (0,27,655,1) solid #000000
+text (313.5,6,28,16) "Hel…" 13pt w600 #ffffffd9
+text (79,6,28,16) "Test" 13pt w700 #ffffffd9
+text (121,6,28,16) "File" 13pt #ffffffd9
+text (163,6,28,16) "Edit" 13pt #ffffffd9
+text (205,6,28,16) "View" 13pt #ffffffd9
+text (247,6,42,16) "Window" 13pt #ffffffd9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29
+## narrow: three titles, no window title, dark, 300 wide
+fillRRect (0,0,300,28) solid #383838
+fillRRect (0,27,300,1) solid #000000
+text (79,6,28,16) "Test" 13pt w700 #ffffffd9
+text (121,6,28,16) "File" 13pt #ffffffd9
+text (163,6,28,16) "Edit" 13pt #ffffffd9
+fillRRect (8,8,12,12) r=6 solid #ff5f57
+strokeRRect (8.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #e0443e
+fillRRect (28,8,12,12) r=6 solid #febc2e
+strokeRRect (28.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #dea123
+fillRRect (48,8,12,12) r=6 solid #28c840
+strokeRRect (48.25,8.25,11.5,11.5) r=5.75 w=0.5 solid #1aab29

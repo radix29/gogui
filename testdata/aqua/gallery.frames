@@ -1,0 +1,90 @@
+Stack 0,0 640x400
+  Stack 20,20 230.5x360
+    Label 0,0 35x16
+    Label 0,22 105x16
+    Label 0,44 98x16
+    Label 0,66 65.15384615384616x13.538461538461538
+    Label 0,85.53846153846155 70x16
+    Separator 0,107.53846153846155 230.5x1
+    Button 0,114.53846153846155 101x20
+    Button 0,140.53846153846155 73x20
+    Button 0,166.53846153846155 70x20
+    Button 0,192.53846153846155 80x20
+    Button 0,218.53846153846155 60x17
+    Button 0,241.53846153846155 50x14
+    Button 0,261.53846153846155 80x26
+  Separator 266.5,20 1x360
+  Stack 283.5,20 82x360
+    Checkbox 0,0 76x16
+    Checkbox 0,22 69x16
+    Checkbox 0,44 55x16
+    Checkbox 0,66 76x16
+    Checkbox 0,88 69x16
+    Box 0,110 82x94
+      RadioGroup 0,0 62x60
+        Radio 0,0 55x16
+        Radio 0,22 62x16
+        Radio 0,44 55x16
+  Separator 381.5,20 1x360
+  Stack 398.5,20 221.5x360
+    Slider 0,0 221.5x20
+    Slider 0,30 221.5x28
+    Slider 0,68 221.5x20
+    ProgressBar 0,98 221.5x6
+    ProgressBar 0,114 221.5x6
+    Stack 0,130 221.5x32
+      Spinner 0,0 32x32
+    ScrollView 0,172 221.5x188
+      Stack 0,0 268x246
+        Stack 10,10 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,40 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,70 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,100 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,130 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,160 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,190 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+        Stack 10,220 248x16
+          Label 0,0 56x16
+          Label 96,0 56x16
+          Label 192,0 56x16
+titlebar
+  titlebar "Gallery" @0,0 640x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "Gallery" 295.5,6 49x16
+  region caption 0,0 640x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12
+titlebar at 560x428
+  titlebar "Gallery" @0,0 560x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "Gallery" 255.5,6 49x16
+  region caption 0,0 560x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12

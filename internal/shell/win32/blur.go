@@ -46,10 +46,8 @@ type backdrop struct {
 }
 
 // release releases the scratch bitmap; leak gets a reference left over.
-func (b *backdrop) release(leak func(what string, left uint32)) {
-	if n := b.bmp.Release(); n != 0 && leak != nil {
-		leak("ID2D1Bitmap1 (backdrop)", n)
-	}
+func (b *backdrop) release(leak leakFunc) {
+	leak.releaseLast("ID2D1Bitmap1 (backdrop)", &b.bmp.Ptr)
 	b.w, b.h, b.dpi = 0, 0, 0
 }
 
@@ -171,7 +169,7 @@ func (c *canvas) blurBackdrop(r render.Rect, sigma float64) {
 		}
 	}
 	for _, p := range reopen {
-		c.dc.SetTransform(p.xf)
+		c.sendXf(p.xf)
 		switch p.kind {
 		case pushClip:
 			c.dc.PushAxisAlignedClip(p.rect, p.aa)
@@ -180,8 +178,6 @@ func (c *canvas) blurBackdrop(r render.Rect, sigma float64) {
 		}
 		c.pushes = append(c.pushes, p)
 	}
-	m, _ := matrix(c.xf) // c.xf was narrowed when it was set
-	c.dc.SetTransform(m)
 	if copyErr != nil {
 		return
 	}
@@ -205,10 +201,8 @@ func (c *canvas) drawBlur() {
 	}
 	c.blur.ok = false
 	at := c.blur.at
-	c.dc.SetTransform(d2d.IdentityMatrix())
+	c.sendXf(d2d.IdentityMatrix())
 	c.dc.DrawImage(c.blurFx.out, &at, nil, d2d.INTERPOLATION_MODE_NEAREST_NEIGHBOR, d2d.COMPOSITE_MODE_SOURCE_OVER)
-	m, _ := matrix(c.xf)
-	c.dc.SetTransform(m)
 	c.blurs++
 }
 

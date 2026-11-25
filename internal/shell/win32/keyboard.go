@@ -5,6 +5,8 @@ package win32
 import (
 	"unicode/utf16"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/shell"
 	"github.com/radix29/gogui/internal/shell/win32/w32"
@@ -19,8 +21,15 @@ import (
 //     layout (MapVirtualKeyExW, which leaves the dead-key state alone,
 //     unlike ToUnicodeEx), KeyNone for the rest (modifier keys alone,
 //     Insert, F13 and up). Repeat is lParam bit 30, the previous key state.
-//     A key that went to the IME (VK_PROCESSKEY) is not delivered; the IME
-//     is S5.3.
+//     A key-down of a character key also carries Shifted (S5.6h), the
+//     character the layout gives it with Shift alone: ToUnicodeEx over a
+//     Shift-only keyboard state with TOUNICODE_NOSTATE (Windows 10 1607
+//     on, below D7's floor), so a pending dead key is not consumed.
+//     A modifier key alone carries its Modifier (modifierFor, S5.6i),
+//     on the press and the release, so the aqua menu strip tells a lone
+//     Alt from Insert or F13.
+//     A key that went to the IME (VK_PROCESSKEY) is not delivered; the
+//     composition arrives as WM_IME_* messages (ime.go).
 //   - The message loop's TranslateMessage has already posted the key's
 //     WM_CHAR when the key-down arrives. If Event returns true, the key was
 //     consumed: its pending WM_CHAR and WM_SYSCHAR messages are removed
@@ -92,14 +101,44 @@ func keyFor(vk uint32, layoutChar func(vk uint32) uint32) driver.Key {
 		return driver.KeyF1 + driver.Key(vk-w32.VK_F1)
 	case vk >= w32.VK_NUMPAD0 && vk <= w32.VK_NUMPAD9:
 		return driver.Key('0' + vk - w32.VK_NUMPAD0)
-	case vk > w32.VK_F12 && vk <= w32.VK_F24, noCharKeys[vk], vk < 0x20:
+	case !layoutKey(vk):
 		return driver.KeyNone
 	}
-	c := rune(layoutChar(vk) &^ mapDeadKey)
+	return charKey(rune(layoutChar(vk) &^ mapDeadKey))
+}
+
+// layoutKey reports whether vk is a character key, whose character the
+// keyboard layout gives (not a named key, the keypad, a function or a
+// modifier key).
+func layoutKey(vk uint32) bool {
+	if _, ok := vkKeys[vk]; ok {
+		return false
+	}
+	switch {
+	case vk >= w32.VK_F1 && vk <= w32.VK_F24, vk >= w32.VK_NUMPAD0 && vk <= w32.VK_NUMPAD9,
+		noCharKeys[vk], vk < 0x20:
+		return false
+	}
+	return true
+}
+
+// charKey returns the key of a layout's character c, KeyNone for none
+// and for control characters and surrogates.
+func charKey(c rune) driver.Key {
 	if c < 0x20 || c == 0x7F || (c >= 0x80 && c < 0xA0) || utf16.IsSurrogate(c) {
 		return driver.KeyNone
 	}
 	return driver.NormalizeKey(driver.Key(c))
+}
+
+// shiftedFor returns KeyEvent.Shifted of virtual key vk with scan code
+// scan (S5.6h): for a character key, the character the layout gives it
+// with Shift alone, from shiftedChar (ToUnicodeEx), KeyNone otherwise.
+func shiftedFor(vk, scan uint32, shiftedChar func(vk, scan uint32) rune) driver.Key {
+	if !layoutKey(vk) {
+		return driver.KeyNone
+	}
+	return charKey(shiftedChar(vk, scan))
 }
 
 // liveLayoutChar maps vk with the calling thread's keyboard layout.
@@ -107,9 +146,61 @@ func liveLayoutChar(vk uint32) uint32 {
 	return w32.MapVirtualKeyEx(vk, w32.MAPVK_VK_TO_CHAR, w32.GetKeyboardLayout(0))
 }
 
+// liveShiftedChar is the character of vk with Shift alone held in the
+// calling thread's keyboard layout (0 for none or more than one).
+func liveShiftedChar(vk, scan uint32) rune {
+	return shiftedCharIn(vk, scan, w32.GetKeyboardLayout(0))
+}
+
+// shiftedCharIn is the character of vk with Shift alone held in layout
+// hkl: ToUnicodeEx over a keyboard state of Shift only (so Ctrl, Alt and
+// Caps Lock do not change it) with TOUNICODE_NOSTATE, which leaves a
+// pending dead key alone; a dead key gives its spacing character, as its
+// Key does; 0 for no character or a ligature of several.
+func shiftedCharIn(vk, scan uint32, hkl windows.Handle) rune {
+	var state [256]byte
+	state[w32.VK_SHIFT] = 0x80
+	state[w32.VK_LSHIFT] = 0x80
+	var buf [4]uint16
+	switch w32.ToUnicodeEx(vk, scan, &state, buf[:], w32.TOUNICODE_NOSTATE, hkl) {
+	case 1, -1:
+		return rune(buf[0])
+	}
+	return 0
+}
+
+// scanCode returns the scan code of a key message's lParam (bits 16–23,
+// the extended-key bit as 0xE000).
+func scanCode(lp uintptr) uint32 {
+	sc := uint32(lp>>16) & 0xFF
+	if lp&(1<<24) != 0 {
+		sc |= 0xE000
+	}
+	return sc
+}
+
 // isRepeat reports whether a key-down's lParam marks an auto-repeat
 // (bit 30: the key was already down).
 func isRepeat(lp uintptr) bool { return lp&(1<<30) != 0 }
+
+// modifierFor returns the modifier a modifier key's virtual key stands for
+// (S5.6i; 0 for other keys), as modifiersOf maps the key state: the
+// generic VK_SHIFT, VK_CONTROL and VK_MENU of the key messages and their
+// left and right forms, and the Windows keys. Under AltGr Windows sends a
+// left Control and a right Alt, so AltGr is a Control and an Option key.
+func modifierFor(vk uint32) driver.Modifiers {
+	switch vk {
+	case w32.VK_SHIFT, w32.VK_LSHIFT, w32.VK_RSHIFT:
+		return driver.ModShift
+	case w32.VK_CONTROL, w32.VK_LCONTROL, w32.VK_RCONTROL:
+		return driver.ModControl
+	case w32.VK_MENU, w32.VK_LMENU, w32.VK_RMENU:
+		return driver.ModOption
+	case w32.VK_LWIN, w32.VK_RWIN:
+		return driver.ModCommand
+	}
+	return 0
+}
 
 // keyMsg handles the key messages. handled false sends the message on to
 // DefWindowProcW.
@@ -124,12 +215,13 @@ func (sf *surface) keyMsg(msg uint32, wp, lp uintptr) (uintptr, bool) {
 		if vk < 256 {
 			sf.consumed[vk] = false
 		}
-		sf.h.Event(shell.KeyEvent{Key: keyFor(vk, liveLayoutChar), Mods: modifiers(),
+		sf.keySink().Event(shell.KeyEvent{Key: keyFor(vk, liveLayoutChar), Modifier: modifierFor(vk), Mods: modifiers(),
 			Time: sf.s.eventTime()})
 		return 0, consumed
 	}
-	handled := sf.h.Event(shell.KeyEvent{Down: true, Key: keyFor(vk, liveLayoutChar),
-		Repeat: isRepeat(lp), Mods: modifiers(), Time: sf.s.eventTime()})
+	handled := sf.keySink().Event(shell.KeyEvent{Down: true, Key: keyFor(vk, liveLayoutChar),
+		Shifted:  shiftedFor(vk, scanCode(lp), liveShiftedChar),
+		Modifier: modifierFor(vk), Repeat: isRepeat(lp), Mods: modifiers(), Time: sf.s.eventTime()})
 	if vk < 256 {
 		sf.consumed[vk] = handled
 	}
@@ -186,7 +278,7 @@ func (sf *surface) char(msg uint32, wp uintptr) (uintptr, bool) {
 		return 0, false
 	}
 	if t := textUnit(&sf.highSurrogate, uint16(wp)); t != "" && !sf.dead {
-		sf.h.Event(shell.TextEvent{Text: t, Time: sf.s.eventTime()})
+		sf.keySink().Event(shell.TextEvent{Text: t, Time: sf.s.eventTime()})
 	}
 	return 0, true
 }

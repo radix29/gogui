@@ -27,4 +27,18 @@ type FrameClock interface {
 	// running requests again from inside the frame function, which schedules
 	// the following frame. Surface.Invalidate requests a frame by itself.
 	RequestFrame()
+
+	// SetFrameObserver sets the function called with the timing of each
+	// frame (FrameTiming) after it, on the UI thread; nil removes it.
+	// Without an observer the clock measures nothing. It is the debug
+	// frame-time log's and the frame benchmarks' hook (PLAN.md S6.2c);
+	// the observer must not paint, and may request frames.
+	SetFrameObserver(fn func(FrameTiming))
+
+	// SetPresentObserver sets the function called with the PresentTiming of
+	// each present the display reports shown, on the UI thread, some frames
+	// after it; nil removes it. Without an observer the clock reads no
+	// presentation feedback. It is the frame-pacing run's hook (PLAN.md
+	// S6.2d); the observer must not paint, and may request frames.
+	SetPresentObserver(fn func(PresentTiming))
 }

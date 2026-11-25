@@ -156,17 +156,5 @@ const (
 	clusterIsRightToLeft
 )
 
-// CanWrapLineAfter is whether a line may break after the cluster.
-func (c ClusterMetrics) CanWrapLineAfter() bool { return c.Flags&clusterCanWrapLineAfter != 0 }
-
-// IsWhitespace is whether the cluster is whitespace.
-func (c ClusterMetrics) IsWhitespace() bool { return c.Flags&clusterIsWhitespace != 0 }
-
-// IsNewline is whether the cluster is a line break ("\n", "\r\n", U+2028 …).
-func (c ClusterMetrics) IsNewline() bool { return c.Flags&clusterIsNewline != 0 }
-
-// IsSoftHyphen is whether the cluster is a soft hyphen (U+00AD).
-func (c ClusterMetrics) IsSoftHyphen() bool { return c.Flags&clusterIsSoftHyphen != 0 }
-
 // IsRightToLeft is whether the cluster is laid out right to left.
 func (c ClusterMetrics) IsRightToLeft() bool { return c.Flags&clusterIsRightToLeft != 0 }

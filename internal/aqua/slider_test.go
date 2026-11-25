@@ -26,9 +26,6 @@ func newSlider(t *testing.T) *Slider {
 
 func TestSliderIsReal(t *testing.T) {
 	s := newSlider(t)
-	if _, ok := Caption(s); ok {
-		t.Error("the slider is still a placeholder peer")
-	}
 	if e := ElementOf(s); e == nil || e != Element(s.view) || s.StubPeer() != s.Slider || s.Stub() != &s.Slider.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -169,6 +166,7 @@ func TestSliderPaint(t *testing.T) {
 	// Disabled through an ancestor.
 	parent := newBox("parent", 0, 0, 200, 100)
 	parent.disabled = true
+	treeChange() // set without SetEnabled
 	parent.AddChild(s.view)
 	if got := paintPeer(t, s, r); !strings.Contains(got, "solid #ffffff80") {
 		t.Errorf("disabled ancestor:\n%s", got)
@@ -260,7 +258,7 @@ func TestSliderRedraws(t *testing.T) {
 func sliderWindow(t *testing.T) (*Slider, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	sl := d.NewSlider(nil).(*Slider)
 	sl.SetRange(0, 100)
@@ -318,50 +316,52 @@ func TestSliderInWindow(t *testing.T) {
 
 // TestSliderStates pins every state (normal, pressed, disabled, focused;
 // with and without tick marks; horizontal and vertical) in light and dark,
-// in a key and an inactive window, as record dumps in
-// testdata/slider.states.
+// in a key and an inactive window, with and without Increase Contrast
+// (S6.1e), as record dumps in testdata/slider.states.
 func TestSliderStates(t *testing.T) {
 	var out strings.Builder
-	for _, dark := range []bool{false, true} {
-		for _, key := range []bool{true, false} {
-			for _, st := range []struct {
-				name              string
-				vertical          bool
-				ticks             int
-				pressed           bool
-				disabled, focused bool
-			}{
-				{"normal", false, 0, false, false, false},
-				{"pressed", false, 0, true, false, false},
-				{"disabled", false, 0, false, true, false},
-				{"focused", false, 0, false, false, true},
-				{"tick marks", false, 3, false, false, false},
-				{"vertical", true, 0, false, false, false},
-				{"vertical tick marks pressed", true, 3, true, false, false},
-			} {
-				sl, w, sf, s := sliderWindow(t)
-				w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent})
-				sl.SetVertical(st.vertical)
-				sl.SetTickMarks(st.ticks, false)
-				knob := pt(45, 48) // the knob's centre at value 25
-				if st.vertical {
-					sl.SetFrame(driver.Rect{X: 10, Y: 10, W: 28, H: 60})
-					knob = pt(20, 38+50-10)
-				} else if st.ticks > 0 {
-					sl.SetFrame(driver.Rect{X: 10, Y: 10, W: 120, H: 28})
+	for _, contrast := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, key := range []bool{true, false} {
+				for _, st := range []struct {
+					name              string
+					vertical          bool
+					ticks             int
+					pressed           bool
+					disabled, focused bool
+				}{
+					{"normal", false, 0, false, false, false},
+					{"pressed", false, 0, true, false, false},
+					{"disabled", false, 0, false, true, false},
+					{"focused", false, 0, false, false, true},
+					{"tick marks", false, 3, false, false, false},
+					{"vertical", true, 0, false, false, false},
+					{"vertical tick marks pressed", true, 3, true, false, false},
+				} {
+					sl, w, sf, s := sliderWindow(t)
+					w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent, IncreaseContrast: contrast})
+					sl.SetVertical(st.vertical)
+					sl.SetTickMarks(st.ticks, false)
+					knob := pt(45, 48) // the knob's centre at value 25
+					if st.vertical {
+						sl.SetFrame(driver.Rect{X: 10, Y: 10, W: 28, H: 60})
+						knob = pt(20, 38+50-10)
+					} else if st.ticks > 0 {
+						sl.SetFrame(driver.Rect{X: 10, Y: 10, W: 120, H: 28})
+					}
+					sl.SetEnabled(!st.disabled)
+					if st.focused && !sl.view.Focus() {
+						t.Fatal("focus")
+					}
+					if st.pressed {
+						sf.Press(knob, shell.ButtonPrimary)
+					}
+					if !key {
+						s.Deactivate()
+					}
+					state := sl.view.State()
+					fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 				}
-				sl.SetEnabled(!st.disabled)
-				if st.focused && !sl.view.Focus() {
-					t.Fatal("focus")
-				}
-				if st.pressed {
-					sf.Press(knob, shell.ButtonPrimary)
-				}
-				if !key {
-					s.Deactivate()
-				}
-				state := sl.view.State()
-				fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 			}
 		}
 	}

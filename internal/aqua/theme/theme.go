@@ -11,10 +11,17 @@
 // (Typography), the parameters of the accent rules (Accent; the colors that
 // follow Appearance.Accent are computed, not stored, accent.go), the
 // animation durations, curves and springs (Animation), the tokens of the
-// drawn controls (Controls) and those of the scroll view (Scroll). Lengths
-// are in logical points. Colors with an
-// increased-contrast variant use it when Appearance.IncreaseContrast is
-// set.
+// drawn controls (Controls), those of the scroll view (Scroll), those of
+// the text fields (TextField), those of the text view (TextView) and those
+// of the menus (Menu; their highlight follows the accent, menu.go) and
+// those of the pop-up button (PopUp; its indicator follows the accent,
+// popup.go), those of the title-bar menu strip (MenuBar) and those of the
+// tooltips (Tooltip) and those of the alerts (Alert).
+// Lengths are in logical points. Colors with an increased-contrast variant
+// use it when Appearance.IncreaseContrast is set; the outline tokens
+// (Controls.BezelOutline, Controls.SliderTrackOutline) are transparent
+// otherwise, as Increase Contrast adds outlines the normal look does not
+// have (S6.1d).
 //
 // The values are provisional while phase 1 waits for a Mac: the spec marks
 // each one as "memory" (from memory, to be measured) or "measured", and
@@ -68,6 +75,277 @@ type Theme struct {
 	// Scroll holds the tokens of the scroll view: its scrollers and its
 	// physics (S3.5a).
 	Scroll Scroll
+
+	// TextField holds the tokens of the text field's bezel and caret
+	// (S5.2e; textfield.go).
+	TextField TextField
+
+	// TextView holds the geometry of the text view's text container
+	// (S5.4f).
+	TextView TextView
+
+	// Menu holds the tokens of the drawn menus (S5.5h; menu.go).
+	Menu Menu
+
+	// PopUp holds the tokens of the drawn pop-up button (S5.5j; popup.go).
+	PopUp PopUp
+
+	// MenuBar holds the tokens of the title-bar menu strip (S5.6c).
+	MenuBar MenuBar
+
+	// Tooltip holds the tokens of the drawn tooltips (S5.5l).
+	Tooltip Tooltip
+
+	// Alert holds the tokens of the drawn alerts (S5.7a).
+	Alert Alert
+}
+
+// Alert holds the tokens of the drawn alerts (PLAN.md S5.7a), modelled on
+// the macOS 11+ NSAlert: a fixed-width rounded panel with an icon centred
+// at the top, the message in the bold system font (Typography
+// EmphasizedWeight) and the detail in a smaller one, both centred and
+// wrapped below it, and the buttons under them (regular push buttons). The
+// icon is procedural (no Apple assets, §3.1): a neutral app placeholder,
+// or for a critical alert a caution triangle with the placeholder as a
+// badge. Lengths are in points.
+type Alert struct {
+	// Background fills the panel (opaque), Border is its hairline, drawn
+	// inside it, and Shadow the color of the shadow the panel draws itself
+	// where nothing draws one behind it (a sheet; offset by ShadowOffsetY
+	// with ShadowBlur, render.Shadow semantics). The texts are in
+	// ColorLabel, as NSAlert's.
+	Background, Border, Shadow ColorToken
+
+	// IconTop and IconBottom are the ends of the app placeholder's
+	// vertical gradient, IconBorder its hairline and IconGlyph the window
+	// glyph drawn on it. CautionFill fills the caution triangle and
+	// CautionMark is its exclamation mark.
+	IconTop, IconBottom, IconBorder, IconGlyph, CautionFill, CautionMark ColorToken
+
+	// Width is the panel's width; CornerRadius its corner radius and
+	// BorderWidth its border's (whole device pixels, at least one).
+	Width, CornerRadius, BorderWidth float64
+
+	// ShadowOffsetY and ShadowBlur shape the panel's own shadow.
+	ShadowOffsetY, ShadowBlur float64
+
+	// PaddingX is the space between the panel's sides and the texts and
+	// buttons, PaddingTop the space above the icon and PaddingBottom the
+	// space below the last button.
+	PaddingX, PaddingTop, PaddingBottom float64
+
+	// IconSize is the icon's side; IconCornerRadius the placeholder's
+	// corner radius at that size; BadgeSize the side of the placeholder
+	// badge over a critical alert's caution triangle; IconGap the space
+	// between the icon and the message.
+	IconSize, IconCornerRadius, BadgeSize, IconGap float64
+
+	// MessageFontSize and DetailFontSize are the sizes of the two texts'
+	// system fonts; DetailGap is the space between the message and the
+	// detail (none without a detail).
+	MessageFontSize, DetailFontSize, DetailGap float64
+
+	// ButtonsGap is the space between the texts and the first row of
+	// buttons, ButtonGap the space between two buttons side by side or
+	// stacked.
+	ButtonsGap, ButtonGap float64
+}
+
+// MenuBar holds the tokens of the menu strip the aqua driver draws in the
+// title bar on Windows and Linux (PLAN.md §5.4.1, S5.6c), right of the
+// traffic lights. The titles are in the regular system font (Typography),
+// the app menu's in EmphasizedWeight. Lengths are in points.
+type MenuBar struct {
+	// Text colors the titles of a key window, InactiveText those of an
+	// inactive one; Highlight is the rounded fill behind the open or
+	// keyboard-focused title (accent-free, as macOS's menu bar).
+	Text, InactiveText, Highlight ColorToken
+
+	// StartGap is the space between the traffic lights and the first
+	// title's slot. Each slot is its title's width plus TitlePaddingX on
+	// both sides; the highlight covers the slot, HighlightHeight high and
+	// centred in the bar, with HighlightRadius corners.
+	StartGap, TitlePaddingX, HighlightHeight, HighlightRadius float64
+
+	// MinDragWidth is the least caption width kept right of the last shown
+	// title (the titles that do not fit are dropped from the right), and
+	// WindowTitleGap the least space between the strip and the window
+	// title.
+	MinDragWidth, WindowTitleGap float64
+}
+
+// Tooltip holds the tokens of the drawn tooltips (PLAN.md S5.5l): a small
+// rounded panel with the text of Widget.SetTooltip, in a non-grab popup
+// below the pointer. Lengths are in points.
+type Tooltip struct {
+	// Background fills the panel (opaque: a tooltip is never blurred
+	// behind), Border is its hairline, drawn inside it, and Text colors the
+	// text. Shadow is the color of the shadow a tooltip draws itself where
+	// the OS draws none behind its popup (offset by ShadowOffsetY with
+	// ShadowBlur, render.Shadow semantics).
+	Background, Border, Text, Shadow ColorToken
+
+	// BorderWidth is the border's width (rounded to whole device pixels,
+	// at least one); CornerRadius is the panel's corner radius.
+	BorderWidth, CornerRadius float64
+
+	// ShadowOffsetY and ShadowBlur shape the tooltip's own shadow.
+	ShadowOffsetY, ShadowBlur float64
+
+	// PaddingX and PaddingY are the space between the panel's edges and the
+	// text; FontSize is the size of the text's system font
+	// (NSFont.toolTipsFont); a text that would make the panel wider than
+	// MaxWidth wraps.
+	PaddingX, PaddingY, FontSize, MaxWidth float64
+
+	// OffsetX and OffsetY place the panel's top-left corner from the
+	// pointer's hot spot: below the arrow cursor.
+	OffsetX, OffsetY float64
+
+	// Delay is how long the pointer has to rest on a widget with a tooltip
+	// before it shows; for Grace after a tooltip was hidden by moving off
+	// its widget, the next one shows at once.
+	Delay, Grace time.Duration
+}
+
+// PopUp holds the tokens of the drawn PopUpButton (PLAN.md S5.5j). It is a
+// push-button bezel (Metrics.Control, Controls.BezelBorder, ButtonFill)
+// with the selected title on the left, in the system font of the control
+// size, and on the right the indicator: a rounded rect inset into the
+// bezel, filled with the accent in a key window (PopUpIndicatorFill,
+// popup.go), with two procedural chevrons, one pointing up and one down,
+// stacked in its centre. Lengths are in points.
+type PopUp struct {
+	// IndicatorInset is the space between the bezel's top, right and
+	// bottom edges and the indicator; its corner radius is the bezel's
+	// minus this. IndicatorGap is the space between the title's
+	// truncation edge and the indicator.
+	IndicatorInset, IndicatorGap float64
+
+	// ChevronStroke is the chevrons' stroke width (round caps and joins);
+	// ChevronGap the space between the open sides of the up and the down
+	// chevron.
+	ChevronStroke, ChevronGap float64
+
+	// PaddingX is the space between the bezel's left edge and the
+	// left-aligned title, per control size.
+	PaddingX SizeTable
+
+	// IndicatorWidth is the indicator's width per control size; its
+	// height is the bezel's minus twice IndicatorInset.
+	IndicatorWidth SizeTable
+
+	// ChevronWidth is the width of each chevron per control size; a
+	// chevron is a right angle, half as high as wide.
+	ChevronWidth SizeTable
+}
+
+// Menu holds the tokens of the drawn menus (PLAN.md S5.5h): a pop-up
+// button's menu, and the title-bar menus from S5.6. A menu is a rounded
+// panel with a column of items: titles with a checkmark column on their
+// left, and separators. The highlighted item is a rounded fill in the
+// accent (Theme.MenuHighlight, menu.go), inset from the panel's sides.
+// Lengths are in points.
+type Menu struct {
+	// Background fills a menu whose popup the OS blurs behind
+	// (shell.Popup.Translucent): a translucent tint over the blur.
+	// OpaqueBackground fills it everywhere else (no blur: Windows 10, high
+	// contrast, transparency effects off, Linux). Border is the panel's
+	// hairline, drawn inside it. Shadow is the color of the shadow a menu
+	// draws itself where the OS draws none (offset by ShadowOffsetY with
+	// ShadowBlur, render.Shadow semantics).
+	Background, OpaqueBackground, Border, Shadow ColorToken
+
+	// Text colors an enabled item's title and checkmark, DisabledText a
+	// disabled item's, HighlightedText the highlighted item's (on the
+	// accent fill).
+	Text, DisabledText, HighlightedText ColorToken
+
+	// Separator colors a separator item's line.
+	Separator ColorToken
+
+	// BorderWidth is the border's width (rounded to whole device pixels,
+	// at least one); CornerRadius is the panel's corner radius.
+	BorderWidth, CornerRadius float64
+
+	// ShadowOffsetY and ShadowBlur shape the menu's own shadow.
+	ShadowOffsetY, ShadowBlur float64
+
+	// PaddingY is the space above the first item and below the last.
+	PaddingY float64
+
+	// HighlightInsetX is the space between the panel's sides and the
+	// highlight, HighlightRadius the highlight's corner radius.
+	HighlightInsetX, HighlightRadius float64
+
+	// CheckColumnWidth is the column between the highlight's left edge and
+	// the titles; a checkmark is centred in it, CheckmarkSize wide and
+	// high, stroked CheckmarkStroke wide. TitlePaddingRight is the space
+	// between the widest title and the panel's right side.
+	CheckColumnWidth, CheckmarkSize, CheckmarkStroke, TitlePaddingRight float64
+
+	// SeparatorHeight is the height of a separator item, whose line is
+	// SeparatorThickness thick (whole device pixels, at least one),
+	// centred in it and SeparatorInsetX from the panel's sides.
+	SeparatorHeight, SeparatorThickness, SeparatorInsetX float64
+
+	// ScrollArrowHeight is the height of the strip at the top or bottom of
+	// a menu lower than its items (S5.5i), shown while the items can
+	// scroll that way; its arrow, a triangle in Text pointing up or down,
+	// is ScrollArrowSize wide and half as high, centred in it.
+	ScrollArrowHeight, ScrollArrowSize float64
+
+	// ShortcutGap is the least space between the widest title and the
+	// shortcut column (S5.6b), which holds the items' shortcuts and submenu
+	// chevrons right-aligned TitlePaddingRight from the panel's right side;
+	// a menu without either has no column. A submenu chevron points right,
+	// SubmenuChevronSize high and half as wide, stroked
+	// SubmenuChevronStroke wide in the title's color.
+	ShortcutGap, SubmenuChevronSize, SubmenuChevronStroke float64
+
+	// ItemHeight is the height of a title item per control size; the
+	// title, in the system font of that size, is centred in it.
+	ItemHeight SizeTable
+}
+
+// TextView holds the tokens of the drawn TextView (PLAN.md S5.4f): the
+// geometry of its text container, as NSTextView's defaults. The text view
+// draws its text with the TextField's colors and caret (Caret,
+// TextSelection, CaretWidth) on ColorTextBackground. Lengths are in points.
+type TextView struct {
+	// ContainerInsetY is the space above the first line and below the
+	// last (NSTextView.textContainerInset.height).
+	ContainerInsetY float64
+
+	// LineFragmentPadding is the space left and right of every line
+	// (NSTextContainer.lineFragmentPadding): the text wraps at the
+	// viewport width minus twice this.
+	LineFragmentPadding float64
+}
+
+// TextField holds the tokens of the drawn TextField and SecureField
+// (PLAN.md S5.2e). The bezel is the field's whole frame (S5.2f, as an
+// NSTextField's square bezel) and is filled with ColorTextBackground; the text is ColorText (ColorDisabledControlText
+// when disabled), the placeholder ColorPlaceholderText and selected text
+// ColorSelectedText. The caret and the selection colors follow the accent
+// and the focus, so they are computed (Caret and TextSelection,
+// textfield.go), not stored. Lengths are in points.
+type TextField struct {
+	// FieldBorder is the bezel's border, FieldBorderWidth wide and drawn
+	// inside the bezel; FieldInsetShadow is the inset shadow under its top
+	// edge, offset by FieldInsetShadowOffsetY with FieldInsetShadowBlur
+	// (render.Shadow semantics).
+	FieldBorder, FieldInsetShadow ColorToken
+
+	FieldBorderWidth, FieldInsetShadowOffsetY, FieldInsetShadowBlur float64
+
+	// CaretWidth is the width of the insertion point.
+	CaretWidth float64
+
+	// FieldCornerRadius is the bezel's corner radius; FieldPaddingX is the
+	// space between the bezel's edge (its border included) and the text on
+	// either side. The text is centred vertically in the bezel.
+	FieldCornerRadius, FieldPaddingX SizeTable
 }
 
 // Scroll holds the tokens of the drawn scroll view (PLAN.md §5.6, S3.5a):
@@ -128,6 +406,14 @@ type Controls struct {
 	// pressed; BezelBorder is its 1 pt border.
 	BezelFill, BezelPressedFill, BezelBorder ColorToken
 
+	// BezelOutline is the solid outline Increase Contrast draws around a
+	// bezel whose normal look has no border: an accent-filled one (a
+	// default button, a checked or mixed checkbox's box, an on radio's
+	// circle, the pop-up button's indicator). It is transparent without
+	// Increase Contrast; the off-state bezels darken BezelBorder instead
+	// (S6.1d; painted from S6.1e).
+	BezelOutline ColorToken
+
 	// BoxFill and BoxBorder draw a Box's rounded group.
 	BoxFill, BoxBorder ColorToken
 
@@ -143,7 +429,7 @@ type Controls struct {
 
 	// ToggleDisabledAlpha is the opacity a disabled checkbox's box (with
 	// its mark) and a disabled radio's circle are drawn with.
-	ToggleDisabledAlpha float64
+	ToggleDisabledAlpha float32
 
 	// ButtonMinWidth is the least width of a push button's bezel.
 	ButtonMinWidth SizeTable
@@ -168,6 +454,12 @@ type Controls struct {
 	// draw the round knob; SliderTickMark colors the tick marks.
 	SliderTrack, SliderKnobFill, SliderKnobBorder, SliderKnobShadow, SliderTickMark ColorToken
 
+	// SliderTrackOutline is the solid outline Increase Contrast draws
+	// around a slider's whole track, the filled part included; transparent
+	// without Increase Contrast, as BezelOutline (S6.1d; painted from
+	// S6.1e).
+	SliderTrackOutline ColorToken
+
 	// ProgressTrack is the empty track of a progress bar (the filled part
 	// and the indeterminate band are ValueFill); SpinnerSpoke is the color
 	// of a spinner's leading spoke.
@@ -184,11 +476,12 @@ type Controls struct {
 	// SpinnerSpokes is the number of a spinner's spokes (a whole number);
 	// SpinnerTailAlpha is the opacity of the faintest spoke relative to
 	// SpinnerSpoke, the spokes between fading linearly.
-	SpinnerSpokes, SpinnerTailAlpha float64
+	SpinnerSpokes    float64
+	SpinnerTailAlpha float32
 
 	// ValueDisabledAlpha is the opacity a disabled slider or progress
 	// indicator is drawn with; ValueFill applies it to the filled part.
-	ValueDisabledAlpha float64
+	ValueDisabledAlpha float32
 
 	// SliderTrackThickness and SliderTrackRadius shape a horizontal
 	// slider's track (its height; a vertical one turns it); SliderKnobSize
@@ -331,9 +624,6 @@ type TrackingStep struct {
 	Size, Tracking float64
 }
 
-// LineHeightFor returns the line height of a font of size size, in points.
-func (t *Typography) LineHeightFor(size float64) float64 { return t.LineHeight * size }
-
 // TrackingAt returns the tracking at the font size size in thousandths of
 // an em: linear between two rows of the table, the first or the last row's
 // value outside it, and 0 for an empty table.
@@ -354,12 +644,6 @@ func (t *Typography) TrackingAt(size float64) float64 {
 	return tr[len(tr)-1].Tracking
 }
 
-// TrackingPoints returns the tracking at the font size size in points
-// (TrackingAt × size / 1000): the spacing to add after each character.
-func (t *Typography) TrackingPoints(size float64) float64 {
-	return t.TrackingAt(size) * size / 1000
-}
-
 // Accent holds the parameters of the accent rules (accent.go): the colors
 // that depend on Appearance.Accent are computed from it, never stored, so an
 // OS or app accent changes them all.
@@ -372,10 +656,21 @@ type Accent struct {
 	// button, a checked checkbox's mark).
 	DefaultButtonText ColorToken
 
+	// AccentDarkText replaces DefaultButtonText on a light accent, one
+	// that DefaultButtonText has a contrast ratio below
+	// AccentTextMinContrast on (S6.1g; Windows lets the user pick any
+	// accent).
+	AccentDarkText ColorToken
+
 	// SelectionAlpha is the alpha of the accent over Base in the selection
 	// colors (ColorSelectedTextBackground, ColorSelectedControl);
 	// FocusRingAlpha the alpha of the keyboard focus ring.
 	SelectionAlpha, FocusRingAlpha float32
+
+	// SelectionContrastAlpha replaces SelectionAlpha with
+	// Appearance.IncreaseContrast: a stronger selection that keeps the
+	// selected text readable (S6.1e).
+	SelectionContrastAlpha float32
 
 	// PressedShade is the factor a pressed accent fill scales the color
 	// channels by.
@@ -384,11 +679,16 @@ type Accent struct {
 	// InactiveAlpha is the alpha of the accent's grey (its luminance) over
 	// Base: accent fills in an inactive window.
 	InactiveAlpha float32
+
+	// AccentTextMinContrast is the WCAG 2 contrast ratio DefaultButtonText
+	// needs on the accent to stay the label of an accent fill (AccentText).
+	AccentTextMinContrast float32
 }
 
 // Animation holds the animation tokens (PLAN.md §5.5): durations, timing
 // curves and springs. The animation engine (internal/aqua/anim, S3.2) runs
-// them; with Appearance.ReduceMotion every duration is zero (Duration).
+// them; with Appearance.ReduceMotion the Timeline makes them jump
+// (anim.Timeline.SetReduceMotion).
 type Animation struct {
 	// DurationFast is for hover and press feedback, DurationNormal the
 	// default (0.2–0.25 s), DurationSlow for larger transitions.
@@ -409,15 +709,6 @@ type Animation struct {
 	// selection); RubberBandSpring brings a rubber-banded scroll view back
 	// to its edge.
 	ControlSpring, RubberBandSpring Spring
-}
-
-// Duration returns d for the appearance a: zero with Reduce Motion, so the
-// change happens at once.
-func (an *Animation) Duration(d time.Duration, a driver.Appearance) time.Duration {
-	if a.ReduceMotion {
-		return 0
-	}
-	return d
 }
 
 // Curve is a cubic-bezier timing curve from (0, 0) to (1, 1) with the

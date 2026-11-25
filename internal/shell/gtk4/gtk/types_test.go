@@ -1,6 +1,7 @@
 package gtk
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/radix29/gogui/internal/ffi"
@@ -48,12 +49,40 @@ func TestColorStopLayout(t *testing.T) {
 	ffi.CheckNoGoPointers(t, ColorStop{})
 }
 
-func TestAllocationLayout(t *testing.T) {
-	ffi.CheckLayout(t, Allocation{}, ffi.Layout{Size: 16, Align: 4, Fields: []ffi.Field{
+// TestRectangleLayout checks the GdkRectangle mirror (S5.5e) and that
+// Allocation is the same type, as GtkAllocation is GdkRectangle in C.
+func TestRectangleLayout(t *testing.T) {
+	ffi.CheckLayout(t, Rectangle{}, ffi.Layout{Size: 16, Align: 4, Fields: []ffi.Field{
 		{Name: "X", Offset: 0, Size: 4}, {Name: "Y", Offset: 4, Size: 4},
 		{Name: "Width", Offset: 8, Size: 4}, {Name: "Height", Offset: 12, Size: 4},
 	}})
-	ffi.CheckNoGoPointers(t, Allocation{})
+	ffi.CheckNoGoPointers(t, Rectangle{})
+	if reflect.TypeFor[Allocation]() != reflect.TypeFor[Rectangle]() {
+		t.Error("Allocation is not an alias of Rectangle")
+	}
+}
+
+// TestPopoverEnums checks the GtkPositionType values and the style
+// provider priorities of S5.5e and the GtkAlign and GtkTextDirection
+// values of S5.5f (gtkenums.h, gtkstyleprovider.h).
+func TestPopoverEnums(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		got, want int64
+	}{
+		{"PosLeft", int64(PosLeft), 0}, {"PosRight", int64(PosRight), 1},
+		{"PosTop", int64(PosTop), 2}, {"PosBottom", int64(PosBottom), 3},
+		{"StyleProviderPriorityFallback", int64(StyleProviderPriorityFallback), 1},
+		{"StyleProviderPriorityTheme", int64(StyleProviderPriorityTheme), 200},
+		{"StyleProviderPrioritySettings", int64(StyleProviderPrioritySettings), 400},
+		{"StyleProviderPriorityApplication", int64(StyleProviderPriorityApplication), 600},
+		{"StyleProviderPriorityUser", int64(StyleProviderPriorityUser), 800},
+		{"AlignStart", int64(AlignStart), 1}, {"TextDirLTR", int64(TextDirLTR), 1},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", c.name, c.got, c.want)
+		}
+	}
 }
 
 func TestTypeQueryLayout(t *testing.T) {
@@ -130,4 +159,43 @@ func TestPangoItemLayout(t *testing.T) {
 	}})
 	ffi.CheckNoGoPointers(t, GlyphItem{})
 	ffi.CheckNoGoPointers(t, PangoItem{})
+}
+
+// TestPangoAttributeLayout: gslist.h and pango-attributes.h (the
+// PangoAttribute header, and PangoAttrClass with its type first), S5.3h;
+// PangoAttrInt (the underline's value), S5.3i.
+func TestPangoAttributeLayout(t *testing.T) {
+	ffi.CheckLayout(t, GSList{}, ffi.Layout{Size: 16, Align: 8, Fields: []ffi.Field{
+		{Name: "Data", Offset: 0, Size: 8}, {Name: "Next", Offset: 8, Size: 8},
+	}})
+	ffi.CheckLayout(t, PangoAttribute{}, ffi.Layout{Size: 16, Align: 8, Fields: []ffi.Field{
+		{Name: "Klass", Offset: 0, Size: 8},
+		{Name: "StartIndex", Offset: 8, Size: 4}, {Name: "EndIndex", Offset: 12, Size: 4},
+	}})
+	ffi.CheckLayout(t, PangoAttrClass{}, ffi.Layout{Size: 32, Align: 8, Fields: []ffi.Field{
+		{Name: "Type", Offset: 0, Size: 4}, {Name: "Copy", Offset: 8, Size: 8},
+		{Name: "Destroy", Offset: 16, Size: 8}, {Name: "Equal", Offset: 24, Size: 8},
+	}})
+	ffi.CheckNoGoPointers(t, GSList{})
+	ffi.CheckNoGoPointers(t, PangoAttribute{})
+	ffi.CheckNoGoPointers(t, PangoAttrClass{})
+	ffi.CheckLayout(t, PangoAttrInt{}, ffi.Layout{Size: 24, Align: 8, Fields: []ffi.Field{
+		{Name: "Attr", Offset: 0, Size: 16}, {Name: "Value", Offset: 16, Size: 4},
+	}})
+	ffi.CheckNoGoPointers(t, PangoAttrInt{})
+}
+
+// TestPangoAttrTypes pins the PangoAttrType values of pango-attributes.h
+// (an enum counted from PANGO_ATTR_INVALID = 0) and the text-end index.
+func TestPangoAttrTypes(t *testing.T) {
+	if AttrForeground != 9 || AttrBackground != 10 || AttrUnderline != 11 {
+		t.Errorf("AttrForeground, AttrBackground, AttrUnderline = %d, %d, %d, want 9, 10, 11",
+			AttrForeground, AttrBackground, AttrUnderline)
+	}
+	if UnderlineNone != 0 {
+		t.Errorf("UnderlineNone = %d, want 0", UnderlineNone)
+	}
+	if AttrIndexToTextEnd != 1<<32-1 {
+		t.Errorf("AttrIndexToTextEnd = %#x, want G_MAXUINT", AttrIndexToTextEnd)
+	}
 }

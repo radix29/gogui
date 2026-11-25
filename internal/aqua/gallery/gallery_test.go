@@ -186,17 +186,14 @@ func overlap(a, b driver.Rect) bool {
 }
 
 // TestGalleryScene checks the scene's structure on the aqua driver: every
-// widget is a real control (no placeholder), every kind the scene promises
-// is there, the children of every container lie inside it without
+// kind the scene promises is there (since S5.5j every aqua control is
+// real), the children of every container lie inside it without
 // overlapping, every frame is at least the control's fitting height, and
 // the states Open sets (focus, scroll offset) hold.
 func TestGalleryScene(t *testing.T) {
 	withGallery(t, false, func(g opened) {
 		kinds := map[string]int{}
 		for _, w := range g.d.widgets {
-			if c, ok := aqua.Caption(w); ok {
-				t.Errorf("placeholder in the scene: %s", c)
-			}
 			kinds[strings.TrimPrefix(fmt.Sprintf("%T", w), "*aqua.")]++
 		}
 		for k, n := range map[string]int{

@@ -149,17 +149,17 @@ func TestStandardShortcuts(t *testing.T) {
 		role driver.ItemRole
 		mac  string
 	}{
-		{"Undo", ShortcutUndo, driver.ItemUndo, "⌘Z"},
-		{"Redo", ShortcutRedo, driver.ItemRedo, "⇧⌘Z"},
-		{"Cut", ShortcutCut, driver.ItemCut, "⌘X"},
-		{"Copy", ShortcutCopy, driver.ItemCopy, "⌘C"},
-		{"Paste", ShortcutPaste, driver.ItemPaste, "⌘V"},
-		{"SelectAll", ShortcutSelectAll, driver.ItemSelectAll, "⌘A"},
-		{"Hide", ShortcutHide, driver.ItemHide, "⌘H"},
-		{"HideOthers", ShortcutHideOthers, driver.ItemHideOthers, "⌥⌘H"},
-		{"Quit", ShortcutQuit, driver.ItemQuit, "⌘Q"},
-		{"Minimize", ShortcutMinimize, driver.ItemMinimize, "⌘M"},
-		{"Close", ShortcutClose, driver.ItemClose, "⌘W"},
+		{"Undo", ShortcutUndo(), driver.ItemUndo, "⌘Z"},
+		{"Redo", ShortcutRedo(), driver.ItemRedo, "⇧⌘Z"},
+		{"Cut", ShortcutCut(), driver.ItemCut, "⌘X"},
+		{"Copy", ShortcutCopy(), driver.ItemCopy, "⌘C"},
+		{"Paste", ShortcutPaste(), driver.ItemPaste, "⌘V"},
+		{"SelectAll", ShortcutSelectAll(), driver.ItemSelectAll, "⌘A"},
+		{"Hide", ShortcutHide(), driver.ItemHide, "⌘H"},
+		{"HideOthers", ShortcutHideOthers(), driver.ItemHideOthers, "⌥⌘H"},
+		{"Quit", ShortcutQuit(), driver.ItemQuit, "⌘Q"},
+		{"Minimize", ShortcutMinimize(), driver.ItemMinimize, "⌘M"},
+		{"Close", ShortcutClose(), driver.ItemClose, "⌘W"},
 	} {
 		if want := tc.role.DefaultShortcut(); tc.got != want || want.IsZero() {
 			t.Errorf("Shortcut%s = %+v, want %+v", tc.name, tc.got, want)
@@ -171,8 +171,8 @@ func TestStandardShortcuts(t *testing.T) {
 			t.Errorf("Shortcut%s on macOS = %q, want %q", tc.name, got, tc.mac)
 		}
 	}
-	if got := ShortcutCopy.Display(false); got != "Ctrl+C" {
-		t.Errorf("ShortcutCopy elsewhere = %q, want Ctrl+C", got)
+	if got := ShortcutCopy().Display(false); got != "Ctrl+C" {
+		t.Errorf("ShortcutCopy() elsewhere = %q, want Ctrl+C", got)
 	}
 }
 

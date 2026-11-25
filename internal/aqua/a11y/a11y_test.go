@@ -22,7 +22,7 @@ func TestStrings(t *testing.T) {
 		t.Errorf("Actions %q", got)
 	}
 	// Every named bit has a name.
-	if len(stateNames) != 8 || len(actionNames) != 5 || len(roleNames) != int(RoleTitleBar)+1 {
+	if len(stateNames) != 8 || len(actionNames) != 5 || len(roleNames) != int(RoleDialog)+1 {
 		t.Error("name tables out of date")
 	}
 }
@@ -45,9 +45,6 @@ func TestNode(t *testing.T) {
 		"  textfield \"say \\\"hi\\\"\" value=\"x\" @0,0 0x0"
 	if got := root.Dump(); got != want {
 		t.Errorf("Dump:\n%s\nwant:\n%s", got, want)
-	}
-	if root.Count() != 5 {
-		t.Error("Count")
 	}
 	if root.Find(RoleStaticText, "Hi") != inner || root.Find(RoleButton, "Cancel") != nil {
 		t.Error("Find")

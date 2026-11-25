@@ -102,6 +102,7 @@ type portalOnly struct{ p *portal }
 
 func (s portalOnly) portalValue(key string) (any, bool) { return s.p.portalValue(key) }
 func (portalOnly) gtkBool(string) (bool, bool)          { return false, false }
+func (portalOnly) gtkInt(string) (int32, bool)          { return 0, false }
 
 func TestPortalApply(t *testing.T) {
 	sig := func(name string, path dbus.ObjectPath, body ...any) *dbus.Signal {

@@ -39,8 +39,27 @@ func (b *Base) FittingSize(max driver.Size) driver.Size {
 	return s.Min(max)
 }
 
-// SetEnabled implements driver.Widget.
+// SetEnabled implements driver.Widget. Disabled holds the widget's own
+// state; Enabled also looks at its ancestors.
 func (b *Base) SetEnabled(enabled bool) { b.Disabled = !enabled }
+
+// Enabled reports whether the widget accepts user input: it and every stub
+// container, box or scroll view above it are enabled. A disabled container
+// disables its subtree, as on aqua, so the User* methods of a control in
+// it do nothing.
+func (b *Base) Enabled() bool {
+	for w := b; w != nil; {
+		if w.Disabled {
+			return false
+		}
+		p, ok := w.parent.(interface{ stubBase() *Base })
+		if !ok {
+			return true
+		}
+		w = p.stubBase()
+	}
+	return true
+}
 
 // SetHidden implements driver.Widget.
 func (b *Base) SetHidden(hidden bool) { b.Hidden = hidden }
@@ -125,6 +144,15 @@ func (c *Container) SetChildren(children []driver.Widget) {
 	}
 	c.Children = append([]driver.Widget(nil), children...)
 	for _, w := range c.Children {
+		adopt(c, w)
+	}
+}
+
+// AppendChildren appends children after the current ones (the gogui
+// stack's incremental sync).
+func (c *Container) AppendChildren(children []driver.Widget) {
+	c.Children = append(c.Children, children...)
+	for _, w := range children {
 		adopt(c, w)
 	}
 }

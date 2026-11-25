@@ -4,6 +4,7 @@ package d2d
 
 import (
 	"fmt"
+	"syscall"
 	"unsafe"
 
 	"github.com/radix29/gogui/internal/shell/win32/com"
@@ -70,19 +71,16 @@ func (c DeviceContext) CreateBitmap(size SizeU, src []byte, pitch uint32, props 
 			sp = &src[0]
 		}
 	}
-	var out com.Ptr
-	err := c.CallHR("ID2D1DeviceContext::CreateBitmap", slotDCCreateBitmap,
-		size.packed(), uintptr(unsafe.Pointer(sp)), uintptr(pitch), uintptr(unsafe.Pointer(props)),
-		uintptr(unsafe.Pointer(&out)))
+	out, err := c.CallOut("ID2D1DeviceContext::CreateBitmap", slotDCCreateBitmap,
+		size.packed(), uintptr(unsafe.Pointer(sp)), uintptr(pitch), uintptr(unsafe.Pointer(props)))
 	return Bitmap1{out}, err
 }
 
 // CreateEffect creates the built-in effect clsid (CLSID_D2D1Shadow,
 // CLSID_D2D1GaussianBlur).
 func (c DeviceContext) CreateEffect(clsid *com.GUID) (Effect, error) {
-	var out com.Ptr
-	err := c.CallHR("ID2D1DeviceContext::CreateEffect", slotDCCreateEffect,
-		uintptr(unsafe.Pointer(clsid)), uintptr(unsafe.Pointer(&out)))
+	out, err := c.CallOut("ID2D1DeviceContext::CreateEffect", slotDCCreateEffect,
+		uintptr(unsafe.Pointer(clsid)))
 	return Effect{out}, err
 }
 
@@ -90,8 +88,8 @@ func (c DeviceContext) CreateEffect(clsid *com.GUID) (Effect, error) {
 // transform with its origin at offset (nil: 0, 0); src (nil: all of it)
 // selects the part of the image, in the image's space.
 func (c DeviceContext) DrawImage(img Image, offset *Point2F, src *RectF, interp InterpolationMode, comp CompositeMode) {
-	c.Call(slotDCDrawImage, uintptr(img.Ptr), uintptr(unsafe.Pointer(offset)), uintptr(unsafe.Pointer(src)),
-		uintptr(interp), uintptr(comp))
+	syscall.SyscallN(c.Slot(slotDCDrawImage), uintptr(c.Ptr), uintptr(img.Ptr), uintptr(unsafe.Pointer(offset)),
+		uintptr(unsafe.Pointer(src)), uintptr(interp), uintptr(comp))
 }
 
 // DrawBitmap draws the part src (nil: all of it, in the bitmap's DIPs) of
@@ -99,7 +97,30 @@ func (c DeviceContext) DrawImage(img Image, offset *Point2F, src *RectF, interp 
 // current transform, at opacity. It is ID2D1DeviceContext's overload,
 // which takes a D2D1_INTERPOLATION_MODE, on the float path.
 func (c DeviceContext) DrawBitmap(b Bitmap1, dst *RectF, opacity float32, interp InterpolationMode, src *RectF) {
-	methodDrawBitmap.Fn(c.Ptr)(c.Ptr, b.Ptr, dst, opacity, interp, src, 0)
+	if directFloats {
+		syscall.SyscallN(c.Slot(slotDCDrawBitmap), uintptr(c.Ptr), uintptr(b.Ptr), uintptr(unsafe.Pointer(dst)),
+			com.Float(opacity), uintptr(interp), uintptr(unsafe.Pointer(src)), 0)
+		return
+	}
+	drawBitmapBound(c, b, dst, opacity, interp, src)
+}
+
+// drawBitmapBound is DrawBitmap's bound path. The rects the bound func
+// gets (which escape into it) are copies, so the caller's stay where they
+// are on the direct path.
+//
+//go:noinline
+func drawBitmapBound(c DeviceContext, b Bitmap1, dst *RectF, opacity float32, interp InterpolationMode, src *RectF) {
+	var d, s *RectF
+	if dst != nil {
+		d = new(RectF)
+		*d = *dst
+	}
+	if src != nil {
+		s = new(RectF)
+		*s = *src
+	}
+	methodDrawBitmap.Fn(c.Ptr)(c.Ptr, b.Ptr, d, opacity, interp, s, 0)
 }
 
 // --- Images and bitmaps ---------------------------------------------------------
@@ -125,12 +146,6 @@ func (b Bitmap1) CopyFromBitmap(dst *Point2U, src Bitmap1, srcRect *RectU) error
 
 // Effect is ID2D1Effect with its ID2D1Properties methods.
 type Effect struct{ com.Ptr }
-
-// PropertyCount returns the number of the effect's own properties
-// (system properties, PROPERTY_CLSID and up, not counted).
-func (e Effect) PropertyCount() uint32 {
-	return uint32(e.Call(slotPropsGetPropertyCount))
-}
 
 // Type returns the type of property index, or PROPERTY_TYPE_UNKNOWN for
 // none.
@@ -185,51 +200,17 @@ func (e Effect) Float(index uint32) (float32, error) {
 	return v, err
 }
 
-// Enum reads an enum property.
-func (e Effect) Enum(index uint32) (uint32, error) {
-	var v uint32
-	err := e.Value(index, PROPERTY_TYPE_ENUM, bytesOf(&v))
-	return v, err
-}
-
-// Vector4 reads a VECTOR4 property.
-func (e Effect) Vector4(index uint32) (Vector4F, error) {
-	var v Vector4F
-	err := e.Value(index, PROPERTY_TYPE_VECTOR4, bytesOf(&v))
-	return v, err
-}
-
-// CLSID reads the effect's class ID (the system property PROPERTY_CLSID).
-func (e Effect) CLSID() (com.GUID, error) {
-	var g com.GUID
-	err := e.Value(PROPERTY_CLSID, PROPERTY_TYPE_CLSID, bytesOf(&g))
-	return g, err
-}
-
 // SetInput sets input index to img (or the zero Image to clear it); the
 // effect takes a reference of its own.
 func (e Effect) SetInput(index uint32, img Image) {
 	e.Call(slotEffectSetInput, uintptr(index), uintptr(img.Ptr), 1)
 }
 
-// SetInputCount changes the number of inputs (fails for effects with a
-// fixed count).
-func (e Effect) SetInputCount(n uint32) error {
-	return e.CallHR("ID2D1Effect::SetInputCount", slotEffectSetInputCount, uintptr(n))
-}
-
-// InputCount returns the number of inputs.
-func (e Effect) InputCount() uint32 {
-	return uint32(e.Call(slotEffectGetInputCount))
-}
-
 // Output returns the effect's output image with a reference of its own
 // (release it); it stays valid while the effect lives and follows its
 // inputs and properties.
 func (e Effect) Output() Image {
-	var out com.Ptr
-	e.Call(slotEffectGetOutput, uintptr(unsafe.Pointer(&out)))
-	return Image{out}
+	return Image{e.GetOut(slotEffectGetOutput)}
 }
 
 // Flush executes the batched drawing commands now and returns the first

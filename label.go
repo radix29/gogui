@@ -32,7 +32,7 @@ func (l *Label) SetText(text string) *Label {
 }
 
 // Text returns the text.
-func (l *Label) Text() string { l.check("Text"); return l.text }
+func (l *Label) Text() string { l.get("Text"); return l.text }
 
 // SetFont sets the font. The zero Font is the system font at the default
 // size for the control size.
@@ -47,7 +47,7 @@ func (l *Label) SetFont(f Font) *Label {
 }
 
 // Font returns the font set with SetFont.
-func (l *Label) Font() Font { l.check("Font"); return l.font }
+func (l *Label) Font() Font { l.get("Font"); return l.font }
 
 // SetTextColor sets the text color. The zero Color means ColorLabel.
 func (l *Label) SetTextColor(c Color) *Label {
@@ -59,7 +59,8 @@ func (l *Label) SetTextColor(c Color) *Label {
 }
 
 // SetAlignment sets the horizontal alignment of the text in the label's
-// frame. The default is AlignLeading.
+// frame. The default is AlignLeading. On Windows and Linux AlignJustified
+// is drawn as AlignLeading.
 func (l *Label) SetAlignment(a TextAlignment) *Label {
 	l.check("SetAlignment")
 	if l.live() {
@@ -68,7 +69,9 @@ func (l *Label) SetAlignment(a TextAlignment) *Label {
 	return l
 }
 
-// SetSelectable lets the user select and copy the text.
+// SetSelectable lets the user select and copy the text. On Windows and
+// Linux the setting is recorded but not applied yet: the text can't be
+// selected there.
 func (l *Label) SetSelectable(selectable bool) *Label {
 	l.check("SetSelectable")
 	if l.live() {

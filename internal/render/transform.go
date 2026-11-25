@@ -22,13 +22,6 @@ func Translation(dx, dy float64) Transform { return Transform{A: 1, D: 1, E: dx,
 // Scaling returns a transform that scales by (sx, sy) around the origin.
 func Scaling(sx, sy float64) Transform { return Transform{A: sx, D: sy} }
 
-// Rotation returns a transform that rotates by angle radians around the
-// origin; positive angles turn clockwise on screen (Y down).
-func Rotation(angle float64) Transform {
-	s, c := math.Sincos(angle)
-	return Transform{A: c, B: s, C: -s, D: c}
-}
-
 // Then returns the transform that applies t first and u second.
 func (t Transform) Then(u Transform) Transform {
 	return Transform{
@@ -82,11 +75,6 @@ func (t Transform) IsTranslation() bool { return t.A == 1 && t.B == 0 && t.C == 
 // Apply maps the point p.
 func (t Transform) Apply(p Point) Point {
 	return Point{X: t.A*p.X + t.C*p.Y + t.E, Y: t.B*p.X + t.D*p.Y + t.F}
-}
-
-// ApplyVector maps the vector v (the linear part only, no translation).
-func (t Transform) ApplyVector(v Point) Point {
-	return Point{X: t.A*v.X + t.C*v.Y, Y: t.B*v.X + t.D*v.Y}
 }
 
 // ApplyRect returns the axis-aligned bounding box of r mapped by t. It is

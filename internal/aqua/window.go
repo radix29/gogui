@@ -3,6 +3,7 @@ package aqua
 import (
 	"github.com/radix29/gogui/internal/aqua/a11y"
 	"github.com/radix29/gogui/internal/aqua/anim"
+	"github.com/radix29/gogui/internal/aqua/menubar"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/render"
 	"github.com/radix29/gogui/internal/shell"
@@ -25,11 +26,17 @@ func TitleBarHeight() float64 { return tokens.Chrome.TitleBarHeight }
 // so the handler methods stay out of Window's method set) paints the tree,
 // routes input through the window's Router, follows resizes and the key
 // state, and asks driver.WindowHandler.ShouldClose before an OS close.
+// It also publishes the IME state of its focus on the surface
+// (Surface.SetTextInput, see TextInputClient) after each paint and each
+// focus or key change, only when it changed. Its elements open popups
+// (menus, tooltips) as popupRoots with trees of their own (popuproot.go,
+// S5.5g), which close with the window and when it stops being key.
 //
 // A Window is used on the UI thread only. After it has closed every method
 // does nothing; the getters keep returning the last state.
 type Window struct {
 	sh      shell.Shell
+	text    render.TextSystem // the shell's (shell.Services)
 	surface shell.Surface
 	h       driver.WindowHandler
 	style   driver.WindowStyle
@@ -49,6 +56,32 @@ type Window struct {
 	router  *Router
 
 	timeline *anim.Timeline // the driver's; nil outside a Driver
+	driver   *Driver        // the driver that made it; nil outside one
+
+	textInput shell.TextInput // published last on the surface (S5.3d)
+
+	popups      []*popupRoot // open popups in opening order (S5.5g)
+	sheets      []*sheet     // the alerts shown and queued, first on screen (S5.7c)
+	layer       *sheetLayer  // between the content and the title bar
+	closing     bool         // Close is answering the alerts
+	grab        *popupRoot   // the open grab popup, or nil
+	grabOpening bool         // inside PopupShell.NewPopup for a grab popup
+
+	// menuPicked reports a pick in the menu strip (S5.6f): the driver sets
+	// it to its menu handler; nil reports nothing. menuEnabled validates an
+	// item each time its menu opens (S5.6g): the driver's role rules; nil
+	// keeps the items' own flags.
+	menuPicked  func(menubar.Ref)
+	menuEnabled func(menubar.Ref) bool
+	// accelerator looks a key-down up in the menu bar before the router
+	// (S5.6h): the driver's; it reports whether it ran an item.
+	accelerator func(shell.KeyEvent) bool
+	// altAlone: an Alt key-down with nothing else held has come, and no
+	// other key-down or press since (the lone Alt of the menu strip's
+	// keyboard access, S5.6i, menukeys.go).
+	altAlone bool
+
+	tips tooltips // the tooltip controller (tooltip.go, S5.5l)
 
 	resizing bool // inside SetContentSize: Resized reported ContentResized
 	reported bool
@@ -57,14 +90,16 @@ type Window struct {
 var _ driver.Window = (*Window)(nil)
 
 // NewWindow creates a hidden aqua window on sh, which must be running
-// (after shell.Handler.Ready). The window starts with sh's appearance;
+// (after shell.Handler.Ready), laying its text out with sv.Text (the
+// services Ready handed over). The window starts with sh's appearance;
 // the driver passes later changes with SetAppearance. h must be non-nil.
-func NewWindow(sh shell.Shell, cfg driver.WindowConfig, h driver.WindowHandler) (*Window, error) {
+func NewWindow(sh shell.Shell, sv shell.Services, cfg driver.WindowConfig, h driver.WindowHandler) (*Window, error) {
 	if h == nil {
 		panic("aqua: NewWindow with a nil handler")
 	}
 	w := &Window{
 		sh:         sh,
+		text:       sv.Text,
 		h:          h,
 		style:      cfg.Style,
 		titled:     cfg.Style&driver.StyleTitled != 0,
@@ -92,12 +127,20 @@ func NewWindow(sh shell.Shell, cfg driver.WindowConfig, h driver.WindowHandler) 
 	w.content.Init(w.content)
 	w.content.SetClipsChildren(true)
 	w.root.AddChild(w.content)
+	w.layer = &sheetLayer{w: w}
+	w.layer.Init(w.layer)
+	w.layer.SetHidden(true)
+	w.root.AddChild(w.layer)
 	if w.titled {
 		w.bar = newTitleBar(w)
 		w.root.AddChild(w.bar)
 	}
 	w.router = NewRouter(w.root)
 	w.router.SetActive(false) // not key until the shell says so
+	w.router.SetCursorFunc(sf.SetCursor)
+	w.router.SetFocusChangedFunc(w.publishTextInput)
+	w.tips.w = w
+	w.router.SetTreeChangedFunc(w.tips.validate)
 	w.root.SetInvalidateFunc(sf.Invalidate)
 	w.layout(sf.Size())
 	return w, nil
@@ -142,12 +185,33 @@ func (w *Window) layout(s driver.Size) {
 	tb := w.titleBarHeight()
 	w.root.SetFrame(driver.Rect{W: s.W, H: s.H})
 	w.content.SetFrame(driver.Rect{Y: tb, W: s.W, H: max(0, s.H-tb)})
+	w.layer.SetFrame(w.content.Frame())
 	if w.bar == nil {
 		return
 	}
 	w.bar.SetFrame(driver.Rect{W: s.W, H: tb})
 	w.bar.layout()
 	w.surface.SetChromeRegions(w.bar.regions())
+}
+
+// setMenuBar shows the menu strip of bar in the title bar (nil: none) and
+// sets the chrome regions again (S5.6c). An untitled window has no strip
+// (D11). The driver calls it for every window on SetMenuBar.
+func (w *Window) setMenuBar(bar *menubar.Bar) {
+	if w.closed || w.bar == nil {
+		return
+	}
+	w.bar.setMenuBar(bar)
+	w.surface.SetChromeRegions(w.bar.regions())
+	w.router.RefreshHover()
+}
+
+// menuStrip returns the window's menu strip, or nil.
+func (w *Window) menuStrip() *menuStrip {
+	if w.bar == nil {
+		return nil
+	}
+	return w.bar.strip
 }
 
 // Root returns the root element (the whole surface).
@@ -223,7 +287,7 @@ func (w *Window) SetTitle(title string) {
 }
 
 // SetContent implements driver.Window. The element of the widget (an aqua
-// Element, or a placeholder peer's) becomes the content area's only child
+// Element, or a control peer's) becomes the content area's only child
 // (moved from its old parent); its frame, set by the public layer, is
 // relative to the content area. Any other widget is not drawn, and nil
 // removes the content. A focus inside the old content is dropped (the old
@@ -265,7 +329,7 @@ func (w *Window) SetMinSize(size driver.Size) {
 		return
 	}
 	w.min = size
-	w.surface.SetMinSize(w.surfaceLimit(size, true))
+	w.applyLimits()
 }
 
 // SetMaxSize implements driver.Window (a content size).
@@ -274,12 +338,18 @@ func (w *Window) SetMaxSize(size driver.Size) {
 		return
 	}
 	w.max = size
-	w.surface.SetMaxSize(w.surfaceLimit(size, false))
+	w.applyLimits()
 }
 
 // MinSize and MaxSize return the content limits set last.
 func (w *Window) MinSize() driver.Size { return w.min }
 func (w *Window) MaxSize() driver.Size { return w.max }
+
+// applyLimits hands both content limits to the surface at once, so a
+// change of one is clamped against the other in a single resize.
+func (w *Window) applyLimits() {
+	w.surface.SetSizeLimits(w.surfaceLimit(w.min, true), w.surfaceLimit(w.max, false))
+}
 
 // Center implements driver.Window.
 func (w *Window) Center() {
@@ -303,17 +373,23 @@ func (w *Window) Show() {
 	w.surface.Show()
 }
 
-// Close implements driver.Window: the surface closes without ShouldClose,
-// and Closed is called.
+// Close implements driver.Window: the alerts shown or queued on the window
+// are answered with their Cancel index first (sheet.go), then the surface
+// closes without ShouldClose, and Closed is called.
 func (w *Window) Close() {
+	if w.closed {
+		return
+	}
+	w.dismissSheets()
 	if !w.closed {
 		w.surface.Close()
 	}
 }
 
 // performClose is the red traffic light: ask ShouldClose, then close.
+// It does nothing while an alert is up (S5.7c).
 func (w *Window) performClose() {
-	if !w.closed && w.h.ShouldClose() && !w.closed {
+	if !w.closed && !w.modal() && w.h.ShouldClose() && !w.closed {
 		w.surface.Close()
 	}
 }
@@ -323,7 +399,12 @@ type surfaceHandler struct{ w *Window }
 
 var _ shell.SurfaceHandler = surfaceHandler{}
 
-func (s surfaceHandler) Paint(c render.Canvas) { PaintTree(c, s.w.root) }
+// Paint paints the tree, then publishes the text input, whose caret the
+// paint may have moved (the field's scroll).
+func (s surfaceHandler) Paint(c render.Canvas) {
+	PaintTree(c, s.w.root)
+	s.w.publishTextInput()
+}
 
 func (s surfaceHandler) Resized(size driver.Size, _ float64) {
 	w := s.w
@@ -340,10 +421,11 @@ func (s surfaceHandler) Resized(size driver.Size, _ float64) {
 }
 
 // CloseRequested asks ShouldClose. A window without StyleClosable refuses
-// OS close requests, as AppKit's performClose does.
+// OS close requests, as AppKit's performClose does, and so does a window
+// with an alert up (S5.7c).
 func (s surfaceHandler) CloseRequested() bool {
 	w := s.w
-	return !w.closed && w.style&driver.StyleClosable != 0 && w.h.ShouldClose()
+	return !w.closed && !w.modal() && w.style&driver.StyleClosable != 0 && w.h.ShouldClose()
 }
 
 func (s surfaceHandler) Closed() {
@@ -351,8 +433,12 @@ func (s surfaceHandler) Closed() {
 	if w.closed {
 		return
 	}
+	w.tips.reset()
+	w.closePopups() // the shell has closed them already; this makes sure
 	w.closed, w.key = true, false
 	w.router.SetActive(false)
+	w.dismissSheets() // Quit, or the OS (S5.7c)
+	w.dropSheets()
 	w.h.Closed()
 }
 
@@ -361,9 +447,18 @@ func (s surfaceHandler) KeyChanged(isKey bool) {
 	if w.closed || isKey == w.key {
 		return
 	}
+	w.altAlone = false
+	if !isKey {
+		w.tips.reset()
+		w.closePopups() // deactivation, hiding, minimizing (S5.5g)
+		if s := w.menuStrip(); s != nil {
+			s.leaveKeyboard() // S5.6i
+		}
+	}
 	w.key = isKey
-	w.router.SetActive(isKey)
+	w.router.SetActive(w.contentActive())
 	w.stateChanged()
+	w.publishTextInput()
 	if !w.closed {
 		w.h.KeyChanged(isKey)
 	}
@@ -373,6 +468,35 @@ func (s surfaceHandler) Event(ev shell.Event) bool {
 	w := s.w
 	if w.closed {
 		return false
+	}
+	if w.grab == nil && !w.grabOpening {
+		w.tips.event(ev) // before the routing: a press hides the tip first
+	}
+	if w.grab != nil || w.grabOpening {
+		// Only the capture cancel of a grab popup's opening (see
+		// shell.PopupShell.NewPopup) reaches here: the router's own pointer
+		// state was cancelled by openPopup.
+		switch ev.(type) {
+		case shell.PointerEvent, shell.ScrollEvent:
+			return false
+		}
+	}
+	if w.grab == nil && !w.grabOpening {
+		// The menu strip's keyboard access (S5.6i), before the shortcuts.
+		if handled, done := w.menuAccess(ev, nil); done || w.closed {
+			return handled
+		}
+	}
+	if k, ok := ev.(shell.KeyEvent); ok && k.Down && w.grab == nil && !w.grabOpening &&
+
+		w.accelerator != nil && w.accelerator(k) {
+		return true // a menu item's shortcut, before the focus (S5.6h)
+	}
+	if w.closed {
+		return false
+	}
+	if w.modal() {
+		return w.modalEvent(ev) // an alert is up (S5.7c)
 	}
 	if w.router.Event(ev) {
 		return true

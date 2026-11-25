@@ -4,6 +4,7 @@ package win32
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/radix29/gogui/internal/driver"
@@ -199,7 +200,7 @@ func TestCanvasShadowTransform(t *testing.T) {
 			// 6√2 ≈ 8.5, its spread-3 shadow 9√2 ≈ 12.7.
 			c.Save()
 			c.Translate(44, 44)
-			c.Concat(render.Rotation(math.Pi / 4))
+			c.Concat(rotation(math.Pi / 4))
 			c.DrawShadow(rect(-6, -6, 12, 12), render.Radii{}, render.Shadow{Spread: 3, Color: k})
 			c.Restore()
 		})
@@ -225,8 +226,8 @@ func TestCanvasShadowCache(t *testing.T) {
 			c.DrawShadow(rect(4, 4, 12, 12), render.Radii{}, sh) // same mask, new effect
 			c.Restore()
 			c.DrawShadow(rect(48, 4, 12, 12), render.UniformRadii(4), sh) // new mask
-			if len(c.masks) != 2 || len(c.effects) != 3 || c.maskHits != 2 {
-				t.Errorf("%d masks, %d effects, %d mask hits; want 2, 3, 2", len(c.masks), len(c.effects), c.maskHits)
+			if c.masksMade != 2 || c.shadowsBaked != 3 || c.maskHits != 2 {
+				t.Errorf("%d masks made, %d shadows baked, %d mask hits; want 2, 3, 2", c.masksMade, c.shadowsBaked, c.maskHits)
 			}
 			// Nothing drawn and nothing cached for these.
 			c.DrawShadow(rect(4, 48, 12, 12), render.Radii{}, render.Shadow{Blur: 4, Color: driver.RGBA(0, 0, 0, 0)})
@@ -234,8 +235,8 @@ func TestCanvasShadowCache(t *testing.T) {
 			c.DrawShadow(rect(4, 48, -4, 12), render.Radii{}, render.Shadow{Blur: 4, Color: k})
 			c.DrawShadow(rect(4, 48, 12, 12), render.Radii{}, render.Shadow{Blur: 4, Color: driver.Semantic(driver.ColorLabel)})
 			c.DrawShadow(rect(4, 48, 12, 12), render.Radii{}, render.Shadow{Blur: 1e300, Color: k})
-			if len(c.masks) != 2 || len(c.effects) != 3 {
-				t.Errorf("after the empty shadows: %d masks, %d effects", len(c.masks), len(c.effects))
+			if c.masksMade != 2 || c.shadowsBaked != 3 {
+				t.Errorf("after the empty shadows: %d masks made, %d shadows baked", c.masksMade, c.shadowsBaked)
 			}
 		})
 		if a, b := s.gray(16.5, 10), s.gray(40.5, 10); a > 200 || a != b {
@@ -246,6 +247,78 @@ func TestCanvasShadowCache(t *testing.T) {
 		}
 		s.is("empty shadows", cWhite, 1, 2, 54, 10, 46, 18, 54)
 	})
+}
+
+// TestCanvasShadowCacheFrames: the shadow cache across frames (S6.2e): a
+// second identical frame makes no mask and no effect and draws the same
+// pixels; another DPI makes its own masks; an entry unused for shadowKeep
+// paints goes with its effects, and the masks beyond shadowMaxMasks go
+// oldest first but never one drawn by the paint; the device's release
+// frees the rest (newCanvasEnv's cleanup checks every last reference).
+func TestCanvasShadowCacheFrames(t *testing.T) {
+	k := driver.RGB8(0, 0, 0)
+	e := newCanvasEnv(t)
+	sc := &e.g.shadows
+	scene := func(c *canvas) {
+		c.DrawShadow(rect(4, 4, 12, 12), render.Radii{}, render.Shadow{Blur: 4, Color: k})
+		c.DrawShadow(rect(28, 4, 12, 12), render.UniformRadii(4), render.Shadow{Blur: 4, Color: driver.RGB8(255, 0, 0)})
+		c.DrawShadow(rect(4, 28, 24, 24), render.UniformRadii(4), render.Shadow{Blur: 2, Spread: 2, Inset: true, Color: k})
+	}
+	// The device has one canvas (review P3): each frame's counts are read
+	// before the next frame resets them.
+	first, c1, _ := e.frame(1, false, scene)
+	if c1.masksMade != 3 || c1.shadowsBaked != 3 {
+		t.Errorf("first frame: %d masks made, %d shadows baked; want 3, 3", c1.masksMade, c1.shadowsBaked)
+	}
+	second, c2, _ := e.frame(1, false, scene)
+	if c2.masksMade != 0 || c2.shadowsBaked != 0 || c2.maskHits != 3 {
+		t.Errorf("second frame: %d masks made, %d shadows baked, %d hits; want 0, 0, 3", c2.masksMade, c2.shadowsBaked, c2.maskHits)
+	}
+	if !slices.Equal(first.pix, second.pix) {
+		t.Error("the cached shadows draw other pixels")
+	}
+	_, c3, _ := e.frame(2, false, scene)
+	if c3.masksMade != 3 {
+		t.Errorf("at 2×: %d masks made, want 3", c3.masksMade)
+	}
+	if m, fx := sc.len(); m != 6 || fx != 6 {
+		t.Errorf("%d masks, %d shadows cached; want 6, 6", m, fx)
+	}
+	// Age: the 2× ones are drawn on, the 1× ones not.
+	for range shadowKeep {
+		e.frame(2, false, scene)
+	}
+	if m, fx := sc.len(); m != 3 || fx != 3 {
+		t.Errorf("after %d paints without the 1× shadows: %d masks, %d shadows; want 3, 3", shadowKeep, m, fx)
+	}
+	// Count: more masks in one paint than the bound keeps them all; the
+	// next paint's trim drops the oldest down to the bound.
+	many := func(n int) func(c *canvas) {
+		return func(c *canvas) {
+			for i := range n {
+				c.DrawShadow(rect(4, 4, 8+float64(i)/16, 8), render.Radii{}, render.Shadow{Blur: 2, Color: k})
+			}
+		}
+	}
+	e.frame(1, false, many(shadowMaxMasks+10))
+	if m, _ := sc.len(); m != shadowMaxMasks+10 {
+		t.Errorf("one paint of %d masks keeps %d, want them all", shadowMaxMasks+10, m)
+	}
+	e.frame(1, false, many(1))
+	if m, _ := sc.len(); m != shadowMaxMasks {
+		t.Errorf("the next paint keeps %d masks, want %d", m, shadowMaxMasks)
+	}
+	px := 0
+	for _, m := range sc.masks {
+		px += int(m.pw) * int(m.ph)
+	}
+	for k := range sc.baked {
+		m := sc.masks[k.mask]
+		px += int(m.pw) * int(m.ph)
+	}
+	if px != sc.pixels {
+		t.Errorf("the cache counts %d pixels, its masks and shadows have %d", sc.pixels, px)
+	}
 }
 
 // TestCanvasShadowDebugClean: shadows and opacity are clean for the

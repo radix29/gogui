@@ -2,6 +2,7 @@ package gtk4
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,9 +20,18 @@ func openPointer(t *testing.T) (*surface, *fakeWindow, *sfHandler, *winFactory) 
 	_, f := newSurfaceTest(t)
 	h := &sfHandler{}
 	sf, fw := f.open(t, sfResizable, h)
+	pastFirstClick(sf, fw)
 	fw.take()
 	h.take()
 	return sf, fw, h, f
+}
+
+// pastFirstClick makes the surface key and uses up its first click (S6.1c),
+// so a press acts at once.
+func pastFirstClick(sf *surface, fw *fakeWindow) {
+	fw.isActive = true
+	fw.notify(kindActive)
+	sf.ptr.armed = false
 }
 
 // at is an event at GDK time t of GDK button b, without modifiers.
@@ -538,7 +548,7 @@ func TestPointerDuringCreate(t *testing.T) {
 	fw.ptrPressed(1, 2, 2, at(7100, 1))
 	fw.ptrReleased(1, 2, 2, at(7110, 1))
 	wantLog(t, "after creation", h.take(), "enter 2,2", "move 2,2",
-		"down 2,2 b=1 held=1 n=1", "up 2,2 b=1 held=0 n=1")
+		"down 2,2 b=1 held=1 n=1 activating", "up 2,2 b=1 held=0 n=1") // not key: the first click (S6.1c)
 }
 
 // TestPointerAfterClose: after Close neither the signals nor the peer
@@ -627,4 +637,78 @@ func TestPointerPanic(t *testing.T) {
 		t.Errorf("pending panic left: %v", pendingPanic)
 	}
 	wantLog(t, "window calls", fw.take())
+}
+
+// TestPointerFirstClick (S6.1c): the press that activates a surface is
+// Activating, whether it comes while the surface is not key (once: a
+// second press while still not key acts) or within firstClickWindow after
+// is-active turned true; its release, later presses, a press long after a
+// keyboard activation and a press after a caption press are not marked;
+// any button activates; a key loss resets the rule.
+func TestPointerFirstClick(t *testing.T) {
+	sf, fw, h := openChrome(t, sfResizable) // not key
+	key := func(on bool) {
+		fw.isActive = on
+		fw.notify(kindActive)
+	}
+	click := func(b uint32, t0 uint32) {
+		fw.ptrPressed(1, 100, 100, at(t0, b))
+		fw.ptrReleased(1, 100, 100, at(t0+5, b))
+	}
+
+	// The press comes before the activation (Wayland, usually).
+	fw.ptrMotion(100, 100, fakeEv{})
+	click(1, 1000)
+	key(true)
+	click(1, 2000)
+	wantLog(t, "press, then the activation", h.take(), "enter 100,100", "move 100,100",
+		"down 100,100 b=1 held=1 n=1 activating", "up 100,100 b=1 held=0 n=1",
+		"key true", "down 100,100 b=1 held=1 n=1", "up 100,100 b=1 held=0 n=1")
+
+	// The activation comes before the press (X11, usually); any button.
+	key(false)
+	key(true)
+	click(3, 3000)
+	click(3, 4000)
+	wantLog(t, "the activation, then the press", h.take(), "key false", "key true",
+		"down 100,100 b=2 held=2 n=1 activating", "up 100,100 b=2 held=0 n=1",
+		"down 100,100 b=2 held=2 n=1", "up 100,100 b=2 held=0 n=1")
+
+	// A press long after the activation (the keyboard's) acts.
+	key(false)
+	key(true)
+	sf.ptr.armedAt -= firstClickWindow + time.Millisecond
+	click(1, 5000)
+	wantLog(t, "a press after the window", h.take(), "key false", "key true",
+		"down 100,100 b=1 held=1 n=1", "up 100,100 b=1 held=0 n=1")
+
+	// No activation comes (the window manager does not activate on click):
+	// the second press acts.
+	key(false)
+	click(1, 6000)
+	click(1, 7000)
+	wantLog(t, "never activated", h.take(), "key false",
+		"down 100,100 b=1 held=1 n=1 activating", "up 100,100 b=1 held=0 n=1",
+		"down 100,100 b=1 held=1 n=1", "up 100,100 b=1 held=0 n=1")
+
+	// The caption press activates (the window manager's move); the next
+	// press acts, before and after the activation.
+	key(true)
+	key(false)
+	fw.ptrPressed(1, 150, 10, at(8000, 1))
+	fw.ptrReleased(1, 150, 10, at(8005, 1))
+	key(true)
+	click(1, 9000)
+	key(false)
+	key(true)
+	fw.ptrPressed(1, 150, 10, at(10000, 1))
+	fw.ptrReleased(1, 150, 10, at(10005, 1))
+	click(1, 11000)
+	got := h.take()
+	for _, l := range got {
+		if strings.Contains(l, "activating") {
+			t.Errorf("after a caption press: %q", got)
+			break
+		}
+	}
 }

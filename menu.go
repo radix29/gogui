@@ -57,6 +57,10 @@ func MenuSeparator() MenuItemSpec { return MenuItemSpec{separator: true} }
 // AppMenu returns the standard application menu, titled with
 // AppConfig.Name: About, Hide, Hide Others, Show All and Quit. Quit (⌘Q,
 // Ctrl+Q) asks the App.OnQuitRequested handlers and then quits.
+//
+// On Windows and Linux, where the OS has no app-wide hiding, Hide
+// minimizes the app's windows, Show All restores them and Hide Others
+// stays disabled; About shows an app-modal alert with the app name.
 func AppMenu() MenuSpec { return menuFromDriver(driver.DefaultAppMenu()) }
 
 // EditMenu returns the standard Edit menu: Undo, Redo, Cut, Copy, Paste,
@@ -65,7 +69,8 @@ func EditMenu() MenuSpec { return menuFromDriver(driver.DefaultEditMenu()) }
 
 // WindowMenu returns the standard Window menu: Minimize (⌘M, Ctrl+M), Zoom
 // and Close (⌘W, Ctrl+W). They act on the key window; Close asks its
-// OnShouldClose handlers first.
+// OnShouldClose handlers first. On Windows and Linux Zoom maximizes the
+// window, or restores it when it is maximized.
 func WindowMenu() MenuSpec {
 	return MenuSpec{title: "Window", role: driver.MenuWindow, items: []MenuItemSpec{
 		{role: driver.ItemMinimize},

@@ -289,6 +289,7 @@ func layoutLines(l uintptr) ([]pangoLine, error) {
 		pl.start = gtk.Pango.LayoutLineGetStartIndex(line)
 		pl.length = gtk.Pango.LayoutLineGetLength(line)
 		gtk.Pango.LayoutIterGetLineYrange(it, &pl.top, &pl.bottom)
+		pl.baseline = gtk.Pango.LayoutIterGetBaseline(it)
 		gtk.Pango.LayoutIterGetLineExtents(it, nil, &logical)
 		gtk.Pango.LayoutLineIndexToX(line, pl.start+pl.length, gtk.False, &pl.endX)
 		pl.endX += logical.X

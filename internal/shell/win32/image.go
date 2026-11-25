@@ -53,13 +53,11 @@ func (im *shellImage) Size() render.Size {
 
 // release frees the image's bitmap, if it has one; the next draw makes a
 // new one. leak gets a reference left over.
-func (im *shellImage) release(leak func(what string, left uint32)) {
+func (im *shellImage) release(leak leakFunc) {
 	if im.bmp.IsNil() {
 		return
 	}
-	if n := im.bmp.Release(); n != 0 && leak != nil {
-		leak("ID2D1Bitmap1 (image)", n)
-	}
+	leak.releaseLast("ID2D1Bitmap1 (image)", &im.bmp.Ptr)
 	delete(im.set.live, im)
 }
 
@@ -123,7 +121,7 @@ func (is *imageSet) bitmap(g *gpu, im *shellImage) (bmp d2d.Bitmap1, ok bool, er
 }
 
 // release frees every image's bitmap (before the device objects go).
-func (is *imageSet) release(leak func(what string, left uint32)) {
+func (is *imageSet) release(leak leakFunc) {
 	for im := range is.live {
 		im.release(leak)
 		im.dev = nil
@@ -158,5 +156,5 @@ func (c *canvas) DrawImage(img render.Image, dst render.Rect) {
 	if !ok {
 		return
 	}
-	c.dc.DrawBitmap(bmp, &rf, 1, d2d.INTERPOLATION_MODE_LINEAR, nil)
+	c.drawDC().DrawBitmap(bmp, &rf, 1, d2d.INTERPOLATION_MODE_LINEAR, nil)
 }

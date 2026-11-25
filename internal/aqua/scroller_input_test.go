@@ -162,7 +162,7 @@ func TestScrollerInputKnobDrag(t *testing.T) {
 		}
 		// Release (off the strip): ends the drag, arms the fade.
 		e.sf.Release(e.at(20, -300), shell.ButtonPrimary)
-		if b.dragging || b.press.down || e.w.router.Captured() != nil {
+		if b.dragging || b.press.Down() || e.w.router.Captured() != nil {
 			t.Fatal("drag not ended by the release")
 		}
 		e.clk.Advance(an.ScrollerFadeDelay + an.ScrollerFadeDuration + tokens.Scroll.ScrollerHoverDuration)
@@ -178,14 +178,14 @@ func TestScrollerInputKnobDragCancelAndButtons(t *testing.T) {
 		e.sf.Move(e.at(inStrip, 14))
 		// Another button: ignored.
 		e.sf.Press(e.at(inStrip, 14), shell.ButtonSecondary)
-		if b.press.down {
+		if b.press.Down() {
 			t.Fatal("secondary press started a drag")
 		}
 		e.sf.Release(e.at(inStrip, 14), shell.ButtonSecondary)
 		e.sf.Press(e.at(inStrip, 14), shell.ButtonPrimary)
 		e.sf.Move(e.at(inStrip, 50))
 		e.sf.CancelCapture()
-		if b.dragging || b.press.down {
+		if b.dragging || b.press.Down() {
 			t.Fatal("cancel did not end the drag")
 		}
 		off := e.sv.Offset()
@@ -226,7 +226,7 @@ func TestScrollerInputDisabled(t *testing.T) {
 		e.sv.UserScroll(driver.Point{}) // show it
 		e.sv.SetEnabled(false)
 		e.sf.Press(e.at(inStrip, 14), shell.ButtonPrimary)
-		if e.vbar().press.down || e.w.router.Captured() != nil {
+		if e.vbar().press.Down() || e.w.router.Captured() != nil {
 			t.Fatal("disabled scroll view: press taken")
 		}
 		e.sf.Move(e.at(inStrip, 60))

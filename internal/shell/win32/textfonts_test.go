@@ -156,7 +156,7 @@ func TestTextEmbeddedDefault(t *testing.T) {
 		t.Error("an embedded font without font files")
 	case len(files) > 0 && ts.fonts == nil:
 		t.Errorf("the font files of assets/fonts don't load: %q", logged)
-	case len(files) > 0 && hasFamily(ts.embedded, familyEmbedded) && ts.resolve(render.Font{}).family != familyEmbedded:
+	case len(files) > 0 && ts.hasFamily(ts.embedded, familyEmbedded) && ts.resolve(render.Font{}).family != familyEmbedded:
 		t.Error("Inter is embedded but not the UI font")
 	}
 }

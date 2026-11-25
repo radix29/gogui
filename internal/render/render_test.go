@@ -398,7 +398,7 @@ func TestSemanticDetection(t *testing.T) {
 }
 
 func TestStrokeWidth(t *testing.T) {
-	for _, tt := range []struct{ in, want float64 }{{1.5, 1.5}, {0, 0}, {-2, 0}, {math.NaN(), 0}} {
+	for _, tt := range []struct{ in, want float64 }{{1.5, 1.5}, {0, 0}, {-2, 0}, {math.NaN(), 0}, {math.Inf(1), 0}, {math.Inf(-1), 0}} {
 		if got := StrokeWidth(tt.in); got != tt.want {
 			t.Errorf("StrokeWidth(%v) = %v, want %v", tt.in, got, tt.want)
 		}
@@ -454,11 +454,37 @@ func TestStrokeStyleNormalized(t *testing.T) {
 			}
 		})
 	}
-	in := StrokeStyle{Dash: []float64{1, 2}}
+	in := StrokeStyle{Dash: []float64{1, -2, 3}}
 	out := in.Normalized()
 	out.Dash[0] = 9
-	if in.Dash[0] != 1 {
-		t.Error("Normalized shares the dash slice")
+	if in.Dash[0] != 1 || in.Dash[1] != -2 {
+		t.Error("Normalized changed or shares a dash slice it had to fix")
+	}
+}
+
+// TestNormalizedShares (review P16): a paint or a stroke style that is
+// already normal comes back with its own slices, so a canvas normalizing
+// it on every call allocates nothing.
+func TestNormalizedShares(t *testing.T) {
+	stops := []GradientStop{{0, red}, {0.5, green}, {0.5, blue}, {1, red}}
+	p := LinearGradient(pt(0, 0), pt(0, 10), stops...)
+	s := StrokeStyle{Cap: CapRound, Dash: []float64{2, 0, 1, 3}}
+	if n := p.Normalized(); &n.Stops[0] != &p.Stops[0] || !slices.Equal(n.Stops, stops) {
+		t.Errorf("normal stops copied or changed: %v", n.Stops)
+	}
+	if n := s.Normalized(); &n.Dash[0] != &s.Dash[0] || !slices.Equal(n.Dash, s.Dash) {
+		t.Errorf("normal dash copied or changed: %v", n.Dash)
+	}
+	if n := testing.AllocsPerRun(100, func() {
+		_ = p.Normalized()
+		_ = s.Normalized()
+	}); n != 0 {
+		t.Errorf("Normalized of normal values: %v allocations", n)
+	}
+	for _, bad := range [][]GradientStop{{{0.5, red}, {0.2, red}}, {{-0.1, red}}, {{1.1, red}}, {{math.NaN(), red}}} {
+		if !stopsNormal(stops) || stopsNormal(bad) {
+			t.Errorf("stopsNormal(%v)", bad)
+		}
 	}
 }
 
@@ -488,14 +514,11 @@ func TestTransformBasics(t *testing.T) {
 	if p := Translation(3, 4).Apply(pt(1, 1)); p != pt(4, 5) {
 		t.Errorf("translate = %v", p)
 	}
-	if v := Translation(3, 4).ApplyVector(pt(1, 1)); v != pt(1, 1) {
-		t.Errorf("vector ignores translation: %v", v)
-	}
 	if p := Scaling(2, 3).Apply(pt(1, 1)); p != pt(2, 3) {
 		t.Errorf("scale = %v", p)
 	}
 	// Positive angles turn clockwise on screen: +X towards +Y.
-	if p := Rotation(math.Pi / 2).Apply(pt(1, 0)); !nearPt(p, pt(0, 1)) {
+	if p := rotation(math.Pi / 2).Apply(pt(1, 0)); !nearPt(p, pt(0, 1)) {
 		t.Errorf("rotate = %v, want (0,1)", p)
 	}
 	if !Translation(1, 2).IsTranslation() || Scaling(2, 2).IsTranslation() {
@@ -522,7 +545,7 @@ func TestTransformComposition(t *testing.T) {
 		t.Errorf("ctm.Pre(scale) = %v, want (12,2)", got)
 	}
 	// Composition matches applying one after the other, for a mixed chain.
-	a, b, c := Rotation(0.3), Translation(-4, 7), Scaling(1.5, -2)
+	a, b, c := rotation(0.3), Translation(-4, 7), Scaling(1.5, -2)
 	chain := a.Then(b).Then(c)
 	q := pt(3, -2)
 	if got, want := chain.Apply(q), c.Apply(b.Apply(a.Apply(q))); !nearPt(got, want) {
@@ -542,8 +565,8 @@ func TestTransformInvert(t *testing.T) {
 		Identity(),
 		Translation(3, -4),
 		Scaling(2, 0.5),
-		Rotation(1.1),
-		Rotation(0.7).Then(Scaling(3, -1)).Then(Translation(5, 9)),
+		rotation(1.1),
+		rotation(0.7).Then(Scaling(3, -1)).Then(Translation(5, 9)),
 		{A: 1, B: 2, C: 3, D: 4, E: 5, F: 6},
 	} {
 		inv, ok := m.Invert()
@@ -581,7 +604,7 @@ func TestTransformApplyRect(t *testing.T) {
 	if got := Scaling(-2, 1).ApplyRect(r); !nearRect(got, rc(-8, 2, 6, 4)) {
 		t.Errorf("mirror = %v", got)
 	}
-	if got := Rotation(math.Pi / 2).ApplyRect(rc(0, 0, 2, 1)); !nearRect(got, rc(-1, 0, 1, 2)) {
+	if got := rotation(math.Pi / 2).ApplyRect(rc(0, 0, 2, 1)); !nearRect(got, rc(-1, 0, 1, 2)) {
 		t.Errorf("rotate = %v", got)
 	}
 }
@@ -595,4 +618,104 @@ func TestOpString(t *testing.T) {
 	if got != want {
 		t.Errorf("ops = %q, want %q", got, want)
 	}
+}
+
+// TestPathArcToNonFinite is B15: a non-finite point never becomes NaN
+// cubics; ArcTo draws a line to p1, and a NaN p1 is left for ValidPath.
+func TestPathArcToNonFinite(t *testing.T) {
+	nan, inf := math.NaN(), math.Inf(1)
+	for _, tt := range []struct {
+		name   string
+		p1, p2 Point
+	}{
+		{"NaN p2", pt(10, 0), pt(nan, 10)},
+		{"Inf p2", pt(10, 0), pt(10, inf)},
+		{"NaN p1", pt(nan, 0), pt(10, 10)},
+	} {
+		var p Path
+		p.MoveTo(pt(0, 0)).ArcTo(tt.p1, tt.p2, 4)
+		ss := segs(&p)
+		if len(ss) != 2 || ss[1].Op != OpLineTo {
+			t.Errorf("%s: segments = %v, want M then L", tt.name, ss)
+		}
+		if ValidPath(&p) != ValidPoint(tt.p1) {
+			t.Errorf("%s: ValidPath %v", tt.name, ValidPath(&p))
+		}
+	}
+	// A NaN current point (a NaN MoveTo) is not finite either.
+	var p Path
+	p.MoveTo(pt(nan, 0)).ArcTo(pt(10, 0), pt(10, 10), 4)
+	for _, s := range segs(&p) {
+		if s.Op == OpCubicTo {
+			t.Errorf("cubic from a NaN current point: %v", segs(&p))
+		}
+	}
+}
+
+// TestValidGeometry is B8's shared rules.
+func TestValidGeometry(t *testing.T) {
+	nan, inf := math.NaN(), math.Inf(1)
+	for _, tt := range []struct {
+		r    Rect
+		want bool
+	}{
+		{rc(0, 0, 10, 10), true},
+		{rc(-5, -5, 0, 0), true},
+		{rc(0, 0, -1, 10), false},
+		{rc(0, 0, 10, -1), false},
+		{rc(nan, 0, 10, 10), false},
+		{rc(0, 0, nan, 10), false},
+		{rc(0, inf, 10, 10), false},
+		{rc(0, 0, inf, 10), false},
+		{rc(1e308, 0, 1e308, 10), false}, // the far edge overflows
+	} {
+		if got := ValidRect(tt.r); got != tt.want {
+			t.Errorf("ValidRect(%v) = %v, want %v", tt.r, got, tt.want)
+		}
+	}
+	if !ValidPoint(pt(-3, 1e300)) || ValidPoint(pt(nan, 0)) || ValidPoint(pt(0, -inf)) {
+		t.Error("ValidPoint")
+	}
+	var p Path
+	if !ValidPath(nil) || !ValidPath(&p) {
+		t.Error("ValidPath of nil or empty")
+	}
+	p.MoveTo(pt(0, 0)).CubicTo(pt(1, 1), pt(nan, 2), pt(3, 3))
+	if ValidPath(&p) {
+		t.Error("ValidPath with a NaN control point")
+	}
+}
+
+// TestSegmentsBounds (review R12, P16): SegmentsBounds of a path's
+// segments is its Bounds, Op.Points counts the points each kind uses, and
+// Bounds allocates nothing (the extrema are arrays).
+func TestSegmentsBounds(t *testing.T) {
+	var p Path
+	p.MoveTo(pt(0, 0)).QuadTo(pt(5, -10), pt(10, 0)).CubicTo(pt(12, 8), pt(20, 8), pt(22, 0)).
+		LineTo(pt(22, 5)).ArcTo(pt(22, 12), pt(15, 12), 3).Close().MoveTo(pt(-3, 2))
+	segs := slices.Collect(p.Segments())
+	if got, want := SegmentsBounds(segs), p.Bounds(); got != want {
+		t.Errorf("SegmentsBounds %v, Bounds %v", got, want)
+	}
+	if got := SegmentsBounds(nil); got != (Rect{}) {
+		t.Errorf("no segments: %v", got)
+	}
+	if got := SegmentsBounds([]Segment{{Op: OpClose}}); got != (Rect{}) {
+		t.Errorf("a lone close: %v", got)
+	}
+	for op, n := range map[Op]int{OpMoveTo: 1, OpLineTo: 1, OpQuadTo: 2, OpCubicTo: 3, OpClose: 0, Op(9): 0} {
+		if op.Points() != n {
+			t.Errorf("%v.Points() = %d, want %d", op, op.Points(), n)
+		}
+	}
+	if n := testing.AllocsPerRun(100, func() { _ = p.Bounds(); _ = SegmentsBounds(segs) }); n != 0 {
+		t.Errorf("Bounds: %v allocations", n)
+	}
+}
+
+// rotation turns by angle radians around the origin, clockwise on screen
+// (render has no Rotation; nothing but the tests rotates).
+func rotation(angle float64) Transform {
+	s, c := math.Sincos(angle)
+	return Transform{A: c, B: s, C: -s, D: c}
 }

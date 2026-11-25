@@ -7,7 +7,9 @@
 // on an anti-aliased edge (found from their neighbours in both images) are
 // counted apart and weigh only Options.AAWeight. Unlike pixelmatch, a
 // translucent pixel is blended over both white and black and the larger
-// distance is taken, so a change of alpha alone is not hidden.
+// distance is taken, so a change of alpha alone is not hidden. Pixels
+// inside Options.Mask (the text boxes of the Linux goldens, S4.3i) are not
+// compared: they are counted apart and never fail.
 //
 // Images are straight-alpha (image.NRGBA); other images are converted
 // first. The package is pure Go, imports only the standard library and has
@@ -70,8 +72,8 @@ func NRGBA(img image.Image) *image.NRGBA {
 // Options set the tolerance of Compare.
 type Options struct {
 	// Threshold is the largest YIQ distance of two pixels that still
-	// counts as equal, from 0 (exact) to 1 (anything); pixelmatch's
-	// default is 0.1.
+	// counts as equal, from 0 (exact) to 1 (anything), clamped to that
+	// range (NaN counts as 0); pixelmatch's default is 0.1.
 	Threshold float64
 
 	// AAWeight is what a differing pixel on an anti-aliased edge counts
@@ -82,6 +84,24 @@ type Options struct {
 	// MaxDiff is the largest weighted count of differing pixels that still
 	// passes: plain differing pixels count 1, anti-aliased ones AAWeight.
 	MaxDiff float64
+
+	// Mask lists rectangles, in pixels of the images, whose pixels are not
+	// compared (none when empty): a pixel over the threshold inside one
+	// counts as Result.Masked, not as Diff or AA, and is left out of
+	// MaxDelta and Bounds. The anti-aliasing test still reads masked
+	// neighbours.
+	Mask []image.Rectangle
+}
+
+// masked reports whether (x, y) lies in one of m.
+func masked(m []image.Rectangle, x, y int) bool {
+	p := image.Point{X: x, Y: y}
+	for _, r := range m {
+		if p.In(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultOptions is the tolerance of the gallery goldens: pixelmatch's
@@ -99,6 +119,10 @@ type Result struct {
 	// Diff counts the pixels over the threshold that are not on an
 	// anti-aliased edge, AA those that are.
 	Diff, AA int
+
+	// Masked counts the pixels over the threshold inside Options.Mask,
+	// which are not compared.
+	Masked int
 
 	// Weighted is Diff + AA × AAWeight, compared with MaxDiff.
 	Weighted float64
@@ -124,8 +148,12 @@ func (r Result) String() string {
 	if !r.Pass {
 		verdict = "FAIL"
 	}
-	return fmt.Sprintf("%s: %d differing pixels, %d anti-aliased (weighted %.4g), max delta %.4f, bounds %v",
+	s := fmt.Sprintf("%s: %d differing pixels, %d anti-aliased (weighted %.4g), max delta %.4f, bounds %v",
 		verdict, r.Diff, r.AA, r.Weighted, r.MaxDelta, r.Bounds)
+	if r.Masked > 0 {
+		s += fmt.Sprintf(", %d masked", r.Masked)
+	}
+	return s
 }
 
 // maxYIQ is the largest YIQ distance, as in pixelmatch: thresholds are
@@ -134,14 +162,15 @@ const maxYIQ = 35215
 
 // The colors of the diff image (pixelmatch's defaults).
 var (
-	diffColor = color.NRGBA{R: 255, A: 255}         // a differing pixel
-	aaColor   = color.NRGBA{R: 255, G: 255, A: 255} // a differing anti-aliased pixel
+	diffColor = color.NRGBA{R: 255, A: 255}                // a differing pixel
+	aaColor   = color.NRGBA{R: 255, G: 255, A: 255}        // a differing anti-aliased pixel
+	maskColor = color.NRGBA{R: 96, G: 160, B: 255, A: 255} // a differing pixel inside the mask
 )
 
 // Compare compares got with want. It returns the result and a diff image of
 // want's size: unchanged pixels as a faded grey of want, differing pixels
-// red, differing anti-aliased ones yellow. On a size mismatch the result
-// fails and the diff image is nil.
+// red, differing anti-aliased ones yellow, differing masked ones blue. On a
+// size mismatch the result fails and the diff image is nil.
 func Compare(want, got image.Image, opt Options) (Result, *image.NRGBA) {
 	a, b := NRGBA(want), NRGBA(got)
 	r := Result{WantSize: a.Rect.Size(), GotSize: b.Rect.Size()}
@@ -150,13 +179,25 @@ func Compare(want, got image.Image, opt Options) (Result, *image.NRGBA) {
 		return r, nil
 	}
 	w, h := r.WantSize.X, r.WantSize.Y
-	limit := maxYIQ * opt.Threshold * opt.Threshold
+	th := opt.Threshold // clamped to [0, 1]; NaN counts as 0 (exact)
+	switch {
+	case !(th > 0):
+		th = 0
+	case th > 1:
+		th = 1
+	}
+	limit := maxYIQ * th * th
 	diff := image.NewNRGBA(a.Rect)
 	var maxD float64
 	for y := range h {
 		for x := range w {
 			pa := pix(a, x, y)
 			d := pixelDelta(pa, pix(b, x, y))
+			if d > limit && len(opt.Mask) > 0 && masked(opt.Mask, x, y) {
+				r.Masked++
+				diff.SetNRGBA(x, y, maskColor)
+				continue
+			}
 			maxD = max(maxD, d)
 			if d <= limit {
 				diff.SetNRGBA(x, y, faded(pa))

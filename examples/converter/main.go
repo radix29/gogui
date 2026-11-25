@@ -60,12 +60,18 @@ func main() {
 		setCelsius(20, fromNone)
 
 		// Background goroutine: simulates a periodic sync and marshals UI
-		// updates back to the UI thread with gogui.Do.
+		// updates back to the UI thread with gogui.Do. closed is set on the UI
+		// thread when the window closes: that destroys its widgets, and a
+		// destroyed widget panics when used.
+		closed := false
 		go func() {
 			for tick := 0; ; tick++ {
 				time.Sleep(100 * time.Millisecond)
 				t := tick
 				gogui.Do(func() {
+					if closed {
+						return
+					}
 					syncBar.SetValue(float64(t%50) / 49)
 					if t%50 == 49 {
 						updated.SetText(fmt.Sprintf("Synced at %s", time.Now().Format("15:04:05")))
@@ -88,9 +94,9 @@ func main() {
 			slider,
 			gogui.NewSeparator(),
 			gogui.HStack(8, syncBar, updated),
-		).Padding(20))
+		).SetPadding(20))
 
-		win.OnClose(app.Quit)
+		win.OnClose(func() { closed = true; app.Quit() })
 		win.Show()
 	}); err != nil {
 		log.Fatal(err)

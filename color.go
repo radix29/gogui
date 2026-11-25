@@ -7,6 +7,17 @@ import "github.com/radix29/gogui/internal/driver"
 // the current appearance (light or dark, accent color, increased contrast)
 // every time they are drawn, so an app that uses them follows appearance
 // changes without doing anything.
+//
+// A concrete color has R, G, B and A, its sRGB components with straight
+// (not premultiplied) alpha, each in 0..1; RGBA and RGB8 make one. A
+// semantic color has its Semantic field set, which only the ColorX
+// variables do, and then R, G, B and A are ignored; IsSemantic reports
+// which kind c is. The zero Color is transparent black; the setters that
+// take a color document what zero means for them (SetTextColor: the
+// default text color).
+//
+// On the headless driver (macOS until the AppKit driver exists) nothing is
+// drawn, so semantic colors are never resolved.
 type Color = driver.Color
 
 // RGBA returns a concrete sRGB color with straight alpha; each component

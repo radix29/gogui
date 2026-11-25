@@ -1,6 +1,8 @@
 package aqua
 
 import (
+	"time"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/shell"
 )
@@ -53,7 +55,8 @@ type ControlState struct {
 }
 
 // String returns a compact form for test logs, such as
-// "pressed focused key light" or "normal unfocused disabled inactive dark".
+// "pressed focused key light" or "normal unfocused disabled inactive dark";
+// " contrast" is appended with Appearance.IncreaseContrast.
 func (s ControlState) String() string {
 	out := s.Interaction.String() + " " + s.Focus.String()
 	if s.Disabled {
@@ -65,9 +68,14 @@ func (s ControlState) String() string {
 		out += " inactive"
 	}
 	if s.Appearance.Dark {
-		return out + " dark"
+		out += " dark"
+	} else {
+		out += " light"
 	}
-	return out + " light"
+	if s.Appearance.IncreaseContrast {
+		out += " contrast"
+	}
+	return out
 }
 
 // controlState computes the element's control state. t is the element's
@@ -145,8 +153,7 @@ func (t *pressTracker) Track(e Element, ev Event) (handled, act bool) {
 		if pe.Button != shell.ButtonPrimary || t.down {
 			return t.down, false
 		}
-		t.down = true
-		t.setPressed(e, true)
+		t.Begin(e)
 		return true, false
 	case PointerMove:
 		if t.down {
@@ -157,17 +164,31 @@ func (t *pressTracker) Track(e Element, ev Event) (handled, act bool) {
 		if !t.down || pe.Button != shell.ButtonPrimary {
 			return t.down, false
 		}
-		t.down = false
-		t.setPressed(e, false)
+		t.End(e)
 		return true, pe.Over
 	case PointerCancel:
-		t.Reset(e)
+		t.Cancel(e)
 	}
 	return false, false
 }
 
-// Reset drops a press in progress without acting.
-func (t *pressTracker) Reset(e Element) {
+// Begin starts a press over the control: down and drawn pressed. Controls
+// with their own press rules (the slider's drag, the scroller's knob and
+// track) call it instead of Track for their PointerDown.
+func (t *pressTracker) Begin(e Element) {
+	t.down = true
+	t.setPressed(e, true)
+}
+
+// End ends the press on its release; the caller decides whether it acts.
+func (t *pressTracker) End(e Element) {
+	t.down = false
+	t.setPressed(e, false)
+}
+
+// Cancel drops a press in progress without acting (a PointerCancel, the
+// control disabled during the press). It does nothing when idle.
+func (t *pressTracker) Cancel(e Element) {
 	t.down = false
 	t.setPressed(e, false)
 }
@@ -177,6 +198,55 @@ func (t *pressTracker) setPressed(e Element, p bool) {
 		t.pressed = p
 		e.base().Invalidate()
 	}
+}
+
+// clickable is a push-like control whose click is its primary action: what
+// a release over it, Activate (Space, the default and cancel keys) and
+// the accessibility press do.
+type clickable interface {
+	Element
+	click()
+}
+
+// clickControl is the click core of the push-like controls (review R2),
+// embedded by the push button, the checkbox, the radio button and the
+// traffic lights: the press, the focus ring and one HandleEvent and
+// Activate for all of them. A disabled control (EnabledInTree) drops a
+// press, handles nothing and refuses Activate.
+type clickControl struct {
+	press pressTracker
+	ring  FocusRing
+
+	// The key flash (flash): the timer that ends it, or nil.
+	flashEnd func()
+}
+
+// handleClick is the HandleEvent of e: it tracks the focus ring, then
+// (enabled only) offers a key event to keys (nil: none) and feeds the
+// press; a release over e clicks it.
+func (c *clickControl) handleClick(e clickable, ev Event, keys func(KeyEvent) bool) bool {
+	c.ring.Track(e, ev)
+	if !e.base().EnabledInTree() {
+		c.press.Cancel(e)
+		return false
+	}
+	if k, ok := ev.(KeyEvent); ok && keys != nil && keys(k) {
+		return true
+	}
+	handled, act := c.press.Track(e, ev)
+	if act {
+		e.click()
+	}
+	return handled
+}
+
+// activate is the Activate of e: it clicks e, refused while disabled.
+func (c *clickControl) activate(e clickable) bool {
+	if !e.base().EnabledInTree() {
+		return false
+	}
+	e.click()
+	return true
 }
 
 // spaceActivates handles an unhandled key-down of Space on the focused
@@ -194,5 +264,55 @@ func (r *Router) spaceActivates(ev shell.KeyEvent) bool {
 	if ev.Repeat {
 		return true
 	}
-	return f.Activate()
+	return activateByKey(f)
+}
+
+// keyFlash is how long a press by key shows its control pressed, as
+// AppKit's performClick: highlights it (S5.7b, review R2; provisional, as
+// menuFlash, from memory of macOS).
+const keyFlash = 100 * time.Millisecond
+
+// flash draws e pressed for keyFlash, as a click shows it, for a press by
+// key (Return, Escape, Space; the alert's keys). A running flash restarts.
+// It changes nothing else: the caller performs the action. d is the
+// driver whose shell runs the timer.
+func (c *clickControl) flash(e Element, d *Driver) {
+	if c.flashEnd != nil {
+		c.flashEnd()
+	}
+	e.base().Invalidate()
+	c.flashEnd = d.sh.After(keyFlash, func() {
+		c.flashEnd = nil
+		e.base().Invalidate()
+	})
+}
+
+// Flashing reports whether a key flash runs.
+func (c *clickControl) Flashing() bool { return c.flashEnd != nil }
+
+// state returns e's control state: its press, and pressed during a key
+// flash unless disabled.
+func (c *clickControl) state(e Element) ControlState {
+	s := c.press.State(e)
+	if c.flashEnd != nil && !s.Disabled {
+		s.Interaction = InteractionPressed
+	}
+	return s
+}
+
+// keyFlasher is an element that shows a press by key (keyFlash): the
+// push button, the checkbox and the radio button.
+type keyFlasher interface {
+	Element
+	keyFlash()
+}
+
+// activateByKey activates e for a key press (the default and cancel keys,
+// Space on the focused control): a keyFlasher that is enabled flashes
+// first, then e's Activate runs.
+func activateByKey(e Element) bool {
+	if f, ok := e.(keyFlasher); ok && e.base().EnabledInTree() {
+		f.keyFlash()
+	}
+	return e.Activate()
 }

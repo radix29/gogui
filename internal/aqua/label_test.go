@@ -23,9 +23,6 @@ func newLabel(t *testing.T, text string) *Label {
 
 func TestLabelIsReal(t *testing.T) {
 	l := newLabel(t, "Hi")
-	if _, ok := Caption(l); ok {
-		t.Error("the label is still a placeholder peer")
-	}
 	if e := ElementOf(l); e == nil || e != Element(l.view) || l.AquaElement() != e {
 		t.Error("ElementOf / AquaElement")
 	}
@@ -236,7 +233,7 @@ func TestLabelRedraws(t *testing.T) {
 
 func TestLabelInWindow(t *testing.T) {
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	w.SetAppearance(driver.Appearance{Dark: true, Accent: driver.DefaultAccent})
 	l := d.NewLabel().(*Label)

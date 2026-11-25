@@ -10,7 +10,9 @@ import "sync/atomic"
 // drawing or layout method is called many times per frame, so each one
 // keeps the last bound func and the code address it was bound for, and goes
 // back to Bind only when an object of another class (another slot address)
-// comes along.
+// comes along. Since review P2 the binding packages use it on
+// windows/arm64 only (and in the tests' bound-path runs); windows/amd64
+// takes the direct path of direct.go.
 //
 // A binding package declares one per method as a package variable:
 //

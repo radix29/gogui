@@ -134,6 +134,12 @@ type progressView struct {
 	tl       *anim.Timeline // loop's timeline
 	phase    float64        // the phase drawn, 0 to 1
 	painting bool           // inside Paint: a phase change needs no repaint
+
+	// The spinner's spokes for spokesKey, rebuilt when it changes, and its
+	// alpha buffer (P10).
+	spokes    []*render.Path
+	spokesKey spokeGeometry
+	alphas    []float64
 }
 
 func (e *progressView) FittingSize(max driver.Size) driver.Size { return e.p.FittingSize(max) }
@@ -181,15 +187,31 @@ func (e *progressView) animate() {
 // longer live and repaints otherwise (not from inside Paint, which draws
 // the new phase anyway).
 func (e *progressView) phaseChanged(x float64) {
+	old := e.phase
 	e.phase = x
 	if !e.live() {
 		e.loop.Stop()
+		return
+	}
+	// A spinner draws only the phase's lead spoke, which changes
+	// SpinnerSpokes times per period, not on every frame (P10).
+	if e.p.Style == driver.ProgressSpinner && e.spinnerLead(old) == e.spinnerLead(x) {
 		return
 	}
 	if !e.painting {
 		e.Invalidate()
 	}
 }
+
+// spinnerLead returns the spoke the indeterminate spinner leads with at
+// phase x (Reduce Motion aside).
+func (e *progressView) spinnerLead(x float64) int {
+	n := spokeCount()
+	return min(n-1, int(x*float64(n)))
+}
+
+// spokeCount returns the number of the spinner's spokes.
+func spokeCount() int { return max(1, int(math.Round(tokens.Controls.SpinnerSpokes))) }
 
 // Running reports whether the indeterminate loop runs.
 func (e *progressView) Running() bool { return e.loop != nil && e.loop.Running() }
@@ -218,14 +240,6 @@ func (e *progressView) Paint(c render.Canvas) {
 	e.paintBar(c, a, key, disabled)
 }
 
-// dimmed returns col at ValueDisabledAlpha when disabled.
-func dimmed(col driver.Color, disabled bool) driver.Color {
-	if disabled {
-		col.A *= float32(tokens.Controls.ValueDisabledAlpha)
-	}
-	return col
-}
-
 // paintBar draws a progress bar.
 func (e *progressView) paintBar(c render.Canvas, a driver.Appearance, key, disabled bool) {
 	b := e.Bounds()
@@ -249,7 +263,7 @@ func (e *progressView) paintBar(c render.Canvas, a driver.Appearance, key, disab
 		return
 	}
 	if a.ReduceMotion {
-		fill.A *= float32(tokens.Controls.ValueDisabledAlpha)
+		fill.A *= tokens.Controls.ValueDisabledAlpha
 		c.FillRoundedRect(track, render.UniformRadii(r), render.Solid(fill))
 		return
 	}
@@ -276,34 +290,62 @@ func (e *progressView) paintSpinner(c render.Canvas, a driver.Appearance, disabl
 	if !(d > 0) || !(size > 0) {
 		return
 	}
-	k := d / size
-	length := tokens.Controls.SpinnerSpokeLength.At(cs) * k
-	width := tokens.Controls.SpinnerSpokeWidth.At(cs) * k
-	n := max(1, int(math.Round(tokens.Controls.SpinnerSpokes)))
-	outer := math.Max(0, d/2-width/2)          // the outer cap's centre
-	inner := math.Max(0, outer-(length-width)) // the inner cap's centre
-	cx, cy := b.W/2, b.H/2
+	width := tokens.Controls.SpinnerSpokeWidth.At(cs) * d / size
+	n := spokeCount()
 	col := dimmed(tokens.Controls.SpinnerSpoke.Value(a), disabled)
-	tail := tokens.Controls.SpinnerTailAlpha
+	tail := float64(tokens.Controls.SpinnerTailAlpha)
 
+	spokes := e.spokePaths(spokeGeometry{b.Size(), cs, d, size, n})
 	alpha := e.spokeAlphas(n, tail, a.ReduceMotion)
-	for i := range n {
-		th := 2 * math.Pi * float64(i) / float64(n)
-		sx, sy := math.Sin(th), -math.Cos(th)
-		pt := func(r float64) driver.Point {
-			return driver.Point{X: roundCoord(cx + r*sx), Y: roundCoord(cy + r*sy)}
-		}
-		path := (&render.Path{}).MoveTo(pt(inner)).LineTo(pt(outer))
+	for i, path := range spokes {
 		sc := col
 		sc.A *= float32(alpha[i])
 		c.StrokePath(path, width, render.Solid(sc), render.StrokeStyle{Cap: render.CapRound})
 	}
 }
 
+// spokeGeometry is what the spinner's spoke paths depend on: the bounds'
+// size, the control size, the drawn and the nominal diameter (d, size of
+// paintSpinner) and the spoke count. The tokens are fixed per process.
+type spokeGeometry struct {
+	bounds  driver.Size
+	cs      driver.ControlSize
+	d, size float64
+	n       int
+}
+
+// spokePaths returns the n spokes' centre lines for g, the first at
+// twelve o'clock and clockwise, built once per geometry (P10).
+func (e *progressView) spokePaths(g spokeGeometry) []*render.Path {
+	if e.spokes != nil && e.spokesKey == g {
+		return e.spokes
+	}
+	k := g.d / g.size
+	length := tokens.Controls.SpinnerSpokeLength.At(g.cs) * k
+	width := tokens.Controls.SpinnerSpokeWidth.At(g.cs) * k
+	outer := math.Max(0, g.d/2-width/2)        // the outer cap's centre
+	inner := math.Max(0, outer-(length-width)) // the inner cap's centre
+	cx, cy := g.bounds.W/2, g.bounds.H/2
+	spokes := make([]*render.Path, g.n)
+	for i := range spokes {
+		th := 2 * math.Pi * float64(i) / float64(g.n)
+		sx, sy := math.Sin(th), -math.Cos(th)
+		pt := func(r float64) driver.Point {
+			return driver.Point{X: roundCoord(cx + r*sx), Y: roundCoord(cy + r*sy)}
+		}
+		spokes[i] = (&render.Path{}).MoveTo(pt(inner)).LineTo(pt(outer))
+	}
+	e.spokes, e.spokesKey = spokes, g
+	return spokes
+}
+
 // spokeAlphas returns the opacity of each of n spokes relative to
-// SpinnerSpoke (see Progress).
+// SpinnerSpoke (see Progress), in a buffer reused by the next call.
 func (e *progressView) spokeAlphas(n int, tail float64, reduce bool) []float64 {
-	out := make([]float64, n)
+	if cap(e.alphas) < n {
+		e.alphas = make([]float64, n)
+	}
+	out := e.alphas[:n]
 	if !e.p.Indeterminate {
 		lit := int(math.Floor(e.p.fraction()*float64(n) + 1e-9))
 		for i := range out {
@@ -316,7 +358,7 @@ func (e *progressView) spokeAlphas(n int, tail float64, reduce bool) []float64 {
 	}
 	lead := 0
 	if !reduce {
-		lead = min(n-1, int(e.phase*float64(n)))
+		lead = e.spinnerLead(e.phase)
 	}
 	for i := range out {
 		out[i] = 1

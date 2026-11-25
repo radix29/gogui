@@ -78,7 +78,7 @@ func (s *Slider) SetValue(v float64) *Slider {
 }
 
 // Value returns the value, including the user's changes.
-func (s *Slider) Value() float64 { s.check("Value"); return s.r.val }
+func (s *Slider) Value() float64 { s.get("Value"); return s.r.val }
 
 // SetTickMarks shows count tick marks (0 hides them). With snap set, the
 // knob only stops at tick marks.
@@ -117,12 +117,15 @@ type sliderEvents struct{ s *Slider }
 
 func (e sliderEvents) ValueChanged(v float64) {
 	s := e.s
-	if s.disabled || s.dead {
+	if s.dead {
 		return
 	}
-	s.r.set(v)
+	s.r.set(v) // the cache follows the native value even when disabled (B14)
 	v = s.r.val
-	s.onChange.each(func(fn func(float64)) { fn(v) })
+	if s.disabled {
+		return
+	}
+	s.onChange.eachLive(&s.widget, func(fn func(float64)) { fn(v) })
 }
 
 // progress is the state of ProgressBar and Spinner (NSProgressIndicator).
@@ -168,7 +171,7 @@ func (g *progress[T]) SetValue(v float64) T {
 }
 
 // Value returns the progress.
-func (g *progress[T]) Value() float64 { g.check("Value"); return g.r.val }
+func (g *progress[T]) Value() float64 { g.get("Value"); return g.r.val }
 
 // SetIndeterminate switches to the indeterminate animation, for work of
 // unknown length. The animation runs while the indicator is visible and
@@ -183,7 +186,7 @@ func (g *progress[T]) SetIndeterminate(indeterminate bool) T {
 }
 
 // Indeterminate reports whether the indeterminate animation is on.
-func (g *progress[T]) Indeterminate() bool { g.check("Indeterminate"); return g.indet }
+func (g *progress[T]) Indeterminate() bool { g.get("Indeterminate"); return g.indet }
 
 // ProgressBar is a horizontal progress bar (NSProgressIndicator with the
 // bar style). It expands horizontally.

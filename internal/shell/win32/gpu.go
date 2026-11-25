@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/radix29/gogui/internal/shell/win32/com"
 	"github.com/radix29/gogui/internal/shell/win32/d2d"
@@ -42,6 +43,9 @@ type gpu struct {
 	dc      d2d.DeviceContext
 	mask    d2d.DeviceContext // draws shadow masks (shadow.go)
 	comp    dcomp.Device
+	shadows shadowCache // shadow masks and effects across frames (shadow.go)
+	res     resCache    // brushes, stop collections, stroke styles across frames (rescache.go)
+	canvas  canvas      // the one canvas, reused by every paint (newCanvas)
 }
 
 // newGPU creates the device objects. On failure nothing is left alive.
@@ -94,15 +98,25 @@ func newGPU(warp bool) (_ *gpu, err error) {
 	return g, nil
 }
 
+// leakFunc gets an object whose release left references behind
+// (Shell.leak; tests pass their own). A nil leakFunc ignores them.
+type leakFunc func(what string, left uint32)
+
+// releaseLast releases the reference *p holds, which must be the last one;
+// leak (if not nil) gets the references left otherwise.
+func (leak leakFunc) releaseLast(what string, p *com.Ptr) {
+	if n := p.Release(); n != 0 && leak != nil {
+		leak(what, n)
+	}
+}
+
 // release drops every reference, dependants first. Every surface's chain
 // must be gone. leak (if not nil) gets the objects whose last reference
 // was not the one released here.
-func (g *gpu) release(leak func(what string, left uint32)) {
-	last := func(what string, p *com.Ptr) {
-		if n := p.Release(); n != 0 && leak != nil {
-			leak(what, n)
-		}
-	}
+func (g *gpu) release(leak leakFunc) {
+	last := leak.releaseLast
+	g.shadows.release(last) // before the contexts
+	g.res.release(last)
 	last("ID2D1DeviceContext (mask)", &g.mask.Ptr)
 	last("ID2D1DeviceContext", &g.dc.Ptr)
 	last("ID2D1Device", &g.d2dev.Ptr)
@@ -121,17 +135,17 @@ func (g *gpu) release(leak func(what string, left uint32)) {
 }
 
 // device returns the shell's device objects, creating them if there are
-// none (on WARP if s.warp is set).
+// none (on WARP if s.hooks.warp or s.fallback is set).
 func (s *Shell) device() (*gpu, error) {
 	if s.gpu != nil {
 		return s.gpu, nil
 	}
-	g, err := newGPU(s.warp)
+	g, err := newGPU(s.hooks.warp || s.fallback)
 	if err != nil {
 		return nil, fmt.Errorf("win32: creating the GPU devices: %w", err)
 	}
-	s.gpuGen++
-	g.gen = s.gpuGen
+	s.stats.gpuGen++
+	g.gen = s.stats.gpuGen
 	s.gpu = g
 	return g, nil
 }
@@ -139,7 +153,7 @@ func (s *Shell) device() (*gpu, error) {
 // releaseGPU releases every surface's chain, the images' bitmaps
 // (image.go) and the device objects.
 func (s *Shell) releaseGPU() {
-	for _, sf := range s.surfaces {
+	for sf := range s.allWindows() {
 		sf.releaseChain()
 	}
 	s.images.release(s.leak)
@@ -152,9 +166,7 @@ func (s *Shell) releaseGPU() {
 
 // release drops the reference *p holds, which must be the last one.
 func (s *Shell) release(what string, p *com.Ptr) {
-	if n := p.Release(); n != 0 {
-		s.leak(what, n)
-	}
+	leakFunc(s.leak).releaseLast(what, p)
 }
 
 // leak records an object that outlived its last expected reference
@@ -175,41 +187,112 @@ func isDeviceLost(err error) bool {
 		errors.Is(err, com.DXGI_ERROR_DEVICE_HUNG) || errors.Is(err, com.D2DERR_RECREATE_TARGET)
 }
 
+// The device-loss policy (review-plan B2). Every create and commit error
+// of the rendering goes through lost, which starts the recovery for a lost
+// device: the chain's creation (render; a new surface or popup retries it
+// once, newChain), the target bitmap and ResizeBuffers (fitChain), EndDraw,
+// Present and the frame's Commit (render). deviceLost recovers in one
+// place, guarded against re-entry. A device lost again while it recreates
+// the chains is rebuilt once more (recoverTries in all); after that the
+// surfaces without a chain retry at their next paint. After lossLimit
+// losses within lossWindow the shell gives up on the hardware device and
+// runs on WARP (fallback) for the rest of its life, so a GPU that keeps
+// hanging is not rebuilt every frame.
+const (
+	recoverTries = 2
+	lossLimit    = 3
+	lossWindow   = 30 * time.Second
+)
+
+// lost starts the recovery if err means a lost device, and returns err.
+func (s *Shell) lost(err error) error {
+	if isDeviceLost(err) {
+		s.deviceLost(err)
+	}
+	return err
+}
+
 // deviceLost recovers from a lost device: every surface's chain and the
 // device objects are released and recreated, and every surface is
-// invalidated, so the next frame repaints the ones on screen. A surface
-// whose chain cannot be recreated keeps the error and tries again at its
-// next paint.
+// invalidated, so the next frame repaints the ones on screen. If the
+// device is lost again while the chains are recreated, it starts over, at
+// most recoverTries times in all; a surface whose chain cannot be
+// recreated keeps the error and tries again at its next paint (render).
+// Called while a recovery runs, it only records the cause for that one.
 func (s *Shell) deviceLost(cause error) {
-	s.losses++
-	if debugChecks {
-		log.Printf("win32: GPU device lost (%v); recreating", cause)
-	}
-	s.releaseGPU()
-	for _, sf := range s.surfaces {
-		if sf.dead {
-			continue
+	if s.recovering {
+		if s.relost == nil {
+			s.relost = cause
 		}
-		sf.renderErr = sf.createChain()
-		sf.invalid = true
+		return
+	}
+	s.recovering = true
+	defer func() { s.recovering, s.relost = false, nil }()
+	for try := 1; ; try++ {
+		s.stats.losses++
+		s.noteLoss()
+		if debugChecks {
+			log.Printf("win32: GPU device lost (%v); recreating", cause)
+		}
+		s.releaseGPU()
+		s.relost = nil
+		for sf := range s.allWindows() {
+			if sf.dead {
+				continue
+			}
+			sf.invalid = true
+			if s.relost != nil { // lost again: the rest wait for the next try or paint
+				sf.renderErr = s.relost
+				continue
+			}
+			err := sf.createChain()
+			if isDeviceLost(err) {
+				s.relost = err
+			}
+			sf.renderErr = err
+		}
+		if s.relost == nil || try >= recoverTries {
+			break
+		}
+		cause = s.relost
 	}
 	if len(s.surfaces) > 0 {
 		s.clock.RequestFrame()
 	}
 }
 
+// noteLoss records a loss and switches the shell to WARP at the lossLimit-th
+// loss within lossWindow (see lost).
+func (s *Shell) noteLoss() {
+	now := time.Now()
+	copy(s.lossAt[:], s.lossAt[1:])
+	s.lossAt[len(s.lossAt)-1] = now
+	first := s.lossAt[0]
+	if s.fallback || first.IsZero() || now.Sub(first) > lossWindow {
+		return
+	}
+	s.fallback = true
+	if debugChecks {
+		log.Printf("win32: %d GPU device losses within %v; using WARP from now on", lossLimit, lossWindow)
+	}
+}
+
 // fault is the test hook for device loss: the next call named op
-// ("EndDraw", "Present" or "ResizeBuffers") fails with hr.
+// ("createChain", "createBitmap", "ResizeBuffers", "EndDraw", "Present" or
+// "Commit") fails with hr. Shell.hooks.hooks.faults is a queue; only its first entry
+// can be hit.
 type fault struct {
 	op string
 	hr com.HRESULT
 }
 
-// inject returns err, or the injected failure for op once.
+// inject returns err, or the failure injected for op once if it is first
+// in the queue.
 func (s *Shell) inject(op string, err error) error {
-	if s.fault.op != op {
+	if len(s.hooks.faults) == 0 || s.hooks.faults[0].op != op {
 		return err
 	}
-	s.fault.op = ""
-	return &com.Error{Op: op + " (injected)", HR: s.fault.hr}
+	hr := s.hooks.faults[0].hr
+	s.hooks.faults = s.hooks.faults[1:]
+	return &com.Error{Op: op + " (injected)", HR: hr}
 }

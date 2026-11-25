@@ -128,3 +128,149 @@ text (30,38,28,16) "Wrap" 13pt #ffffff40
 fillRRect (10,39,14,14) r=7 solid #5f5f5f
 fillRRect (14,43,6,6) r=3 solid #ffffff
 text (30,38,28,16) "Wrap" 13pt #ffffffd9
+## off, normal unfocused key light contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+text (30,38,28,16) "Wrap" 13pt #000000
+## off pressed, pressed unfocused key light contrast
+fillRRect (10,39,14,14) r=7 solid #dedede
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+text (30,38,28,16) "Wrap" 13pt #000000
+## on, normal unfocused key light contrast
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+## on pressed, pressed unfocused key light contrast
+fillRRect (10,39,14,14) r=7 solid #0068d9
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+## disabled off, normal unfocused disabled key light contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #ffffff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+pop
+text (30,38,28,16) "Wrap" 13pt #00000080
+## disabled on, normal unfocused disabled key light contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+pop
+text (30,38,28,16) "Wrap" 13pt #00000080
+## focused on, normal focused key light contrast
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+strokeRRect (8.5,37.5,17,17) r=8.5 w=3 solid #007aff
+## off, normal unfocused inactive light contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+text (30,38,28,16) "Wrap" 13pt #000000
+## off pressed, pressed unfocused inactive light contrast
+fillRRect (10,39,14,14) r=7 solid #dedede
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+text (30,38,28,16) "Wrap" 13pt #000000
+## on, normal unfocused inactive light contrast
+fillRRect (10,39,14,14) r=7 solid #cbcbcb
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+## on pressed, pressed unfocused inactive light contrast
+fillRRect (10,39,14,14) r=7 solid #cbcbcb
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+## disabled off, normal unfocused disabled inactive light contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #ffffff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+pop
+text (30,38,28,16) "Wrap" 13pt #00000080
+## disabled on, normal unfocused disabled inactive light contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #cbcbcb
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+pop
+text (30,38,28,16) "Wrap" 13pt #00000080
+## focused on, normal focused-inactive inactive light contrast
+fillRRect (10,39,14,14) r=7 solid #cbcbcb
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #0000008c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #000000
+## off, normal unfocused key dark contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff40
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## off pressed, pressed unfocused key dark contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff6b
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## on, normal unfocused key dark contrast
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## on pressed, pressed unfocused key dark contrast
+fillRRect (10,39,14,14) r=7 solid #0068d9
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## disabled off, normal unfocused disabled key dark contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #ffffff40
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+pop
+text (30,38,28,16) "Wrap" 13pt #ffffff80
+## disabled on, normal unfocused disabled key dark contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+pop
+text (30,38,28,16) "Wrap" 13pt #ffffff80
+## focused on, normal focused key dark contrast
+fillRRect (10,39,14,14) r=7 solid #007aff
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff
+strokeRRect (8.5,37.5,17,17) r=8.5 w=3 solid #007aff
+## off, normal unfocused inactive dark contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff40
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## off pressed, pressed unfocused inactive dark contrast
+fillRRect (10,39,14,14) r=7 solid #ffffff6b
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## on, normal unfocused inactive dark contrast
+fillRRect (10,39,14,14) r=7 solid #5f5f5f
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## on pressed, pressed unfocused inactive dark contrast
+fillRRect (10,39,14,14) r=7 solid #5f5f5f
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff
+## disabled off, normal unfocused disabled inactive dark contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #ffffff40
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+pop
+text (30,38,28,16) "Wrap" 13pt #ffffff80
+## disabled on, normal unfocused disabled inactive dark contrast
+pushOpacity 0.5
+fillRRect (10,39,14,14) r=7 solid #5f5f5f
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+pop
+text (30,38,28,16) "Wrap" 13pt #ffffff80
+## focused on, normal focused-inactive inactive dark contrast
+fillRRect (10,39,14,14) r=7 solid #5f5f5f
+strokeRRect (10.5,39.5,13,13) r=6.5 w=1 solid #ffffff8c
+fillRRect (14,43,6,6) r=3 solid #ffffff
+text (30,38,28,16) "Wrap" 13pt #ffffff

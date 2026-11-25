@@ -5,9 +5,10 @@
 // talks to the OS only through these interfaces.
 //
 // The implementations are shell/win32 (Win32, DWM, Direct2D, DirectWrite),
-// shell/gtk4 (GTK 4, GSK, Pango) and the test shell shell/fake (S2.1d). Popups
-// (S5.5), IME composition (S5.3) and the clipboard (S5.2) extend the
-// interfaces in their own steps.
+// shell/gtk4 (GTK 4, GSK, Pango) and the test shell shell/fake (S2.1d). The
+// clipboard (S5.2), IME composition (S5.3) and popups (S5.5a: Popup, a
+// borderless surface owned by a parent, for menus and tooltips) extended
+// the interfaces in their own steps.
 //
 // Contracts shared by every implementation:
 //

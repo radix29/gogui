@@ -32,7 +32,11 @@
 // SettingChanged; since S4.3c the Shell's appearance cache: read from an
 // injectable source before Ready, re-read on its changes through Post;
 // since S4.3d the live GtkSettings (gtksettings.go): notify:: of the
-// default GtkSettings through sigPointer, re-read the same way.
+// default GtkSettings through sigPointer, re-read the same way; since
+// S5.2d the caret blink (gtk-cursor-blink, -time, -timeout) among them;
+// since S5.5f the popups (popup.go over popover_linux.go): a GtkPopover
+// without arrow around a second GGSurface, placed by GTK, its grab GTK's
+// autohide.
 //
 // The Shell is untagged and drives the native side through the small loop
 // interface, the surfaces through the window interface, so their logic
@@ -45,7 +49,7 @@
 // hit-testing, carets and selection included (textgeom.go, S4.2h); its UI
 // font is Inter from assets/fonts, added through a cache file for
 // fontconfig (appfont.go, S4.2j), else the system's; without
-// Pango it is shell/fake's.
+// Pango it is shellkit.FixedText's.
 //
 // Callbacks (PLAN.md §6.3, §7.2). Every native callback is one of a fixed
 // set of trampolines (trampolines.go), registered once per process with

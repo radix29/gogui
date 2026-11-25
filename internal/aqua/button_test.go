@@ -33,9 +33,6 @@ func newButton(t *testing.T, title string, clicks *int) *Button {
 
 func TestButtonIsReal(t *testing.T) {
 	b := newButton(t, "OK", nil)
-	if _, ok := Caption(b); ok {
-		t.Error("the button is still a placeholder peer")
-	}
 	if e := ElementOf(b); e == nil || e != Element(b.view) || b.StubPeer() != b.Button || b.Stub() != &b.Button.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -187,6 +184,7 @@ func TestButtonPaint(t *testing.T) {
 	b.SetControlSize(driver.ControlSizeRegular)
 	parent := newBox("parent", 0, 0, 200, 100)
 	parent.disabled = true
+	treeChange() // set without SetEnabled
 	parent.AddChild(b.view)
 	if got := paintPeer(t, b, r); !strings.Contains(got, `"OK" 13pt #00000040`) {
 		t.Errorf("disabled ancestor:\n%s", got)
@@ -217,7 +215,7 @@ func TestButtonRedraws(t *testing.T) {
 func buttonWindow(t *testing.T, title string, clicks *int) (*Button, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	var h driver.ButtonHandler
 	if clicks != nil {
@@ -357,43 +355,45 @@ func TestButtonInWindow(t *testing.T) {
 
 // TestButtonStates pins the bezel of every state (plain, pressed, default,
 // default pressed, disabled, disabled default, focused, focused default)
-// in light and dark, in a key and an inactive window, as record dumps in
-// testdata/button.states.
+// in light and dark, in a key and an inactive window, with and without
+// Increase Contrast (S6.1e), as record dumps in testdata/button.states.
 func TestButtonStates(t *testing.T) {
 	var out strings.Builder
-	for _, dark := range []bool{false, true} {
-		for _, key := range []bool{true, false} {
-			for _, st := range []struct {
-				name               string
-				isDefault, pressed bool
-				disabled, focused  bool
-			}{
-				{"plain", false, false, false, false},
-				{"pressed", false, true, false, false},
-				{"default", true, false, false, false},
-				{"default pressed", true, true, false, false},
-				{"disabled", false, false, true, false},
-				{"disabled default", true, false, true, false},
-				{"focused", false, false, false, true},
-				{"focused default", true, false, false, true},
-			} {
-				b, w, sf, s := buttonWindow(t, "OK", nil)
-				w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent})
-				b.SetDefault(st.isDefault)
-				b.SetEnabled(!st.disabled)
-				if st.focused && !b.view.Focus() {
-					t.Fatal("focus")
-				}
-				if st.pressed {
-					sf.Press(pt(60, 48), shell.ButtonPrimary)
-				}
-				if !key {
-					s.Deactivate()
-				}
-				state := b.view.State()
-				fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, bezelLines(paint(t, s, sf)))
-				if st.pressed {
-					sf.Release(pt(60, 48), shell.ButtonPrimary)
+	for _, contrast := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, key := range []bool{true, false} {
+				for _, st := range []struct {
+					name               string
+					isDefault, pressed bool
+					disabled, focused  bool
+				}{
+					{"plain", false, false, false, false},
+					{"pressed", false, true, false, false},
+					{"default", true, false, false, false},
+					{"default pressed", true, true, false, false},
+					{"disabled", false, false, true, false},
+					{"disabled default", true, false, true, false},
+					{"focused", false, false, false, true},
+					{"focused default", true, false, false, true},
+				} {
+					b, w, sf, s := buttonWindow(t, "OK", nil)
+					w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent, IncreaseContrast: contrast})
+					b.SetDefault(st.isDefault)
+					b.SetEnabled(!st.disabled)
+					if st.focused && !b.view.Focus() {
+						t.Fatal("focus")
+					}
+					if st.pressed {
+						sf.Press(pt(60, 48), shell.ButtonPrimary)
+					}
+					if !key {
+						s.Deactivate()
+					}
+					state := b.view.State()
+					fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, bezelLines(paint(t, s, sf)))
+					if st.pressed {
+						sf.Release(pt(60, 48), shell.ButtonPrimary)
+					}
 				}
 			}
 		}

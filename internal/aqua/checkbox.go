@@ -20,8 +20,10 @@ import (
 //     CheckboxRadius rounded. Off: Theme.ToggleFill (BezelFill) and the
 //     1 pt BezelBorder. On and mixed: the accent fill of ToggleFill
 //     (AccentInactive, grey, in an inactive window) and, stroked in
-//     AccentText (DefaultButtonText) CheckboxMarkStroke wide with round
-//     caps and joins, a check (on) or a dash (mixed); no border.
+//     Theme.ToggleMark (AccentText; DefaultButtonText when inactive)
+//     CheckboxMarkStroke wide with round
+//     caps and joins, a check (on) or a dash (mixed); no border, only the
+//     BezelOutline with Increase Contrast (S6.1e).
 //   - Title: one line in the system font of the control size, after the
 //     box and the gap, centred vertically and truncated with an ellipsis
 //     to the frame, in ColorControlText.
@@ -30,9 +32,10 @@ import (
 //     the box at ToggleDisabledAlpha, the title in
 //     ColorDisabledControlText, and ignores the pointer.
 //   - Focus: the focus ring around the box (FocusControl).
-//   - Clicks go through a pressTracker over the whole frame, box and
-//     title alike: a release over it toggles. Activate (Space, the a11y
-//     press) toggles too, refused while disabled.
+//   - Clicks go through the clickControl core over the whole frame, box
+//     and title alike: a release over it toggles. Activate (Space, the a11y
+//     press) toggles too, refused while disabled; Space flashes the box
+//     pressed for keyFlash first.
 //   - Accessibility: a checkbox with the title, checked or mixed, and the
 //     press action.
 type Checkbox struct {
@@ -40,7 +43,7 @@ type Checkbox struct {
 	peerBase
 	view *checkBox
 
-	title toggleTitle // the title layout
+	title layoutMemo // the title layout
 }
 
 // NewCheckbox returns a checkbox.
@@ -70,7 +73,7 @@ func (c *Checkbox) TitleFont() driver.Font { return toggleFont(c.ControlSize) }
 // titleLayout returns the title on one line, untruncated, or nil for an
 // empty title.
 func (c *Checkbox) titleLayout() render.TextLayout {
-	return c.title.get(c.view.d.sh.TextSystem(), c.Title, c.TitleFont())
+	return c.title.get(c.view.d.text, c.Title, c.TitleFont())
 }
 
 // FittingSize implements driver.Widget: the box and the title, clamped to
@@ -86,10 +89,11 @@ func (c *Checkbox) FittingSize(max driver.Size) driver.Size {
 // checkBox is the element of a Checkbox.
 type checkBox struct {
 	Base
+	clickControl
 	d     *Driver
 	p     *Checkbox
-	press pressTracker
-	ring  FocusRing
+	trunc truncMemo // the title truncated to the width left
+	mark  pathMemo[checkKey]
 }
 
 func (e *checkBox) FittingSize(max driver.Size) driver.Size { return e.p.FittingSize(max) }
@@ -108,30 +112,19 @@ func (e *checkBox) box() (driver.Rect, float64) {
 // HandleEvent tracks the focus ring and the press; a release over the
 // checkbox toggles it. A disabled checkbox drops a press and handles
 // nothing.
-func (e *checkBox) HandleEvent(ev Event) bool {
-	e.ring.Track(e, ev)
-	if !e.EnabledInTree() {
-		e.press.Reset(e)
-		return false
-	}
-	handled, act := e.press.Track(e, ev)
-	if act {
-		e.p.UserClick()
-	}
-	return handled
-}
+func (e *checkBox) HandleEvent(ev Event) bool { return e.handleClick(e, ev, nil) }
 
 // Activate toggles the checkbox, refused while it is disabled.
-func (e *checkBox) Activate() bool {
-	if !e.EnabledInTree() {
-		return false
-	}
-	e.p.UserClick()
-	return true
-}
+func (e *checkBox) Activate() bool { return e.activate(e) }
 
-// State returns the checkbox's control state, its press included.
-func (e *checkBox) State() ControlState { return e.press.State(e) }
+func (e *checkBox) click() { e.p.UserClick() }
+
+// State returns the checkbox's control state, its press and a key flash
+// included.
+func (e *checkBox) State() ControlState { return e.state(e) }
+
+// keyFlash shows a press by key (clickControl.flash).
+func (e *checkBox) keyFlash() { e.flash(e, e.d) }
 
 // Paint draws the box with its border or mark, the title and the focus
 // ring around the box (nothing for an empty frame).
@@ -148,31 +141,38 @@ func (e *checkBox) Paint(c render.Canvas) {
 	on := e.p.Value != driver.StateOff
 
 	if st.Disabled {
-		c.PushOpacity(tokens.Controls.ToggleDisabledAlpha)
+		c.PushOpacity(float64(tokens.Controls.ToggleDisabledAlpha))
 	}
 	c.FillRoundedRect(r, radii, render.Solid(tokens.ToggleFill(a, on, st.Interaction == InteractionPressed, st.Key)))
 	if on {
-		c.StrokePath(checkMark(r, e.p.Value == driver.StateMixed), tokens.Controls.CheckboxMarkStroke.At(cs),
-			render.Solid(tokens.AccentText(a)), render.StrokeStyle{Cap: render.CapRound, Join: render.JoinRound})
-	} else if bw := pixelWidth(1, scaleIn(&e.Base)); r.W > 2*bw && r.H > 2*bw {
-		c.StrokeRoundedRect(r.Inset(driver.UniformInsets(bw/2)), render.UniformRadii(max(0, radius-bw/2)), bw,
-			render.Solid(tokens.Controls.BezelBorder.Value(a)))
+		paintOutline(c, r, radius, scaleIn(&e.Base), a, tokens.Controls.BezelOutline.Value(a))
+		mixed := e.p.Value == driver.StateMixed
+		mark := e.mark.get(checkKey{r, mixed}, func(p *render.Path) { checkMark(p, r, mixed) })
+		c.StrokePath(mark, tokens.Controls.CheckboxMarkStroke.At(cs),
+			render.Solid(tokens.ToggleMark(a, st.Key)), render.StrokeStyle{Cap: render.CapRound, Join: render.JoinRound})
+	} else {
+		strokeInside(c, r, radius, pixelWidth(1, scaleIn(&e.Base)), tokens.Controls.BezelBorder.Value(a))
 	}
 	if st.Disabled {
 		c.Pop()
 	}
 
-	paintToggleTitle(c, e.d.sh.TextSystem(), e.p.titleLayout(), e.p.Title, e.p.TitleFont(),
+	paintToggleTitle(c, &e.trunc, e.d.text, e.p.titleLayout(), e.p.Title, e.p.TitleFont(),
 		tokens.Controls.CheckboxSize.At(cs)+tokens.Controls.CheckboxGap.At(cs), b, st.Disabled, a)
 	e.ring.Paint(c, e, RectFocusShape(r, radii))
 }
 
-// checkMark returns the mark of a checked box r: a check, or for mixed a
-// horizontal dash. The points are on a 14-unit grid of the box.
-func checkMark(r driver.Rect, mixed bool) *render.Path {
+// checkKey is what a checkbox's mark is built from.
+type checkKey struct {
+	box   driver.Rect
+	mixed bool
+}
+
+// checkMark adds to p the mark of a checked box r: a check, or for mixed
+// a horizontal dash. The points are on a 14-unit grid of the box.
+func checkMark(p *render.Path, r driver.Rect, mixed bool) *render.Path {
 	u := r.W / 14
 	at := func(x, y float64) driver.Point { return driver.Point{X: r.X + x*u, Y: r.Y + y*u} }
-	p := &render.Path{}
 	if mixed {
 		return p.MoveTo(at(3.5, 7)).LineTo(at(10.5, 7))
 	}

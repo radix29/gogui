@@ -13,12 +13,14 @@ import (
 // app is a shell.Handler that counts its calls.
 type app struct {
 	ready       int
+	services    shell.Services // the last Ready's
 	appearances []driver.Appearance
 	onReady     func()
 }
 
-func (a *app) Ready() {
+func (a *app) Ready(sv shell.Services) {
 	a.ready++
+	a.services = sv
 	if a.onReady != nil {
 		a.onReady()
 	}
@@ -80,6 +82,9 @@ func eventString(ev shell.Event) string {
 		if e.Clicks != 0 {
 			s += fmt.Sprintf(" n=%d", e.Clicks)
 		}
+		if e.Activating {
+			s += " activating"
+		}
 		if e.Mods != 0 {
 			s += fmt.Sprintf(" m=%d", e.Mods)
 		}
@@ -111,6 +116,19 @@ func eventString(ev shell.Event) string {
 		return s
 	case shell.TextEvent:
 		return fmt.Sprintf("text %q", e.Text)
+	case shell.PreeditEvent:
+		if e.Text == "" {
+			return "preedit end"
+		}
+		s := fmt.Sprintf("preedit %q @%d", e.Text, e.Cursor)
+		for _, sg := range e.Segments {
+			sel := ""
+			if sg.Selected {
+				sel = "*"
+			}
+			s += fmt.Sprintf(" [%d,%d)%s", sg.Start, sg.End, sel)
+		}
+		return s
 	}
 	return "?"
 }

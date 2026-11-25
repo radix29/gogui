@@ -110,6 +110,10 @@ func (f Factory) SystemFontCollection(checkForUpdates bool) (FontCollection, err
 	return FontCollection{out}, err
 }
 
+// directFloats selects the direct path (com.DirectFloats) for the float-path
+// methods; the tests turn it off to check the bound path on amd64 too.
+var directFloats = com.DirectFloats
+
 var (
 	methodCreateTextFormat = com.Method[func(this com.Ptr, family *uint16, collection com.Ptr,
 		weight FontWeight, style FontStyle, stretch FontStretch, size float32, locale *uint16,
@@ -133,7 +137,14 @@ func (f Factory) CreateTextFormat(family string, collection FontCollection, weig
 		return TextFormat{}, fmt.Errorf("dwrite: CreateTextFormat: locale %q: %w", locale, err)
 	}
 	var out com.Ptr
-	hr := methodCreateTextFormat.Fn(f.Ptr)(f.Ptr, fam, collection.Ptr, weight, style, stretch, size, loc, &out)
+	var hr com.HRESULT
+	if directFloats {
+		hr = com.HRESULT(int32(f.Call(slotFactoryCreateTextFormat, uintptr(unsafe.Pointer(fam)), uintptr(collection.Ptr),
+			uintptr(weight), uintptr(style), uintptr(stretch), com.Float(size), uintptr(unsafe.Pointer(loc)),
+			uintptr(unsafe.Pointer(&out)))))
+	} else {
+		hr = methodCreateTextFormat.Fn(f.Ptr)(f.Ptr, fam, collection.Ptr, weight, style, stretch, size, loc, &out)
+	}
 	if err := hr.Err("IDWriteFactory::CreateTextFormat"); err != nil {
 		return TextFormat{}, err
 	}
@@ -150,7 +161,13 @@ func (f Factory) CreateTextLayout(text []uint16, format TextFormat, maxWidth, ma
 	buf := make([]uint16, len(text)+1)
 	copy(buf, text)
 	var out com.Ptr
-	hr := methodCreateTextLayout.Fn(f.Ptr)(f.Ptr, &buf[0], uint32(len(text)), format.Ptr, maxWidth, maxHeight, &out)
+	var hr com.HRESULT
+	if directFloats {
+		hr = com.HRESULT(int32(f.Call(slotFactoryCreateTextLayout, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(text)),
+			uintptr(format.Ptr), com.Float(maxWidth), com.Float(maxHeight), uintptr(unsafe.Pointer(&out)))))
+	} else {
+		hr = methodCreateTextLayout.Fn(f.Ptr)(f.Ptr, &buf[0], uint32(len(text)), format.Ptr, maxWidth, maxHeight, &out)
+	}
 	if err := hr.Err("IDWriteFactory::CreateTextLayout"); err != nil {
 		return TextLayout{}, err
 	}
@@ -173,58 +190,19 @@ func (f TextFormat) SetWordWrapping(w WordWrapping) error {
 	return f.CallHR("IDWriteTextFormat::SetWordWrapping", slotFormatSetWordWrapping, uintptr(w))
 }
 
-// SetTextAlignment sets the horizontal alignment.
-func (f TextFormat) SetTextAlignment(a TextAlignment) error {
-	return f.CallHR("IDWriteTextFormat::SetTextAlignment", slotFormatSetTextAlignment, uintptr(a))
-}
-
-// SetParagraphAlignment sets the vertical alignment.
-func (f TextFormat) SetParagraphAlignment(a ParagraphAlignment) error {
-	return f.CallHR("IDWriteTextFormat::SetParagraphAlignment", slotFormatSetParagraphAlignment, uintptr(a))
-}
-
-// WordWrapping returns the wrapping mode.
-func (f TextFormat) WordWrapping() WordWrapping {
-	return WordWrapping(uint32(f.Call(slotFormatGetWordWrapping)))
-}
-
-// TextAlignment returns the horizontal alignment.
-func (f TextFormat) TextAlignment() TextAlignment {
-	return TextAlignment(uint32(f.Call(slotFormatGetTextAlignment)))
-}
-
-// ParagraphAlignment returns the vertical alignment.
-func (f TextFormat) ParagraphAlignment() ParagraphAlignment {
-	return ParagraphAlignment(uint32(f.Call(slotFormatGetParagraphAlignment)))
-}
-
 // FontWeight returns the format's weight.
 func (f TextFormat) FontWeight() FontWeight {
 	return FontWeight(uint32(f.Call(slotFormatGetFontWeight)))
 }
 
-// FontStyle returns the format's style.
-func (f TextFormat) FontStyle() FontStyle { return FontStyle(uint32(f.Call(slotFormatGetFontStyle))) }
-
-// FontStretch returns the format's stretch.
-func (f TextFormat) FontStretch() FontStretch {
-	return FontStretch(uint32(f.Call(slotFormatGetFontStretch)))
-}
-
 var methodGetFontSize = com.Method[func(this com.Ptr) float32]{Slot: slotFormatGetFontSize}
 
 // FontSize returns the format's size in DIPs (a FLOAT result).
-func (f TextFormat) FontSize() float32 { return methodGetFontSize.Fn(f.Ptr)(f.Ptr) }
-
-// FontFamilyName returns the family name the format was created with.
-func (f TextFormat) FontFamilyName() (string, error) {
-	n := uint32(f.Call(slotFormatGetFontFamilyNameLength))
-	buf := make([]uint16, n+1) // the size passed includes the terminator
-	if err := f.CallHR("IDWriteTextFormat::GetFontFamilyName", slotFormatGetFontFamilyName,
-		uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf))); err != nil {
-		return "", err
+func (f TextFormat) FontSize() float32 {
+	if directFloats {
+		return f.CallFloat(slotFormatGetFontSize)
 	}
-	return windows.UTF16ToString(buf), nil
+	return methodGetFontSize.Fn(f.Ptr)(f.Ptr)
 }
 
 // TextLayout is IDWriteTextLayout. It derives from IDWriteTextFormat, so
@@ -235,12 +213,6 @@ var (
 	methodGetMaxWidth  = com.Method[func(this com.Ptr) float32]{Slot: slotLayoutGetMaxWidth}
 	methodGetMaxHeight = com.Method[func(this com.Ptr) float32]{Slot: slotLayoutGetMaxHeight}
 )
-
-// MaxWidth returns the layout box's width (a FLOAT result).
-func (l TextLayout) MaxWidth() float32 { return methodGetMaxWidth.Fn(l.Ptr)(l.Ptr) }
-
-// MaxHeight returns the layout box's height (a FLOAT result).
-func (l TextLayout) MaxHeight() float32 { return methodGetMaxHeight.Fn(l.Ptr)(l.Ptr) }
 
 // Metrics returns the metrics of the formatted text.
 func (l TextLayout) Metrics() (TextMetrics, error) {
@@ -298,12 +270,6 @@ func fetchArray[T any](op string, call func(buf *T, n uint32, actual *uint32) co
 
 var methodSetMaxWidth = com.Method[func(this com.Ptr, w float32) com.HRESULT]{Slot: slotLayoutSetMaxWidth}
 
-// SetMaxWidth changes the layout box's width; the text is laid out again
-// on the next query. A negative or NaN width is refused with E_INVALIDARG.
-func (l TextLayout) SetMaxWidth(w float32) error {
-	return methodSetMaxWidth.Fn(l.Ptr)(l.Ptr, w).Err("IDWriteTextLayout::SetMaxWidth")
-}
-
 var methodHitTestPoint = com.Method[func(this com.Ptr, x, y float32, trailing, inside *int32,
 	m *HitTestMetrics) com.HRESULT]{Slot: slotLayoutHitTestPoint}
 
@@ -317,19 +283,6 @@ type PointHit struct {
 	Inside bool
 	// Metrics is the hit cluster's box in the layout's coordinates.
 	Metrics HitTestMetrics
-}
-
-// HitTestPoint returns the text position at the point (x, y), in the
-// layout's coordinates (DIPs, origin at the box's top left).
-func (l TextLayout) HitTestPoint(x, y float32) (PointHit, error) {
-	var trailing, inside int32
-	var h PointHit
-	hr := methodHitTestPoint.Fn(l.Ptr)(l.Ptr, x, y, &trailing, &inside, &h.Metrics)
-	if err := hr.Err("IDWriteTextLayout::HitTestPoint"); err != nil {
-		return PointHit{}, err
-	}
-	h.Trailing, h.Inside = trailing != 0, inside != 0
-	return h, nil
 }
 
 // HitTestTextPosition returns the caret point of the text position pos
@@ -347,16 +300,6 @@ func (l TextLayout) HitTestTextPosition(pos uint32, trailing bool) (x, y float32
 
 var methodHitTestTextRange = com.Method[func(this com.Ptr, pos, length uint32, originX, originY float32,
 	m *HitTestMetrics, max uint32, actual *uint32) com.HRESULT]{Slot: slotLayoutHitTestTextRange}
-
-// HitTestTextRange returns the boxes covering the text range [pos,
-// pos+length), offset by (originX, originY): at least one per line the
-// range touches (more with bidi runs), in the layout's order.
-func (l TextLayout) HitTestTextRange(pos, length uint32, originX, originY float32) ([]HitTestMetrics, error) {
-	fn := methodHitTestTextRange.Fn(l.Ptr)
-	return fetchArray("IDWriteTextLayout::HitTestTextRange", func(buf *HitTestMetrics, n uint32, actual *uint32) com.HRESULT {
-		return fn(l.Ptr, pos, length, originX, originY, buf, n, actual)
-	})
-}
 
 func boolArg(b bool) uintptr {
 	if b {

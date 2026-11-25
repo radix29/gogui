@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sys/windows"
 
@@ -45,7 +46,11 @@ type Shell struct {
 	ready    bool         // Handler.Ready has been called
 	quit     bool
 
+	// timers are the pending After timers (timer.go).
+	timers afterTimers
+
 	sys        sysReader
+	backdrop   backdropSys // the popups' Acrylic (backdrop.go)
 	appearance driver.Appearance
 	clock      *clock
 	text       *textSystem
@@ -55,36 +60,69 @@ type Shell struct {
 	msgTime, tick func() uint32
 	events        shellkit.Monotonic
 
-	surfaces    []*surface // the open surfaces, in creation order
-	painting    *surface   // the surface whose Paint runs, or nil
-	silentClose bool       // closeAll without Closed (the teardown)
+	// imm reads a window's IME composition (ime.go; tests replace it, as
+	// no IME composes on the host).
+	imm func(h windows.HWND, parts uint32) imeComposition
 
-	// wakes counts the wake messages posted, drains the ones handled
-	// (tests).
-	wakes, drains atomic.Int64
+	surfaces    []*surface  // the open surfaces, in creation order
+	modals      []*surface  // the shown, open modal surfaces, in first-Show order (modal.go)
+	painting    *swapTarget // the window whose Paint runs, or nil
+	silentClose bool        // closeAll without Closed (the teardown)
 
-	// The GPU (gpu.go): the device objects while a surface is open, how
-	// often they were created and lost, the references left over at a
-	// release, and the test hooks (an injected failure, a call between a
-	// frame's EndDraw and its Present).
-	gpu     *gpu
-	warp    bool // tests: create the devices on WARP (newGPU; the golden renders)
-	gpuGen  int
-	losses  int
-	leaks   []string
-	fault   fault
-	onDrawn func(sf *surface)
+	// popups are the open popups, in creation order (popup.go); grab is
+	// the open grab popup, or nil.
+	popups []*popup
+	grab   *popup
+
+	// Scratch slices of the message loop's idle steps, reused so that they
+	// allocate nothing (review P17): the pacing set (pacingSurfaces) and
+	// the paint pass's list (paintInvalid; nil while a pass uses it).
+	pacingBuf, paintBuf []*swapTarget
+
+	// The GPU (gpu.go): the device objects while a surface is open and the
+	// references left over at a release. The device-loss policy (gpu.go):
+	// a recovery runs, the loss recorded during it, the times of the last
+	// losses, and the switch to WARP after too many of them.
+	gpu        *gpu
+	recovering bool
+	relost     error
+	lossAt     [lossLimit]time.Time
+	fallback   bool
+	leaks      []string
 
 	// images are the shell's images (image.go); their bitmaps go with the
 	// device objects.
 	images imageSet
 
 	// debug sends every Paint to a recorder too and keeps its contract
-	// errors in the surface's paintErr (GOGUI_DEBUG=1; tests set it).
+	// errors in the window's paintErr (GOGUI_DEBUG=1; tests set it).
 	debug bool
+
+	stats shellStats // counters (tests)
+	hooks testHooks  // test hooks, zero outside tests
 }
 
-var _ shell.Shell = (*Shell)(nil)
+// shellStats are the shell's counters, read by tests.
+type shellStats struct {
+	wakes, drains atomic.Int64 // the wake messages posted, and those handled
+
+	gpuGen int // the creations of the GPU devices (gpu.gen)
+	losses int // the device losses (deviceLost)
+}
+
+// testHooks are the shell's test hooks. All of them are zero outside the
+// tests.
+type testHooks struct {
+	// warp creates the devices on WARP (newGPU; the golden renders).
+	warp bool
+	// faults are the injected failures, a queue (gpu.go, inject).
+	faults []fault
+	// onDrawn runs between a frame's EndDraw and its Present (render), when
+	// the back buffer holds the frame.
+	onDrawn func(t *swapTarget)
+}
+
+var _ shell.PopupShell = (*Shell)(nil)
 
 // New returns a shell that has not been started. Its clock's timeline
 // starts now.
@@ -92,7 +130,8 @@ func New() *Shell { return newShell(liveSys{}) }
 
 func newShell(sys sysReader) *Shell {
 	s := &Shell{q: mainthread.New(), sys: sys, debug: debugChecks,
-		msgTime: liveMsgTime, tick: w32.GetTickCount}
+		msgTime: liveMsgTime, tick: w32.GetTickCount, imm: liveIMM,
+		backdrop: liveBackdrop()}
 	s.text = newTextSystem(s.q)
 	s.clock = newClock(s)
 	s.clock.paint = s.paintInvalid
@@ -159,13 +198,13 @@ func (s *Shell) Run(h shell.Handler) (err error) {
 	s.appearance = readAppearance(s.sys)
 	listener := s.listener
 	s.q.SetWake(func() {
-		s.wakes.Add(1)
+		s.stats.wakes.Add(1)
 		// Fails only once the listener is gone, after Run.
 		_ = w32.PostMessage(listener, msgWake, 0, 0)
 	})
 	s.clock.startTimer()
 	s.ready = true
-	h.Ready()
+	h.Ready(shell.Services{Text: s.text, Clock: s.clock})
 
 	// One message per round, after the clock's wait (clock.go): that runs
 	// a due frame first, or waits for a frame, a message or both.
@@ -204,6 +243,7 @@ func (s *Shell) shutdown() {
 	s.releaseGPU() // closeAll left nothing; this is the safety net
 	s.text.release(s.leak)
 	s.clock.close()
+	s.stopTimers()
 	s.q.Close()
 	s.q.SetWake(nil)
 	if s.listener != 0 {
@@ -231,8 +271,9 @@ func setDPIAwareness() error {
 }
 
 // Quit implements shell.Shell. Every open surface is closed (Closed, no
-// CloseRequested), and Run returns once the current message has been
-// handled; later Post calls are dropped. Calling it again does nothing.
+// CloseRequested), the pending After timers are dropped, and Run returns
+// once the current message has been handled; later Post calls are
+// dropped. Calling it again does nothing.
 func (s *Shell) Quit() {
 	s.q.Check("win32.Shell.Quit")
 	if s.quit {
@@ -241,6 +282,7 @@ func (s *Shell) Quit() {
 	s.notPainting("Shell.Quit")
 	s.quit = true // first, so NewSurface in a Closed handler fails
 	s.closeAll(false)
+	s.stopTimers()
 	s.q.Close()
 }
 
@@ -248,8 +290,9 @@ func (s *Shell) Quit() {
 // before Run waits for it; after Quit it is dropped.
 func (s *Shell) Post(fn func()) { s.q.Do(fn) }
 
-// TextSystem implements shell.Shell: the DirectWrite text system (text.go),
-// created with the first layout and released by Run.
+// TextSystem returns the DirectWrite text system (text.go) that Run hands
+// to Handler.Ready (shell.Services); it is released by Run. A test
+// accessor: shell.Shell has none.
 func (s *Shell) TextSystem() render.TextSystem {
 	s.checkReady("TextSystem")
 	return s.text
@@ -261,7 +304,8 @@ func (s *Shell) Appearance() driver.Appearance {
 	return s.appearance
 }
 
-// Clock implements shell.Shell.
+// Clock returns the frame clock that Run hands to Handler.Ready
+// (shell.Services). A test accessor: shell.Shell has none.
 func (s *Shell) Clock() shell.FrameClock {
 	s.checkReady("Clock")
 	return s.clock
@@ -278,6 +322,10 @@ func (s *Shell) appearanceChanged() {
 		_, _, _ = sf.applyFrame() // the dark frame and the corners follow
 		sf.Invalidate()           // and the background the shell clears to
 	}
+	for _, p := range s.popups {
+		_, _ = p.applyBackdrop() // Translucent follows, before the repaint
+		p.Invalidate()
+	}
 	if s.ready && !s.quit {
 		s.h.AppearanceChanged(a)
 	}
@@ -291,8 +339,11 @@ func (l listenerTarget) handle(_ windows.HWND, msg uint32, wp, _ uintptr) (uintp
 	s := l.s
 	switch msg {
 	case msgWake:
-		s.drains.Add(1)
+		s.stats.drains.Add(1)
 		s.q.Drain()
+		return 0, true
+	case msgModalKey:
+		s.modalKey()
 		return 0, true
 	case msgFrame:
 		if wp == frameModal {
@@ -304,6 +355,10 @@ func (l listenerTarget) handle(_ windows.HWND, msg uint32, wp, _ uintptr) (uintp
 	case w32.WM_TIMER:
 		if wp == timerFrame {
 			s.clock.modalFrame()
+			return 0, true
+		}
+		if wp == timerAfter {
+			s.fireTimers()
 			return 0, true
 		}
 	case w32.WM_SETTINGCHANGE, w32.WM_DWMCOLORIZATIONCOLORCHANGED, w32.WM_THEMECHANGED:

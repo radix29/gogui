@@ -33,7 +33,7 @@ import (
 //
 // Outcomes that depend on the windowing system are logged, not failed,
 // with a prefix to grep the native log for: SIZE-RESULT (the first
-// allocation), RESIZE-RESULT (SetSize and SetMinSize on a mapped window),
+// allocation), RESIZE-RESULT (SetSize and SetSizeLimits on a mapped window),
 // KEY-RESULT, ZOOM-RESULT, MINIMIZE-RESULT. Under bare xvfb there is no
 // window manager: nothing activates, maximizes or minimizes a window.
 //
@@ -225,7 +225,17 @@ func (e *surfTest) open(name string, cfg shell.SurfaceConfig) (*surface, *gtkWin
 // reports through e.t (t.Errorf is safe there); its error fails the test.
 func runSurfaceTest(t *testing.T, scenario func(e *surfTest) error) *surfTest {
 	t.Helper()
+	return runSurfaceTestWith(t, nil, scenario)
+}
+
+// runSurfaceTestWith is runSurfaceTest with setup run on the fresh shell
+// before Run (to set its appearance source, for one); nil does nothing.
+func runSurfaceTestWith(t *testing.T, setup func(s *Shell), scenario func(e *surfTest) error) *surfTest {
+	t.Helper()
 	s, reports := newGTKShell(t)
+	if setup != nil {
+		setup(s)
+	}
 	base := dispatch.Len()
 	e := &surfTest{t: t, s: s}
 	ran := false
@@ -427,8 +437,12 @@ func TestSurfaceGTKNew(t *testing.T) {
 			}
 			// The handles: the GGSurface's, and one per handler, which are
 			// close-request and notify::is-active of the window, and
-			// notify::state and notify::scale of the GdkSurface.
-			conns := 2 + 2
+			// notify::state and notify::scale of the GdkSurface (4); the
+			// caption gestures' (3, S4.1h), the pointer controllers' (6,
+			// S4.1i), the scroll controller's (4, S4.1j), the key
+			// controller's (2, S4.1k) and the input method's commit and
+			// preedit signals (4, S5.3i).
+			conns := 4 + 3 + 6 + 4 + 2 + 4
 			if len(g.conns) != conns {
 				t.Errorf("%s: %d signal handlers connected, want %d", c.name, len(g.conns), conns)
 			}
@@ -471,8 +485,7 @@ func TestSurfaceGTKNew(t *testing.T) {
 			size := sf.Size()
 			sf.Show()
 			sf.SetSize(driver.Size{W: 500, H: 500})
-			sf.SetMinSize(driver.Size{W: 600, H: 600})
-			sf.SetMaxSize(driver.Size{W: 50, H: 50})
+			sf.SetSizeLimits(driver.Size{W: 600, H: 600}, driver.Size{W: 50, H: 50})
 			sf.SetTitle("dead")
 			sf.Invalidate()
 			sf.SetCursor(shell.CursorIBeam)
@@ -720,7 +733,7 @@ func TestSurfaceGTKResize(t *testing.T) {
 	}
 }
 
-// TestSurfaceGTKMinSize: SetMinSize and SetMaxSize set the GGSurface's size
+// TestSurfaceGTKMinSize: SetSizeLimits sets the GGSurface's size
 // request and clamp the size (Resized at once); a fixed surface requests
 // its size; on a mapped window a raised minimum is logged (RESIZE-RESULT)
 // as GTK grows the window to it.
@@ -747,21 +760,21 @@ func TestSurfaceGTKMinSize(t *testing.T) {
 			}
 		}
 		check("new", [2]int32{0, 0}, driver.Size{W: 300, H: 200})
-		sf.SetMinSize(driver.Size{W: 150, H: 120})
-		check("SetMinSize below the size", [2]int32{150, 120}, driver.Size{W: 300, H: 200})
+		sf.SetSizeLimits(driver.Size{W: 150, H: 120}, driver.Size{})
+		check("min below the size", [2]int32{150, 120}, driver.Size{W: 300, H: 200})
 		n := len(h.resized)
-		sf.SetMinSize(driver.Size{W: 400, H: 250})
-		check("SetMinSize above the size", [2]int32{400, 250}, driver.Size{W: 400, H: 250})
+		sf.SetSizeLimits(driver.Size{W: 400, H: 250}, driver.Size{})
+		check("min above the size", [2]int32{400, 250}, driver.Size{W: 400, H: 250})
 		if len(h.resized) != n+1 || h.resized[n].size != (driver.Size{W: 400, H: 250}) {
-			t.Errorf("SetMinSize above the size: Resized %v, want one call with 400×250", h.resized[n:])
+			t.Errorf("min above the size: Resized %v, want one call with 400×250", h.resized[n:])
 		}
-		sf.SetMinSize(driver.Size{})
-		check("SetMinSize(0)", [2]int32{0, 0}, driver.Size{W: 400, H: 250})
-		sf.SetMaxSize(driver.Size{W: 200, H: 150})
-		check("SetMaxSize below the size", [2]int32{0, 0}, driver.Size{W: 200, H: 150})
+		sf.SetSizeLimits(driver.Size{}, driver.Size{})
+		check("no limits", [2]int32{0, 0}, driver.Size{W: 400, H: 250})
+		sf.SetSizeLimits(driver.Size{}, driver.Size{W: 200, H: 150})
+		check("max below the size", [2]int32{0, 0}, driver.Size{W: 200, H: 150})
 		sf.SetSize(driver.Size{W: 500, H: 500})
 		check("SetSize above the maximum", [2]int32{0, 0}, driver.Size{W: 200, H: 150})
-		sf.SetMaxSize(driver.Size{})
+		sf.SetSizeLimits(driver.Size{}, driver.Size{})
 
 		fsf, fg, _, err := e.open("fixed-limits", shell.SurfaceConfig{Title: "gogui fixed limits",
 			Size: driver.Size{W: 220, H: 160}, Style: driver.StyleTitled})
@@ -784,9 +797,9 @@ func TestSurfaceGTKMinSize(t *testing.T) {
 		iterateFor(settle)
 		a0 := allocOf(g.surf)
 		want := [2]int32{a0[0] + 80, a0[1] + 60}
-		sf.SetMinSize(sizeOf(want[0], want[1]))
+		sf.SetSizeLimits(sizeOf(want[0], want[1]), driver.Size{})
 		if got := sizeRequestOf(g.surf); got != want {
-			t.Errorf("mapped SetMinSize: the size request is %v, want %v", got, want)
+			t.Errorf("mapped raised minimum: the size request is %v, want %v", got, want)
 		}
 		start := time.Now()
 		reached := iterateUntil(resizeWait, func() bool {
@@ -794,10 +807,10 @@ func TestSurfaceGTKMinSize(t *testing.T) {
 			return a[0] >= want[0] && a[1] >= want[1]
 		})
 		iterateFor(settle)
-		t.Logf("RESIZE-RESULT: SetMinSize %v on a mapped %v window: reached %v after %v, GGSurface %v, Size() %v",
+		t.Logf("RESIZE-RESULT: SetSizeLimits min %v on a mapped %v window: reached %v after %v, GGSurface %v, Size() %v",
 			want, a0, reached, time.Since(start).Round(time.Millisecond), allocOf(g.surf), sf.Size())
 		if got := pxOf(sf.Size()); got != allocOf(g.surf) {
-			t.Errorf("mapped SetMinSize: Size() %v disagrees with the GGSurface %v", got, allocOf(g.surf))
+			t.Errorf("mapped raised minimum: Size() %v disagrees with the GGSurface %v", got, allocOf(g.surf))
 		}
 		return nil
 	})

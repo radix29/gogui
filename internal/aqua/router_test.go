@@ -54,6 +54,9 @@ func (p *probe) HandleEvent(ev Event) bool {
 	case TextEvent:
 		kind = "text"
 		entry = fmt.Sprintf("%s text %q", p.name, ev.Text)
+	case PreeditEvent:
+		kind = "preedit"
+		entry = fmt.Sprintf("%s preedit %q @%d", p.name, ev.Text, ev.Cursor)
 	case FocusEvent:
 		kind = "focus"
 		entry = fmt.Sprintf("%s focus %v", p.name, ev.Focused)
@@ -594,7 +597,7 @@ func TestAccessibilityTree(t *testing.T) {
 	if got, w := tree.Dump(), strings.Join(want, "\n"); got != w {
 		t.Fatalf("tree:\n%s\nwant:\n%s", got, w)
 	}
-	if tree.Count() != 5 || tree.Find(a11y.RoleCheckBox, "Agree") == nil || tree.Find(a11y.RoleButton, "Hidden") != nil {
+	if countNodes(tree) != 5 || tree.Find(a11y.RoleCheckBox, "Agree") == nil || tree.Find(a11y.RoleButton, "Hidden") != nil {
 		t.Fatal("Count/Find")
 	}
 
@@ -629,7 +632,7 @@ func TestRouterOddEvents(t *testing.T) {
 		t.Fatal("unknown pointer kind handled")
 	}
 	// Events are a closed set; the marker methods exist on each type.
-	for _, ev := range []Event{PointerEvent{}, ScrollEvent{}, KeyEvent{}, TextEvent{}, FocusEvent{}} {
+	for _, ev := range []Event{PointerEvent{}, ScrollEvent{}, KeyEvent{}, TextEvent{}, PreeditEvent{}, FocusEvent{}} {
 		ev.isEvent()
 	}
 	// A press handler that disables itself does not capture.
@@ -800,5 +803,46 @@ func TestKeyboardAccess(t *testing.T) {
 	r.SetFullKeyboardAccess(true)
 	if got := tabs(false, 1); got != "t1" {
 		t.Fatalf("Tab after full access is back %q", got)
+	}
+}
+
+// TestPressHandlerEndsTarget: a PointerDown handler that hides, disables
+// or removes its own element ends the press with a PointerCancel instead
+// of leaving it pressed without a capture (B1).
+func TestPressHandlerEndsTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(w *window)
+	}{
+		{"disable", func(w *window) { w.btn.SetEnabled(false) }},
+		{"disable ancestor", func(w *window) { w.panel.SetEnabled(false) }},
+		{"hide", func(w *window) { w.btn.SetHidden(true) }},
+		{"remove", func(w *window) { w.btn.RemoveFromParent() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWindow(t)
+			w.r.Event(move(25, 25))
+			w.log = nil
+			cancelled := false
+			w.btn.onEvent = func(ev Event) {
+				if pe, ok := ev.(PointerEvent); ok {
+					switch pe.Kind {
+					case PointerDown:
+						tc.change(w)
+					case PointerCancel:
+						cancelled = true
+					}
+				}
+			}
+			if !w.r.Event(down(25, 25)) {
+				t.Fatal("press not handled")
+			}
+			if !cancelled {
+				t.Fatalf("no PointerCancel after the handler ended its element; log:\n%s", strings.Join(w.log, "\n"))
+			}
+			if w.r.Captured() != nil {
+				t.Fatal("capture set on an unusable element")
+			}
+		})
 	}
 }

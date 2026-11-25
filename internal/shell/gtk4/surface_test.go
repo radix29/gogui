@@ -15,6 +15,7 @@ import (
 	"github.com/radix29/gogui/internal/ffi"
 	"github.com/radix29/gogui/internal/render"
 	"github.com/radix29/gogui/internal/shell"
+	"github.com/radix29/gogui/internal/shell/fake"
 	"github.com/radix29/gogui/internal/shell/gtk4/gtk"
 	"github.com/radix29/gogui/internal/shell/shellkit"
 )
@@ -37,7 +38,8 @@ type sfHandler struct {
 	onEvent   func(shell.PointerEvent)
 	onScroll  func(shell.ScrollEvent)
 	onKey     func(shell.KeyEvent) bool // the key events' result
-	times     []time.Duration           // of the pointer events
+	onPreedit func(shell.PreeditEvent)
+	times     []time.Duration // of the pointer events
 }
 
 func (h *sfHandler) Paint(c render.Canvas) {
@@ -83,6 +85,9 @@ func (h *sfHandler) Event(ev shell.Event) bool {
 		if ke.Down {
 			s = fmt.Sprintf("key-down %#x", ke.Key)
 		}
+		if ke.Shifted != driver.KeyNone {
+			s += fmt.Sprintf(" s=%#x", ke.Shifted)
+		}
 		if ke.Repeat {
 			s += " repeat"
 		}
@@ -97,6 +102,13 @@ func (h *sfHandler) Event(ev shell.Event) bool {
 	case shell.TextEvent:
 		h.times = append(h.times, ke.Time)
 		h.log = append(h.log, fmt.Sprintf("text %q", ke.Text))
+		return false
+	case shell.PreeditEvent:
+		h.times = append(h.times, ke.Time)
+		h.log = append(h.log, preeditLog(ke))
+		if h.onPreedit != nil {
+			h.onPreedit(ke)
+		}
 		return false
 	}
 	if se, ok := ev.(shell.ScrollEvent); ok {
@@ -118,6 +130,9 @@ func (h *sfHandler) Event(ev shell.Event) bool {
 		s += fmt.Sprintf(" b=%d held=%d n=%d", pe.Button, pe.Buttons, pe.Clicks)
 	} else if pe.Button != 0 || pe.Clicks != 0 {
 		s += fmt.Sprintf(" b=%d n=%d!", pe.Button, pe.Clicks)
+	}
+	if pe.Activating {
+		s += " activating"
 	}
 	if pe.Mods != 0 {
 		s += fmt.Sprintf(" m=%d", pe.Mods)
@@ -155,8 +170,13 @@ type winFactory struct {
 	err    error                // newWindow fails with it (after during)
 
 	wins []*fakeWindow
-	errs []string
-	pins runtime.Pinner
+	// The popovers (popup_test.go): pops, newPopover fails with popErr,
+	// popoverScale is their scale (0: scale).
+	pops         []*fakePopover
+	popErr       error
+	popoverScale float64
+	errs         []string
+	pins         runtime.Pinner
 }
 
 func (f *winFactory) errorf(format string, args ...any) {
@@ -183,7 +203,8 @@ func (f *winFactory) newWindow(cfg windowConfig, p windowPeer) (window, error) {
 		kindPointerEnter, kindPointerMotion, kindPointerLeave,
 		kindPointerPressed, kindPointerReleased, kindPointerCancel,
 		kindScroll, kindScrollBegin, kindScrollEnd, kindScrollDecelerate,
-		kindKeyPressed, kindKeyReleased, kindIMCommit} {
+		kindKeyPressed, kindKeyReleased, kindIMCommit,
+		kindIMPreeditStart, kindIMPreeditChanged, kindIMPreeditEnd} {
 		fw.sig[k] = dispatch.New(entry{peer: p, kind: k})
 	}
 	f.wins = append(f.wins, fw)
@@ -263,6 +284,7 @@ type fakeWindow struct {
 	defW, defH, reqW, reqH int32
 	allocW, allocH         int32 // the last allocation
 	isMax, isActive, isMin bool
+	insensitive            bool // setSensitive(false) last
 	sc                     float64
 	draws                  int
 	snaps                  []*fakeSnapshot // one per snapshotter call
@@ -286,10 +308,31 @@ type fakeWindow struct {
 	// key); evKeyval is the keyval of the event handled now; ims logs the
 	// input-method calls.
 	base      map[uint32]uint32
+	shifted   map[uint32]uint32 // keycode to its Shift-level keyval (keyShifted)
 	imCommits map[uint32]string
 	evKeyval  uint32
 	evDown    bool
 	ims       []string
+	// The preedit (ime.go): what preedit reads, and imPreedits, run by
+	// imFilter for a key-down the input method takes (a synchronous
+	// input method composing inside the key event).
+	pre        fakePreedit
+	imPreedits func(kv uint32)
+	// The text input (S5.3j): imAttached, the key controller has the input
+	// method (imAttach); ctlKey, the controller handles a key event now
+	// (imEventTime); imReleased, releaseIM ran.
+	imAttached, ctlKey, imReleased bool
+	// imHook runs after each logged imReset, imFocus and imAttach call (an
+	// input method that commits or changes its preedit inside them).
+	imHook func(call string)
+
+	// The readback (readback.go): rbFrame replaces the frame of the
+	// allocation, rbErr fails it, rbPaint snapshots first (a GTK that
+	// draws inside the readback); readbacks logs the scales asked for.
+	rbFrame   *readbackFrame
+	rbErr     error
+	rbPaint   bool
+	readbacks []float64
 }
 
 var _ window = (*fakeWindow)(nil)
@@ -321,6 +364,16 @@ func (fw *fakeWindow) widget() uintptr       { fw.use("widget"); return fw.addr 
 func (fw *fakeWindow) setTitle(title string) { fw.call("setTitle %s", title); fw.title = title }
 func (fw *fakeWindow) queueResize()          { fw.call("queueResize") }
 func (fw *fakeWindow) present()              { fw.call("present") }
+func (fw *fakeWindow) setSensitive(on bool)  { fw.call("setSensitive %v", on); fw.insensitive = !on }
+
+// setTransientFor logs the parent by its title ("-" for none).
+func (fw *fakeWindow) setTransientFor(parent window) {
+	name := "-"
+	if p, ok := parent.(*fakeWindow); ok && p != nil {
+		name = p.title
+	}
+	fw.call("setTransientFor %s", name)
+}
 func (fw *fakeWindow) minimize()             { fw.call("minimize") }
 func (fw *fakeWindow) maximized() bool       { fw.use("maximized"); return fw.isMax }
 func (fw *fakeWindow) active() bool          { fw.use("active"); return fw.isActive }
@@ -526,6 +579,7 @@ func newSurfaceTest(t *testing.T) (*Shell, *winFactory) {
 	withFakeClass(t, nil)
 	f := &winFactory{t: t, s: s, l: l, scale: 1}
 	l.newWin = f.newWindow
+	l.newPop = f.newPopover
 	c.begin(0)
 	t.Cleanup(f.finish)
 	return s, f
@@ -726,8 +780,7 @@ func TestSurfaceSetSize(t *testing.T) {
 	wantLog(t, "SetSize to the size", h.take())
 
 	// Clamped to the limits.
-	sf.SetMaxSize(driver.Size{W: 800, H: 700})
-	sf.SetMinSize(driver.Size{W: 100, H: 100})
+	sf.SetSizeLimits(driver.Size{W: 100, H: 100}, driver.Size{W: 800, H: 700})
 	fw.take()
 	sf.SetSize(driver.Size{W: 2000, H: 50})
 	wantLog(t, "clamped SetSize", fw.take(), "setDefaultSize 800x100", "setSizeRequest 100x100", "queueResize")
@@ -762,27 +815,33 @@ func TestSurfaceSetSize(t *testing.T) {
 	}
 }
 
-// TestSurfaceMinMax: SetMinSize and SetMaxSize update the size request
-// and resize a surface that violates them; a fixed surface requests its
+// TestSurfaceMinMax: SetSizeLimits updates the size request and resizes a
+// surface that violates the limits once, clamped to both; a fixed surface requests its
 // size.
 func TestSurfaceMinMax(t *testing.T) {
 	_, f := newSurfaceTest(t)
 	h := &sfHandler{}
 	sf, fw := f.open(t, sfResizable, h)
-	sf.SetMinSize(driver.Size{W: 500, H: 350})
-	wantLog(t, "SetMinSize above", fw.take(), "setDefaultSize 500x350", "setSizeRequest 500x350", "queueResize")
-	wantLog(t, "SetMinSize above", h.take(), "resized 500x350@1")
-	sf.SetMinSize(driver.Size{W: 100, H: 100.5})
-	wantLog(t, "SetMinSize below", fw.take(), "setSizeRequest 100x101")
-	wantLog(t, "SetMinSize below", h.take())
-	sf.SetMaxSize(driver.Size{W: 300, H: 200})
-	wantLog(t, "SetMaxSize below", fw.take(), "setDefaultSize 300x200", "setSizeRequest 100x101", "queueResize")
-	wantLog(t, "SetMaxSize below", h.take(), "resized 300x200@1")
-	sf.SetMaxSize(driver.Size{})
-	wantLog(t, "SetMaxSize none", fw.take(), "setSizeRequest 100x101")
-	wantLog(t, "SetMaxSize none", h.take())
-	if sf.Size() != (driver.Size{W: 300, H: 200}) {
-		t.Errorf("Size() = %v, want 300x200", sf.Size())
+	sf.SetSizeLimits(driver.Size{W: 500, H: 350}, driver.Size{})
+	wantLog(t, "min above", fw.take(), "setDefaultSize 500x350", "setSizeRequest 500x350", "queueResize")
+	wantLog(t, "min above", h.take(), "resized 500x350@1")
+	sf.SetSizeLimits(driver.Size{W: 100, H: 100.5}, driver.Size{})
+	wantLog(t, "min below", fw.take(), "setSizeRequest 100x101")
+	wantLog(t, "min below", h.take())
+	sf.SetSizeLimits(driver.Size{W: 100, H: 100.5}, driver.Size{W: 300, H: 200})
+	wantLog(t, "max below", fw.take(), "setDefaultSize 300x200", "setSizeRequest 100x101", "queueResize")
+	wantLog(t, "max below", h.take(), "resized 300x200@1")
+	sf.SetSizeLimits(driver.Size{W: 100, H: 100.5}, driver.Size{})
+	wantLog(t, "max none", fw.take(), "setSizeRequest 100x101")
+	wantLog(t, "max none", h.take())
+	// Both at once, from below the size to above it: one request, one Resized.
+	sf.SetSizeLimits(driver.Size{W: 350, H: 250}, driver.Size{W: 380, H: 260})
+	wantLog(t, "both", fw.take(), "setDefaultSize 350x250", "setSizeRequest 350x250", "queueResize")
+	wantLog(t, "both", h.take(), "resized 350x250@1")
+	sf.SetSizeLimits(driver.Size{W: 100, H: 100.5}, driver.Size{})
+	fw.take()
+	if sf.Size() != (driver.Size{W: 350, H: 250}) {
+		t.Errorf("Size() = %v, want 350x250", sf.Size())
 	}
 
 	hf := &sfHandler{}
@@ -792,8 +851,8 @@ func TestSurfaceMinMax(t *testing.T) {
 	}
 	ff.SetSize(driver.Size{W: 500, H: 250})
 	wantLog(t, "fixed SetSize", fwf.take(), "setDefaultSize 500x250", "setSizeRequest 500x250", "queueResize")
-	ff.SetMinSize(driver.Size{W: 600})
-	wantLog(t, "fixed SetMinSize", fwf.take(), "setDefaultSize 600x250", "setSizeRequest 600x250", "queueResize")
+	ff.SetSizeLimits(driver.Size{W: 600}, driver.Size{})
+	wantLog(t, "fixed SetSizeLimits", fwf.take(), "setDefaultSize 600x250", "setSizeRequest 600x250", "queueResize")
 	wantLog(t, "fixed", hf.take(), "resized 500x250@1", "resized 600x250@1")
 	fwf.isMax = true
 	ff.Zoom()
@@ -832,8 +891,8 @@ func TestSurfaceResizeSizeRequest(t *testing.T) {
 	if !sf.forced {
 		t.Fatal("growing a shown surface did not force the request")
 	}
-	sf.SetMinSize(driver.Size{W: 50, H: 50})
-	wantLog(t, "SetMinSize while forced", fw.take(), "setSizeRequest 800x300")
+	sf.SetSizeLimits(driver.Size{W: 50, H: 50}, driver.Size{})
+	wantLog(t, "SetSizeLimits while forced", fw.take(), "setSizeRequest 800x300")
 	if n := s.q.Drain(); n != 0 {
 		t.Errorf("%d functions posted before the allocation", n)
 	}
@@ -865,10 +924,11 @@ func TestSurfaceResizeSizeRequest(t *testing.T) {
 	if sf.forced {
 		t.Error("still forced")
 	}
-	// Closed before the posted lowering runs: it does nothing.
+	// Closed before the posted lowering runs: it does nothing (the other
+	// function posted is the window's releaseIM).
 	sf.Close()
-	if n := s.q.Drain(); n != 1 {
-		t.Errorf("%d functions posted, want 1", n)
+	if n := s.q.Drain(); n != 2 || !fw.imReleased {
+		t.Errorf("%d functions posted (released %v), want 2", n, fw.imReleased)
 	}
 	wantLog(t, "after Close", fw.take(), "destroy")
 }
@@ -1019,7 +1079,7 @@ func TestSurfaceQuitGuards(t *testing.T) {
 }
 
 // TestSurfaceInLayout: in a Resized handler that runs inside GTK's
-// allocation (Shell.inLayout), SetSize, SetMinSize and SetMaxSize keep and
+// allocation (Shell.inLayout), SetSize and SetSizeLimits keep and
 // report their sizes at once but post their window calls, and Close is
 // posted; posted window calls of a surface closed meanwhile are dropped.
 // A panic in such a handler resets inLayout.
@@ -1042,8 +1102,7 @@ func TestSurfaceInLayout(t *testing.T) {
 		if sf.Size() != (driver.Size{W: 700, H: 500}) {
 			t.Errorf("Size() = %v right after SetSize in the allocation", sf.Size())
 		}
-		sf.SetMinSize(driver.Size{W: 100, H: 100})
-		sf.SetMaxSize(driver.Size{W: 650})
+		sf.SetSizeLimits(driver.Size{W: 100, H: 100}, driver.Size{W: 650})
 		if calls := fw.take(); len(calls) != 0 {
 			t.Errorf("window calls inside the allocation: %q", calls)
 		}
@@ -1053,12 +1112,11 @@ func TestSurfaceInLayout(t *testing.T) {
 	if s.inLayout != 0 {
 		t.Errorf("inLayout %d after the allocation", s.inLayout)
 	}
-	if n := s.q.Drain(); n != 3 {
-		t.Errorf("%d functions posted, want 3", n)
+	if n := s.q.Drain(); n != 2 {
+		t.Errorf("%d functions posted, want 2", n)
 	}
 	wantLog(t, "posted window calls", fw.take(),
 		"setMaximized false", "setDefaultSize 700x500", "setSizeRequest 100x100", "queueResize", // the request when it runs
-		"setSizeRequest 100x100",
 		"setDefaultSize 650x500", "setSizeRequest 100x100", "queueResize")
 
 	// Close is posted; a SetSize posted after it is dropped.
@@ -1222,8 +1280,7 @@ func TestSurfaceClose(t *testing.T) {
 	size := sf.Size()
 	sf.SetTitle("x")
 	sf.SetSize(driver.Size{W: 10, H: 10})
-	sf.SetMinSize(driver.Size{W: 10, H: 10})
-	sf.SetMaxSize(driver.Size{W: 10, H: 10})
+	sf.SetSizeLimits(driver.Size{W: 10, H: 10}, driver.Size{W: 10, H: 10})
 	sf.Center()
 	sf.Show()
 	sf.Minimize()
@@ -1489,6 +1546,35 @@ func TestSurfacePaintPass(t *testing.T) {
 	}
 }
 
+// TestSurfaceInvalidateInFrame: an Invalidate inside the frame function
+// joins that frame's paint pass and requests no frame (S6.2a), so the last
+// step of an animation ends without an empty frame after it.
+func TestSurfaceInvalidateInFrame(t *testing.T) {
+	s, f := newSurfaceTest(t)
+	a, fa := f.open(t, sfResizable, &sfHandler{})
+	a.Show()
+	f.frame(t)
+	fa.snap()
+	draws := fa.draws
+	s.clock.SetFrameFunc(func(time.Duration) {
+		a.Invalidate()
+		if s.clock.requested {
+			t.Error("an Invalidate in the frame function requested a frame")
+		}
+	})
+	s.clock.RequestFrame()
+	f.frame(t)
+	if fa.draws != draws+1 || s.clock.requested {
+		t.Errorf("%d draws queued, requested %v; want 1 and no request", fa.draws-draws, s.clock.requested)
+	}
+	s.clock.SetFrameFunc(nil)
+	fa.snap()
+	a.Invalidate()
+	if !s.clock.requested || s.clock.inFn {
+		t.Error("Invalidate outside a frame requested no frame")
+	}
+}
+
 // TestSurfaceSnapshotPaint: every snapshot calls Paint with the
 // canvas over the snapshot GTK passed, clipped to the surface and at its
 // scale, and clears the pending paint; the canvas draws the shell's text
@@ -1556,6 +1642,19 @@ func TestSurfaceSnapshotPaint(t *testing.T) {
 	if h.paints != 3 {
 		t.Errorf("%d paints, want 3", h.paints)
 	}
+	// keepText (the golden test, S4.3i): the paint's text boxes are kept.
+	if sf.textBoxes != nil {
+		t.Errorf("text boxes kept without keepText: %v", sf.textBoxes)
+	}
+	sf.keepText = true
+	// A fake layout: its size is fixed (the canvas draws nothing of it, the recorder records it).
+	h.onPaint = func(c render.Canvas) {
+		c.DrawText(fake.NewTextSystem().NewLayout("ab", render.Font{Size: 13}, 0), render.Point{X: 2, Y: 3}, driver.RGBA(0, 0, 0, 1))
+	}
+	fw.snap()
+	if b := sf.textBoxes; len(b) != 1 || b[0].X != 2 || b[0].Y != 3 || !(b[0].W > 0) || !(b[0].H > 0) {
+		t.Errorf("text boxes with keepText = %v, want one at (2,3)", b)
+	}
 }
 
 // TestSurfacePaintGuard: the methods that change a surface panic during
@@ -1571,8 +1670,7 @@ func TestSurfacePaintGuard(t *testing.T) {
 	h.onPaint = func(render.Canvas) {
 		for name, fn := range map[string]func(){
 			"SetSize":       func() { sf.SetSize(sz) },
-			"SetMinSize":    func() { sf.SetMinSize(sz) },
-			"SetMaxSize":    func() { sf.SetMaxSize(sz) },
+			"SetSizeLimits": func() { sf.SetSizeLimits(sz, sz) },
 			"Center":        func() { sf.Center() },
 			"Show":          func() { sf.Show() },
 			"Minimize":      func() { sf.Minimize() },
@@ -1686,8 +1784,7 @@ func TestSurfaceUIThread(t *testing.T) {
 		"SetTitle":         func() { sf.SetTitle("x") },
 		"Size":             func() { sf.Size() },
 		"SetSize":          func() { sf.SetSize(sz) },
-		"SetMinSize":       func() { sf.SetMinSize(sz) },
-		"SetMaxSize":       func() { sf.SetMaxSize(sz) },
+		"SetSizeLimits":    func() { sf.SetSizeLimits(sz, sz) },
 		"Scale":            func() { sf.Scale() },
 		"Center":           func() { sf.Center() },
 		"Show":             func() { sf.Show() },
@@ -1882,6 +1979,14 @@ func (fw *fakeWindow) keyBase(c uintptr, keycode uint32) uint32 {
 	return fw.base[keycode]
 }
 
+func (fw *fakeWindow) keyShifted(c uintptr, keycode uint32) uint32 {
+	fw.use("keyShifted")
+	if c != testKey {
+		fw.f.errorf("keyShifted(%#x), want the key controller", c)
+	}
+	return fw.shifted[keycode]
+}
+
 // keyvalToUnicode is gdk_keyval_to_unicode for Latin-1 and the Unicode
 // keyvals (0x01000000 + code point).
 func (fw *fakeWindow) keyvalToUnicode(kv uint32) rune { return testKeyvalToUnicode(kv) }
@@ -1903,12 +2008,21 @@ func (fw *fakeWindow) imFilter(c uintptr) bool {
 	if c != testKey {
 		fw.f.errorf("imFilter(%#x), want the key controller", c)
 	}
+	return fw.filter("filter")
+}
+
+// filter is the fake input method's filter of the current key event,
+// logged with the prefix what.
+func (fw *fakeWindow) filter(what string) bool {
 	if !fw.evDown {
-		fw.ims = append(fw.ims, fmt.Sprintf("filter-up %#x", fw.evKeyval))
+		fw.ims = append(fw.ims, fmt.Sprintf("%s-up %#x", what, fw.evKeyval))
 		return false
 	}
 	text, ok := fw.imCommits[fw.evKeyval]
-	fw.ims = append(fw.ims, fmt.Sprintf("filter %#x %v", fw.evKeyval, ok))
+	fw.ims = append(fw.ims, fmt.Sprintf("%s %#x %v", what, fw.evKeyval, ok))
+	if fw.imPreedits != nil {
+		fw.imPreedits(fw.evKeyval)
+	}
 	if ok && text != "" {
 		testCommits[0x7e57] = text
 		sigPointer(testIM, 0x7e57, uintptr(fw.sig[kindIMCommit]))
@@ -1920,16 +2034,81 @@ func (fw *fakeWindow) imFilter(c uintptr) bool {
 var testCommits = map[uintptr]string{}
 
 func (fw *fakeWindow) commitString(p uintptr) string { fw.use("commitString"); return testCommits[p] }
-func (fw *fakeWindow) imReset()                      { fw.use("imReset"); fw.ims = append(fw.ims, "reset") }
+func (fw *fakeWindow) imReset() {
+	fw.use("imReset")
+	fw.ims = append(fw.ims, "reset")
+	fw.hook("reset")
+}
+
+func (fw *fakeWindow) hook(call string) {
+	if fw.imHook != nil {
+		fw.imHook(call)
+	}
+}
 func (fw *fakeWindow) imFocus(in bool) {
 	fw.use("imFocus")
 	fw.ims = append(fw.ims, fmt.Sprintf("focus %v", in))
+	fw.hook(fmt.Sprintf("focus %v", in))
 }
 
-// keyPress and keyRelease are the key controller's signals, through the
-// real trampolines; keyPress returns the "key-pressed" gboolean.
+// imAttach is gtk_event_controller_key_set_im_context: a change is
+// logged, and detaching resets the input method, as GTK does.
+func (fw *fakeWindow) imAttach(on bool) {
+	fw.use("imAttach")
+	if on == fw.imAttached {
+		return
+	}
+	if !on {
+		fw.ims = append(fw.ims, "reset")
+	}
+	fw.imAttached = on
+	fw.ims = append(fw.ims, fmt.Sprintf("attach %v", on))
+	fw.hook(fmt.Sprintf("attach %v", on))
+}
+
+func (fw *fakeWindow) imCursor(a gtk.Allocation) {
+	fw.use("imCursor")
+	fw.ims = append(fw.ims, fmt.Sprintf("cursor %d,%d %dx%d", a.X, a.Y, a.Width, a.Height))
+}
+
+// imEventTime is the key controller's current event time: its key event
+// while GTK runs it (ctlKey), else 0.
+func (fw *fakeWindow) imEventTime() uint32 {
+	fw.use("imEventTime")
+	if fw.ctlKey {
+		return fw.evTime
+	}
+	return 0
+}
+
+// releaseIM runs after destroy, on the UI thread, once.
+func (fw *fakeWindow) releaseIM() {
+	if !fw.f.s.q.OnUIThread() {
+		fw.f.errorf("releaseIM off the UI thread")
+	}
+	if !fw.destroyed {
+		fw.f.errorf("releaseIM before destroy")
+	}
+	if fw.imReleased {
+		fw.f.errorf("releaseIM twice")
+	}
+	fw.imReleased = true
+}
+
+// keyPress and keyRelease are the key controller's handling of a key
+// event: with the input method attached (imAttach) it filters the key
+// first ("im …" in ims) and a key it takes reaches no signal; the signals
+// go through the real trampolines. keyPress returns the controller's
+// result ("key-pressed"'s gboolean, or TRUE for a key the input method
+// took).
 func (fw *fakeWindow) keyPress(kv, keycode, state, t uint32) int32 {
 	fw.evTime, fw.evKeyval, fw.evDown = t, kv, true
+	fw.ctlKey = true
+	defer func() { fw.ctlKey = false }()
+	if fw.imAttached && fw.filter("im") {
+		rethrow()
+		return 1
+	}
 	r := sigBoolUintUintUint(testKey, kv, keycode, state, uintptr(fw.sig[kindKeyPressed]))
 	rethrow()
 	return r
@@ -1937,6 +2116,12 @@ func (fw *fakeWindow) keyPress(kv, keycode, state, t uint32) int32 {
 
 func (fw *fakeWindow) keyRelease(kv, keycode, state, t uint32) {
 	fw.evTime, fw.evKeyval, fw.evDown = t, kv, false
+	fw.ctlKey = true
+	defer func() { fw.ctlKey = false }()
+	if fw.imAttached && fw.filter("im") {
+		rethrow()
+		return
+	}
 	sigUintUintUint(testKey, kv, keycode, state, uintptr(fw.sig[kindKeyReleased]))
 	rethrow()
 }
@@ -1947,4 +2132,81 @@ func (fw *fakeWindow) imCommit(text string) {
 	testCommits[0x7e58] = text
 	sigPointer(testIM, 0x7e58, uintptr(fw.sig[kindIMCommit]))
 	rethrow()
+}
+
+// readback is GTK's readback of the last allocation at scale: the
+// allocation × scale pixels in rows of 4 bytes each, every pixel B, G, R,
+// A = 1, 2, 3, 255, drawn by "FakeRenderer"; rbFrame, rbErr and rbPaint
+// change it.
+func (fw *fakeWindow) readback(scale float64) (readbackFrame, error) {
+	fw.use("readback")
+	fw.readbacks = append(fw.readbacks, scale)
+	if fw.rbPaint {
+		surfaceSnapshot(fw.addr, testSnapshot) // rethrown by the caller
+	}
+	if fw.rbErr != nil {
+		return readbackFrame{}, fw.rbErr
+	}
+	if fw.rbFrame != nil {
+		return *fw.rbFrame, nil
+	}
+	w, h := int(shellkit.ToPx(float64(fw.allocW), scale)), int(shellkit.ToPx(float64(fw.allocH), scale))
+	f := readbackFrame{w: w, h: h, stride: 4 * w, pix: make([]byte, 4*w*h), renderer: "FakeRenderer"}
+	for i := 0; i < len(f.pix); i += 4 {
+		f.pix[i], f.pix[i+1], f.pix[i+2], f.pix[i+3] = 1, 2, 3, 255
+	}
+	return f, nil
+}
+
+// TestSurfaceFrameObserver: a frame's record waits for the snapshots of
+// the draws its paint pass queued and is reported after the last, with
+// the frame function and both paints; a snapshot GTK runs by itself is a
+// record of its own (Time -1); a queued draw that never came is reported
+// at the next frame (S6.2c).
+func TestSurfaceFrameObserver(t *testing.T) {
+	s, f := newSurfaceTest(t)
+	a, fa := f.open(t, sfResizable, &sfHandler{})
+	c, fc := f.open(t, sfResizable, &sfHandler{})
+	a.Show()
+	c.Show()
+	f.frame(t)
+	fa.snap()
+	fc.snap()
+	var got []shell.FrameTiming
+	s.clock.SetFrameObserver(func(ft shell.FrameTiming) { got = append(got, ft) })
+	s.clock.SetFrameFunc(func(time.Duration) {
+		time.Sleep(2 * time.Millisecond)
+		a.Invalidate()
+		c.Invalidate()
+	})
+	s.clock.RequestFrame()
+	f.frame(t)
+	s.clock.SetFrameFunc(nil)
+	fa.snap()
+	if len(got) != 0 {
+		t.Fatalf("reported before the last snapshot: %+v", got)
+	}
+	fc.snap()
+	if len(got) != 1 || got[0].Time != s.clock.target || got[0].Surfaces != 2 ||
+		got[0].FrameFunc < time.Millisecond || got[0].Present != 0 {
+		t.Fatalf("a frame with two draws: %+v (target %v)", got, s.clock.target)
+	}
+	got = nil
+	fa.snap()
+	if len(got) != 1 || got[0].Time != -1 || got[0].Surfaces != 1 || got[0].FrameFunc != 0 {
+		t.Errorf("a snapshot outside a frame: %+v", got)
+	}
+	got = nil
+	a.Invalidate()
+	f.frame(t) // its draw never comes
+	first := s.clock.target
+	if len(got) != 0 {
+		t.Fatalf("reported before the draw: %+v", got)
+	}
+	s.clock.RequestFrame()
+	f.frame(t)
+	if len(got) != 1 || got[0].Time != first || got[0].Surfaces != 0 {
+		t.Errorf("a draw that never came: %+v, want the frame at %v", got, first)
+	}
+	s.clock.SetFrameObserver(nil)
 }

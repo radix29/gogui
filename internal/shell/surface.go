@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"errors"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/render"
 )
@@ -31,7 +33,55 @@ type SurfaceConfig struct {
 	// Center centers the surface on its screen when it is first shown.
 	// Otherwise the OS chooses the position.
 	Center bool
+
+	// Modal makes the surface modal (S5.7d, PLAN.md S5.7): a top-level
+	// window for an alert, with no taskbar entry, never resizable,
+	// minimizable or zoomable (Style's StyleResizable and
+	// StyleMiniaturizable are ignored, so Minimize and Zoom do nothing).
+	// It is placed on every Show that first shows it, and on Center:
+	// centered on Owner when the owner is shown and not minimized, else on
+	// the screen of the key surface (the primary screen without one), and
+	// kept inside the work area (the Center field is implied).
+	//
+	// From its first Show until it closes the modal surface blocks every
+	// other surface of the shell, those created later and older modal
+	// surfaces included: a blocked surface takes no pointer, scroll, key,
+	// text or preedit input and the OS refuses its activation (a click on
+	// it, the taskbar, Alt-Tab), bringing the modal to the front and making
+	// it key instead; the user cannot move, resize or close it (no
+	// CloseRequested). Blocking a surface ends its grab popup and its
+	// pointer capture (a PointerUp for every held button) and sends
+	// PointerLeave if the pointer was inside, as a capture cancel does.
+	// Programmatic calls (SetSize, Show, Minimize, Close …) still work, and
+	// a blocked surface still paints. Show on a blocked surface shows it
+	// but keeps the key on the modal surface.
+	//
+	// When the modal surface closes and it was key, the key goes to the
+	// next modal surface still open, else to Owner, else to the surface
+	// that was key when it was first shown, if that one is open, shown,
+	// not minimized and not blocked (after the modal's Closed on the fake;
+	// before it on Win32, where Windows deactivates a window before it
+	// destroys it). Closing the owner closes its modal surfaces first.
+	//
+	// The fake shell implements it since S5.7d, the Win32 shell since S5.7e
+	// (an owned WS_POPUP window, disabled with EnableWindow), the gtk4 shell
+	// since S5.7f (a modal GtkWindow transient for Owner, or for the key
+	// surface when app-modal; the others made insensitive). GTK 4 cannot
+	// place a toplevel: there the window manager places the modal surface,
+	// and the key hand-off presents the next surface, after the modal's
+	// Closed as on the fake.
+	Modal bool
+
+	// Owner is the surface a Modal surface belongs to (an alert's parent
+	// window), or nil for an app-modal one. It must be nil unless Modal is
+	// set, and else an open surface of the same shell: NewSurface returns
+	// ErrSurfaceOwner otherwise.
+	Owner Surface
 }
+
+// ErrSurfaceOwner is returned by Shell.NewSurface for a SurfaceConfig.Owner
+// that is not nil without Modal, or not an open surface of the shell.
+var ErrSurfaceOwner = errors.New("shell: surface owner is not an open surface of this shell, or the surface is not modal")
 
 // Surface is one native top-level window without a native title bar: an
 // HWND with a custom non-client area (WM_NCCALCSIZE) on Windows, a GtkWindow
@@ -54,11 +104,11 @@ type Surface interface {
 	// returns.
 	SetSize(size driver.Size)
 
-	// SetMinSize and SetMaxSize change the limits from SurfaceConfig. If the
-	// current size violates a new limit, the surface is resized (and
-	// Resized called).
-	SetMinSize(size driver.Size)
-	SetMaxSize(size driver.Size)
+	// SetSizeLimits replaces both limits from SurfaceConfig (MinSize and
+	// MaxSize; zero components mean "no limit"). If the current size
+	// violates the new limits, the surface is resized once to the size
+	// clamped to both (and Resized called once).
+	SetSizeLimits(min, max driver.Size)
 
 	// Scale returns the number of device pixels per logical point (1, 1.25,
 	// 1.5, 2 …; fractional on Windows and on Wayland). It is valid from
@@ -92,6 +142,9 @@ type Surface interface {
 	// frame (FrameClock.RequestFrame). SurfaceHandler.Paint is called once
 	// at the next frame, however often Invalidate was called before it. A
 	// hidden or minimized surface is painted when it becomes visible again.
+	// Called from inside the frame function it requests no frame: the paint
+	// pass of the frame that runs paints the surface, so an animation whose
+	// last step invalidates ends without an empty frame after it (S6.2a).
 	Invalidate()
 
 	// SetCursor sets the pointer shape shown while the pointer is over the
@@ -109,6 +162,38 @@ type Surface interface {
 	// regions stay until replaced; nil means "all client". Resize borders
 	// are the shell's and always win over the regions.
 	SetChromeRegions(regions []ChromeRegion)
+
+	// SetTextInput tells the shell whether the focus takes text through an
+	// IME, and where its caret is. While ti.Enabled is false (the initial
+	// state) the IME is off for the surface: keys go to the handler and the
+	// text they type comes as TextEvents, with no compositions. While it is
+	// true, the IME gets the keys first and sends PreeditEvents and commits
+	// (see PreeditEvent), and the shell places the IME's candidate window
+	// by ti.Caret. Disabling it during a composition drops the composition
+	// without any event. It may be called during SurfaceHandler.Paint, and
+	// it calls no handler method.
+	SetTextInput(ti TextInput)
+
+	// CancelComposition drops the IME's composition, if there is one,
+	// without any event: no PreeditEvent, and no TextEvent even if the IME
+	// commits while it is reset. The aqua driver calls it when it commits
+	// the preedit itself (blur, a click, SetText). The text input stays
+	// enabled. It calls no handler method and must not be called during
+	// SurfaceHandler.Paint.
+	CancelComposition()
+}
+
+// TextInput is the text input state of a surface (Surface.SetTextInput).
+type TextInput struct {
+	// Enabled turns the IME on for the surface: the focus is an editable
+	// text element that takes compositions.
+	Enabled bool
+
+	// Caret is the caret rectangle in logical points relative to the
+	// drawable area (at the preedit's cursor while composing). The shell
+	// puts the IME's candidate window next to it without covering it. It
+	// is ignored while Enabled is false.
+	Caret driver.Rect
 }
 
 // SurfaceHandler receives the events of a surface. Every method is called on
@@ -146,8 +231,9 @@ type SurfaceHandler interface {
 	// driver draws inactive chrome and controls while it is false.
 	KeyChanged(isKey bool)
 
-	// Event delivers one input event (PointerEvent, ScrollEvent, KeyEvent or
-	// TextEvent; see their docs for the order and grouping rules). It
+	// Event delivers one input event (PointerEvent, ScrollEvent, KeyEvent,
+	// TextEvent or PreeditEvent; see their docs for the order and grouping
+	// rules). It
 	// returns whether the event was handled; this matters only for key
 	// events (KeyEvent) and is ignored for the others.
 	Event(ev Event) (handled bool)

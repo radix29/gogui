@@ -104,8 +104,8 @@ func (r *callbackRegistry) register(name string, fn any) uintptr {
 		panic("ffi: callback " + strconv.Quote(name) + ": the budget of " +
 			strconv.Itoa(r.limit) + " native callbacks is used up")
 	}
-	// create may panic (the S0.7a placeholder on darwin and linux, or a
-	// runtime limit); the name is recorded only after it succeeds.
+	// create may panic (a runtime limit on the number of callbacks); the
+	// name is recorded only after it succeeds.
 	p := r.create(fn)
 	if r.names == nil {
 		r.names = make(map[string]uintptr)

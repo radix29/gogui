@@ -5,7 +5,7 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 )
 
-// The colors of window chrome and placeholder elements come from the theme
+// The colors of window chrome and the control elements come from the theme
 // tokens (internal/aqua/theme, PLAN.md S3.1b): a semantic color must never
 // reach a canvas (the recorder rejects it), so every element resolves it
 // through tokens first.

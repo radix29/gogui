@@ -124,7 +124,7 @@ func TestDriverPostFIFOFromGoroutines(t *testing.T) {
 		for p := range producers {
 			wg.Go(func() {
 				for i := 1; i <= per; i++ {
-					d.Post(func() {
+					d.Queue().Do(func() {
 						if i != last[p]+1 || !d.Queue().OnUIThread() {
 							bad++
 						}
@@ -159,7 +159,7 @@ func TestDriverDoSync(t *testing.T) {
 			if !q.DoSync(func() { onUI = q.OnUIThread() }) {
 				t.Error("DoSync from a goroutine returned false")
 			}
-			d.Post(d.Quit)
+			d.Queue().Do(d.Quit)
 		}()
 	}}
 	if err := runDriver(t, d, h); err != nil {
@@ -175,25 +175,27 @@ func TestDriverDoSync(t *testing.T) {
 	}
 }
 
-func TestDriverPostBeforeRunAndAfterQuit(t *testing.T) {
+func TestDriverQueueBeforeRunAndAfterQuit(t *testing.T) {
 	d := New(fake.New())
-	d.Post(func() { t.Error("work posted before Run ran") })
+	if d.Queue() != nil {
+		t.Fatal("Queue before Run is not nil")
+	}
 	early := make(chan struct{})
 	var ran []string
 	h := &appLog{onReady: func() {
 		// Work queued from a goroutine before the wake is installed would
 		// wait; here it is queued after Ready and must run.
 		go func() {
-			d.Post(func() { ran = append(ran, "a") })
+			d.Queue().Do(func() { ran = append(ran, "a") })
 			close(early)
 		}()
 		<-early
-		d.Post(func() {
+		d.Queue().Do(func() {
 			ran = append(ran, "b")
 			d.Quit()
-			d.Post(func() { t.Error("work posted after Quit ran") })
+			d.Queue().Do(func() { t.Error("work posted after Quit ran") })
 		})
-		d.Post(func() { ran = append(ran, "c") }) // queued before Quit: runs once
+		d.Queue().Do(func() { ran = append(ran, "c") }) // queued before Quit: runs once
 	}}
 	if err := runDriver(t, d, h); err != nil {
 		t.Fatal(err)
@@ -201,7 +203,9 @@ func TestDriverPostBeforeRunAndAfterQuit(t *testing.T) {
 	if strings.Join(ran, "") != "abc" {
 		t.Errorf("ran %q, want abc", ran)
 	}
-	d.Post(func() { t.Error("work posted after Run ran") })
+	if d.Queue().Do(func() { t.Error("work queued after Run ran") }) {
+		t.Error("Do after Run returned true")
+	}
 }
 
 func TestDriverQuitClosesWindows(t *testing.T) {
@@ -222,7 +226,7 @@ func TestDriverQuitClosesWindows(t *testing.T) {
 		if n := len(d.Windows()); n != 1 || d.Windows()[0].Title() != "W" {
 			t.Fatalf("after Close: %d windows", n)
 		}
-		d.Post(d.Quit)
+		d.Queue().Do(d.Quit)
 	}}
 	if err := runDriver(t, d, h); err != nil {
 		t.Fatal(err)
@@ -541,7 +545,7 @@ func TestDriverTimeline(t *testing.T) {
 		if aw.Timeline() != tl || aw.Root().base().Window().Timeline() != tl {
 			t.Fatal("the window does not share the driver's timeline")
 		}
-		alone, err := NewWindow(sh, driver.WindowConfig{Size: driver.Size{W: 10, H: 10}}, &winLog{})
+		alone, err := NewWindow(sh, services(sh), driver.WindowConfig{Size: driver.Size{W: 10, H: 10}}, &winLog{})
 		if err != nil || alone.Timeline() != nil {
 			t.Fatalf("a window outside the driver: %v, timeline %v", err, alone.Timeline())
 		}
@@ -568,11 +572,11 @@ func TestDriverTimeline(t *testing.T) {
 		paint(t, sh, sf)
 		frames := clk.Frames()
 		// Frames at 1/60 s: the 7th ends the animation. Its change func
-		// invalidates the root inside the frame function, and the shell's
-		// Invalidate requests a frame even then, so one empty frame
-		// follows; then the clock stops.
+		// invalidates the root inside the frame function, which requests no
+		// frame (S6.2a): the 7th frame's paint pass paints it, and the
+		// clock stops with no empty frame after it.
 		v.AnimateTo(0, 100*time.Millisecond, anim.Linear)
-		if n := clk.Advance(time.Second); n != 8 || clk.Frames()-frames != 8 {
+		if n := clk.Advance(time.Second); n != 7 || clk.Frames()-frames != 7 {
 			t.Fatalf("the animation ran %d frames", n)
 		}
 		if v.Value() != 0 || v.Running() || changes != 8 || clk.Requested() || sf.Invalid() {

@@ -192,3 +192,225 @@ fillRRect (32,47,6,2) r=1 solid #ffffff40
 shadow (10,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000066
 fillRRect (10,68,20,20) r=10 solid #ffffff6b
 strokeRRect (10.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #00000040
+## normal, normal unfocused key light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## pressed, pressed unfocused key light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #dedede
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## disabled, normal unfocused disabled key light contrast
+fillRRect (10,46,120,4) r=2 solid #00000040
+fillRRect (10,46,35,4) r=2 solid #007aff80
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #00000046
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000040
+fillRRect (35,38,20,20) r=10 solid #ffffff80
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #00000046
+## focused, normal focused key light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+strokeRRect (33.5,36.5,23,23) r=11.5 w=3 solid #007aff
+## tick marks, normal unfocused key light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+fillRRect (19,60,2,6) r=1 solid #00000099
+fillRRect (69,60,2,6) r=1 solid #00000099
+fillRRect (119,60,2,6) r=1 solid #00000099
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## vertical, normal unfocused key light contrast
+fillRRect (22,38,4,60) r=2 solid #00000080
+fillRRect (22,78,4,20) r=2 solid #007aff
+strokeRRect (22.5,38.5,3,59) r=1.5 w=1 solid #0000008c
+shadow (14,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (14,68,20,20) r=10 solid #ffffff
+strokeRRect (14.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## vertical tick marks pressed, pressed unfocused key light contrast
+fillRRect (18,38,4,60) r=2 solid #00000080
+fillRRect (18,78,4,20) r=2 solid #007aff
+strokeRRect (18.5,38.5,3,59) r=1.5 w=1 solid #0000008c
+fillRRect (32,87,6,2) r=1 solid #00000099
+fillRRect (32,67,6,2) r=1 solid #00000099
+fillRRect (32,47,6,2) r=1 solid #00000099
+shadow (10,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (10,68,20,20) r=10 solid #dedede
+strokeRRect (10.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## normal, normal unfocused inactive light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #cbcbcb
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## pressed, pressed unfocused inactive light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #cbcbcb
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #dedede
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## disabled, normal unfocused disabled inactive light contrast
+fillRRect (10,46,120,4) r=2 solid #00000040
+fillRRect (10,46,35,4) r=2 solid #cbcbcb80
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #00000046
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000040
+fillRRect (35,38,20,20) r=10 solid #ffffff80
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #00000046
+## focused, normal focused-inactive inactive light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #cbcbcb
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## tick marks, normal unfocused inactive light contrast
+fillRRect (10,46,120,4) r=2 solid #00000080
+fillRRect (10,46,35,4) r=2 solid #cbcbcb
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #0000008c
+fillRRect (19,60,2,6) r=1 solid #00000099
+fillRRect (69,60,2,6) r=1 solid #00000099
+fillRRect (119,60,2,6) r=1 solid #00000099
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (35,38,20,20) r=10 solid #ffffff
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## vertical, normal unfocused inactive light contrast
+fillRRect (22,38,4,60) r=2 solid #00000080
+fillRRect (22,78,4,20) r=2 solid #cbcbcb
+strokeRRect (22.5,38.5,3,59) r=1.5 w=1 solid #0000008c
+shadow (14,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (14,68,20,20) r=10 solid #ffffff
+strokeRRect (14.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## vertical tick marks pressed, pressed unfocused inactive light contrast
+fillRRect (18,38,4,60) r=2 solid #00000080
+fillRRect (18,78,4,20) r=2 solid #cbcbcb
+strokeRRect (18.5,38.5,3,59) r=1.5 w=1 solid #0000008c
+fillRRect (32,87,6,2) r=1 solid #00000099
+fillRRect (32,67,6,2) r=1 solid #00000099
+fillRRect (32,47,6,2) r=1 solid #00000099
+shadow (10,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000080
+fillRRect (10,68,20,20) r=10 solid #dedede
+strokeRRect (10.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #0000008c
+## normal, normal unfocused key dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## pressed, pressed unfocused key dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #ffffff6b
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## disabled, normal unfocused disabled key dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff40
+fillRRect (10,46,35,4) r=2 solid #007aff80
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff46
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #0000004d
+fillRRect (35,38,20,20) r=10 solid #d9d9d980
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #00000060
+## focused, normal focused key dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+strokeRRect (33.5,36.5,23,23) r=11.5 w=3 solid #007aff
+## tick marks, normal unfocused key dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #007aff
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+fillRRect (19,60,2,6) r=1 solid #ffffff99
+fillRRect (69,60,2,6) r=1 solid #ffffff99
+fillRRect (119,60,2,6) r=1 solid #ffffff99
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## vertical, normal unfocused key dark contrast
+fillRRect (22,38,4,60) r=2 solid #ffffff80
+fillRRect (22,78,4,20) r=2 solid #007aff
+strokeRRect (22.5,38.5,3,59) r=1.5 w=1 solid #ffffff8c
+shadow (14,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (14,68,20,20) r=10 solid #d9d9d9
+strokeRRect (14.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## vertical tick marks pressed, pressed unfocused key dark contrast
+fillRRect (18,38,4,60) r=2 solid #ffffff80
+fillRRect (18,78,4,20) r=2 solid #007aff
+strokeRRect (18.5,38.5,3,59) r=1.5 w=1 solid #ffffff8c
+fillRRect (32,87,6,2) r=1 solid #ffffff99
+fillRRect (32,67,6,2) r=1 solid #ffffff99
+fillRRect (32,47,6,2) r=1 solid #ffffff99
+shadow (10,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (10,68,20,20) r=10 solid #ffffff6b
+strokeRRect (10.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## normal, normal unfocused inactive dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #5f5f5f
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## pressed, pressed unfocused inactive dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #5f5f5f
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #ffffff6b
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## disabled, normal unfocused disabled inactive dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff40
+fillRRect (10,46,35,4) r=2 solid #5f5f5f80
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff46
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #0000004d
+fillRRect (35,38,20,20) r=10 solid #d9d9d980
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #00000060
+## focused, normal focused-inactive inactive dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #5f5f5f
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## tick marks, normal unfocused inactive dark contrast
+fillRRect (10,46,120,4) r=2 solid #ffffff80
+fillRRect (10,46,35,4) r=2 solid #5f5f5f
+strokeRRect (10.5,46.5,119,3) r=1.5 w=1 solid #ffffff8c
+fillRRect (19,60,2,6) r=1 solid #ffffff99
+fillRRect (69,60,2,6) r=1 solid #ffffff99
+fillRRect (119,60,2,6) r=1 solid #ffffff99
+shadow (35,38,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (35,38,20,20) r=10 solid #d9d9d9
+strokeRRect (35.25,38.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## vertical, normal unfocused inactive dark contrast
+fillRRect (22,38,4,60) r=2 solid #ffffff80
+fillRRect (22,78,4,20) r=2 solid #5f5f5f
+strokeRRect (22.5,38.5,3,59) r=1.5 w=1 solid #ffffff8c
+shadow (14,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (14,68,20,20) r=10 solid #d9d9d9
+strokeRRect (14.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf
+## vertical tick marks pressed, pressed unfocused inactive dark contrast
+fillRRect (18,38,4,60) r=2 solid #ffffff80
+fillRRect (18,78,4,20) r=2 solid #5f5f5f
+strokeRRect (18.5,38.5,3,59) r=1.5 w=1 solid #ffffff8c
+fillRRect (32,87,6,2) r=1 solid #ffffff99
+fillRRect (32,67,6,2) r=1 solid #ffffff99
+fillRRect (32,47,6,2) r=1 solid #ffffff99
+shadow (10,68,20,20) r=10 off=(0,0.5) blur=1.5 #00000099
+fillRRect (10,68,20,20) r=10 solid #ffffff6b
+strokeRRect (10.25,68.25,19.5,19.5) r=9.75 w=0.5 solid #000000bf

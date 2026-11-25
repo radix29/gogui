@@ -18,3 +18,16 @@ Stack 0,0 460x380
   Stack 20,340 420x20
     Button 220,0 70x20
     Button 298,0 122x20
+titlebar
+  titlebar "New Account" @0,0 460x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" [disabled] {press} @28,8 12x12
+    button "Zoom" [disabled] {press} @48,8 12x12
+  title "New Account" 191.5,6 77x16
+  region caption 0,0 460x28
+  region close 8,8 12x12
+sheet at 76,12
+  dialog "Please check your details" @0,0 308x246
+    text "Please check your details" @40,112 228x16
+    text "A name and a valid e-mail address are required." @40,134 228x28
+    button "OK" [focusable focused] {press focus} @40,178 228x20

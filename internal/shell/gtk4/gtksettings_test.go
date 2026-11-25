@@ -3,26 +3,36 @@ package gtk4
 import (
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/ffi"
 )
 
-// fakeGtkProps is a gtkProps over a map. watch keeps a dispatch handle per
+// fakeGtkProps is a gtkProps over maps. watch keeps a dispatch handle per
 // property, as connect does, so a test fires the notify through the real
 // sigPointer trampoline; unwatch frees them, as closureNotify does.
 type fakeGtkProps struct {
 	mu       sync.Mutex
 	props    map[string]bool
+	ints     map[string]int32
 	handles  map[string]ffi.Handle
 	unwatchs int
 }
 
 func newFakeGtkProps(props map[string]bool) *fakeGtkProps {
-	return &fakeGtkProps{props: props, handles: map[string]ffi.Handle{}}
+	return &fakeGtkProps{props: props, ints: map[string]int32{}, handles: map[string]ffi.Handle{}}
+}
+
+// withInts adds the int properties ints.
+func (f *fakeGtkProps) withInts(ints map[string]int32) *fakeGtkProps {
+	f.ints = ints
+	return f
 }
 
 func (f *fakeGtkProps) boolProp(name string) (bool, bool) {
@@ -32,20 +42,34 @@ func (f *fakeGtkProps) boolProp(name string) (bool, bool) {
 	return v, ok
 }
 
+func (f *fakeGtkProps) intProp(name string) (int32, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v, ok := f.ints[name]
+	return v, ok
+}
+
 func (f *fakeGtkProps) set(name string, v bool) {
 	f.mu.Lock()
 	f.props[name] = v
 	f.mu.Unlock()
 }
 
+func (f *fakeGtkProps) setInt(name string, v int32) {
+	f.mu.Lock()
+	f.ints[name] = v
+	f.mu.Unlock()
+}
+
 func (f *fakeGtkProps) watch(name string, p pointerSignalPeer, k kind) bool {
-	if _, ok := f.props[name]; !ok {
+	_, isBool := f.props[name]
+	_, isInt := f.ints[name]
+	if !isBool && !isInt {
 		return false
 	}
 	f.handles[name] = dispatch.New(entry{peer: p, kind: k})
 	return true
 }
-
 func (f *fakeGtkProps) unwatch() {
 	f.unwatchs++
 	for _, h := range f.handles {
@@ -65,8 +89,8 @@ func (f *fakeGtkProps) notify(name string) {
 func TestGtkSettingsWatch(t *testing.T) {
 	base := dispatch.Len()
 	props := newFakeGtkProps(map[string]bool{
-		gtkEnableAnimations: false, gtkOverlayScrolling: true, gtkPreferDark: true,
-	})
+		gtkEnableAnimations: false, gtkOverlayScrolling: true, gtkPreferDark: true, gtkCursorBlink: true,
+	}).withInts(map[string]int32{gtkCursorBlinkTime: 1200, gtkCursorBlinkTimeout: 7})
 	changes := 0
 	g := openGtkSettings(props, func() { changes++ })
 	if g.watched != len(gtkWatched) || dispatch.Len() != base+len(gtkWatched) {
@@ -86,11 +110,18 @@ func TestGtkSettingsWatch(t *testing.T) {
 	if v, ok := g.gtkBool(gtkPreferDark); !v || !ok {
 		t.Errorf("gtkBool(%s) = %v, %v; want true, true", gtkPreferDark, v, ok)
 	}
+	if v, ok := g.gtkInt(gtkCursorBlinkTime); v != 1200 || !ok {
+		t.Errorf("gtkInt(%s) = %v, %v; want 1200, true", gtkCursorBlinkTime, v, ok)
+	}
+	if _, ok := g.gtkInt("gtk-unknown"); ok {
+		t.Error("gtkInt of an unknown property is set")
+	}
 	if _, ok := g.gtkBool("gtk-unknown"); ok {
 		t.Error("gtkBool of an unknown property is set")
 	}
 	want := driver.DefaultAppearance()
 	want.Dark, want.ReduceMotion = true, true
+	want.CaretBlink = driver.CaretBlink{Period: 1200 * time.Millisecond, Timeout: 7 * time.Second}
 	if a := readAppearance(systemSettings{gs: g}); a != want {
 		t.Errorf("readAppearance = %+v, want %+v", a, want)
 	}
@@ -107,6 +138,9 @@ func TestGtkSettingsWatch(t *testing.T) {
 	}
 	if _, ok := g.gtkBool(gtkPreferDark); ok {
 		t.Error("gtkBool set after close")
+	}
+	if _, ok := g.gtkInt(gtkCursorBlinkTime); ok {
+		t.Error("gtkInt set after close")
 	}
 }
 
@@ -126,8 +160,9 @@ func TestGtkSettingsMissing(t *testing.T) {
 	checkLen(t, base)
 	for _, g := range []*gtkSettings{openGtkSettings(nil, nil), nil} {
 		for _, name := range gtkWatched {
-			if _, ok := g.gtkBool(name); ok {
-				t.Errorf("gtkBool(%s) set without GtkSettings", name)
+			_, okB := g.gtkBool(name)
+			if _, okI := g.gtkInt(name); okB || okI {
+				t.Errorf("%s set without GtkSettings", name)
 			}
 		}
 		g.close()
@@ -207,6 +242,52 @@ func TestGtkSettingsAppearanceChanged(t *testing.T) {
 	}
 	if props.unwatchs != 1 {
 		t.Errorf("unwatch called %d times, want 1", props.unwatchs)
+	}
+	checkTornDown(t, s, l, base)
+}
+
+// TestGtkSettingsCaretBlinkChanged: the caret properties are watched like
+// the others: turning gtk-cursor-blink off, then changing the blink time
+// and the timeout, each re-reads the appearance into one AppearanceChanged
+// with the new CaretBlink.
+func TestGtkSettingsCaretBlinkChanged(t *testing.T) {
+	s, l := newTestShell(t)
+	base := dispatch.Len()
+	props := newFakeGtkProps(map[string]bool{gtkCursorBlink: true}).
+		withInts(map[string]int32{gtkCursorBlinkTime: 1200, gtkCursorBlinkTimeout: 10})
+	s.openSettings = openSystemSettings(noBusConfig(), func() gtkProps { return props }, nil)
+	var got []driver.CaretBlink
+	err := run(t, s, &handler{
+		ready: func() {
+			if b := s.Appearance().CaretBlink; b != (driver.CaretBlink{Period: 1200 * time.Millisecond, Timeout: 10 * time.Second}) {
+				t.Errorf("initial CaretBlink %+v, want GTK's defaults", b)
+			}
+			props.notify(gtkCursorBlinkTime) // no change
+			props.set(gtkCursorBlink, false)
+			props.notify(gtkCursorBlink)
+			s.Post(func() {
+				props.set(gtkCursorBlink, true)
+				props.setInt(gtkCursorBlinkTime, 800)
+				props.notify(gtkCursorBlinkTime)
+				s.Post(func() {
+					props.setInt(gtkCursorBlinkTimeout, math.MaxInt32)
+					props.notify(gtkCursorBlinkTimeout)
+					s.Post(s.Quit)
+				})
+			})
+		},
+		appearance: func(a driver.Appearance) { got = append(got, a.CaretBlink) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []driver.CaretBlink{
+		{Period: 0, Timeout: 10 * time.Second},
+		{Period: 800 * time.Millisecond, Timeout: 10 * time.Second},
+		{Period: 800 * time.Millisecond, Timeout: 0},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("CaretBlink changes %+v, want %+v", got, want)
 	}
 	checkTornDown(t, s, l, base)
 }

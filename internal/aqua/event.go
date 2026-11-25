@@ -9,8 +9,9 @@ import (
 )
 
 // Event is an input event delivered to Element.HandleEvent by a Router: a
-// PointerEvent, ScrollEvent, KeyEvent, TextEvent or FocusEvent, or a
-// WindowStateEvent sent by the window (not routed); the set is closed.
+// PointerEvent, ScrollEvent, KeyEvent, TextEvent, PreeditEvent or
+// FocusEvent, or a WindowStateEvent sent by the window (not routed); the
+// set is closed.
 // Positions are in the receiving element's own coordinates.
 type Event interface{ isEvent() }
 
@@ -20,6 +21,7 @@ var (
 	_ Event = ScrollEvent{}
 	_ Event = KeyEvent{}
 	_ Event = TextEvent{}
+	_ Event = PreeditEvent{}
 	_ Event = FocusEvent{}
 	_ Event = WindowStateEvent{}
 )
@@ -45,8 +47,10 @@ const (
 	// PointerUp: a button was released; sent to the capturing element.
 	PointerUp
 	// PointerCancel: the capture ended without a release, because the
-	// capturing element was disabled, hidden or removed. A pressed control
-	// returns to normal without acting.
+	// capturing element was disabled, hidden or removed, the pointer
+	// left during the capture, or a grab popup opened (Router.
+	// CancelPointer; then also right after the PointerDown that opened
+	// it). A pressed control returns to normal without acting.
 	PointerCancel
 )
 
@@ -100,12 +104,25 @@ type KeyEvent struct{ shell.KeyEvent }
 // TextEvent is a shell.TextEvent routed like KeyEvent.
 type TextEvent struct{ shell.TextEvent }
 
+// PreeditEvent is a shell.PreeditEvent (the IME's composition text) routed
+// like TextEvent: to the focused element, or the root when nothing is
+// focused, bubbling up until handled. Only a focused text element that
+// takes IME input handles it (S5.3c); every other element ignores it.
+type PreeditEvent struct{ shell.PreeditEvent }
+
 // FocusEvent tells an element that it gained (Focused true) or lost the
 // window's keyboard focus.
-type FocusEvent struct{ Focused bool }
+type FocusEvent struct {
+	Focused bool
+	// Tab reports that Router.FocusNext moved the focus here (Tab,
+	// Shift-Tab, the window's initial focus at Show) rather than a click or
+	// Focus; a text field then selects all its text, as AppKit does.
+	Tab bool
+}
 
 func (PointerEvent) isEvent() {}
 func (ScrollEvent) isEvent()  {}
 func (KeyEvent) isEvent()     {}
 func (TextEvent) isEvent()    {}
+func (PreeditEvent) isEvent() {}
 func (FocusEvent) isEvent()   {}

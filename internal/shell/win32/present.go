@@ -5,8 +5,7 @@ package win32
 import (
 	"fmt"
 	"log"
-
-	"golang.org/x/sys/windows"
+	"time"
 
 	"github.com/radix29/gogui/internal/aqua/theme"
 	"github.com/radix29/gogui/internal/driver"
@@ -40,10 +39,10 @@ func clearColor(a driver.Appearance) d2d.ColorF {
 // chainSize returns the client area's size in pixels. An empty client
 // area (minimized) keeps the chain's current size, or 1×1 for a new chain
 // (a swap chain has no empty buffers).
-func (sf *surface) chainSize() (w, h uint32) {
-	rc, err := w32.GetClientRect(sf.hwnd)
+func (t *swapTarget) chainSize() (w, h uint32) {
+	rc, err := w32.GetClientRect(t.hwnd)
 	if err != nil || rc.Right <= rc.Left || rc.Bottom <= rc.Top {
-		return max(sf.pxW, 1), max(sf.pxH, 1)
+		return max(t.pxW, 1), max(t.pxH, 1)
 	}
 	return uint32(rc.Right - rc.Left), uint32(rc.Bottom - rc.Top)
 }
@@ -51,137 +50,156 @@ func (sf *surface) chainSize() (w, h uint32) {
 // createChain creates the surface's swap chain, composition target and
 // visual and the target bitmap, creating the shell's device objects
 // first if there are none. On failure nothing of the surface's is left.
-func (sf *surface) createChain() (err error) {
-	g, err := sf.s.device()
+// It does not classify its error (lost does, in its callers: deviceLost
+// calls it too).
+func (t *swapTarget) createChain() (err error) {
+	g, err := t.s.device()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			sf.releaseChain()
+			t.releaseChain()
 		}
 	}()
-	w, h := sf.chainSize()
-	sf.chain, err = g.factory.CreateSwapChainForComposition(g.d3d.Ptr, &dxgi.SwapChainDesc1{
+	w, h := t.chainSize()
+	t.chain, err = g.factory.CreateSwapChainForComposition(g.d3d.Ptr, &dxgi.SwapChainDesc1{
 		Width: w, Height: h, Format: dxgi.FORMAT_B8G8R8A8_UNORM,
 		SampleDesc:  dxgi.SampleDesc{Count: 1},
 		BufferUsage: dxgi.USAGE_RENDER_TARGET_OUTPUT, BufferCount: 2,
 		Scaling: dxgi.SCALING_STRETCH, SwapEffect: dxgi.SWAP_EFFECT_FLIP_SEQUENTIAL,
 		AlphaMode: dxgi.ALPHA_MODE_PREMULTIPLIED, Flags: chainFlags,
 	})
-	if err != nil {
+	if err = t.s.inject("createChain", err); err != nil {
 		return err
 	}
-	sf.pxW, sf.pxH = w, h
-	sf.openWaitable()
-	if sf.ctarget, err = g.comp.CreateTargetForHwnd(sf.hwnd, false); err != nil {
+	t.pxW, t.pxH = w, h
+	t.openWaitable()
+	t.presentLog, t.lastShown = [presentLogSize]presentRecord{}, 0 // a new chain counts from 1
+	if t.ctarget, err = g.comp.CreateTargetForHwnd(t.hwnd, false); err != nil {
 		return err
 	}
-	if sf.visual, err = g.comp.CreateVisual(); err != nil {
+	if t.visual, err = g.comp.CreateVisual(); err != nil {
 		return err
 	}
-	if err = sf.visual.SetContent(sf.chain.Ptr); err != nil {
+	if err = t.visual.SetContent(t.chain.Ptr); err != nil {
 		return err
 	}
-	if err = sf.ctarget.SetRoot(sf.visual); err != nil {
+	if err = t.ctarget.SetRoot(t.visual); err != nil {
 		return err
 	}
 	if err = g.comp.Commit(); err != nil {
 		return err
 	}
-	return sf.createBitmap()
+	return t.createBitmap()
+}
+
+// newChain creates the chain of a new window (NewSurface, NewPopup; t is
+// already among s.allWindows()). A lost device starts the recovery, which
+// creates t's chain with every other one; if t still has none, it is
+// tried once more. An error means t has no chain.
+func (t *swapTarget) newChain() error {
+	err := t.createChain()
+	if err == nil || !isDeviceLost(err) {
+		return err
+	}
+	t.s.deviceLost(err)
+	if t.chain.IsNil() {
+		return t.createChain()
+	}
+	t.renderErr = nil
+	return nil
 }
 
 // createBitmap creates the D2D target bitmap over back buffer 0 at the
 // window's DPI.
-func (sf *surface) createBitmap() error {
-	g := sf.s.gpu
-	surf, err := sf.chain.Buffer(0, &dxgi.IID_IDXGISurface)
+func (t *swapTarget) createBitmap() error {
+	g := t.s.gpu
+	surf, err := t.chain.Buffer(0, &dxgi.IID_IDXGISurface)
 	if err != nil {
 		return err
 	}
 	defer surf.Release() // the bitmap holds its own references
-	dpi := float32(sf.dpi)
-	sf.bitmap, err = g.dc.CreateBitmapFromDxgiSurface(surf, &d2d.BitmapProperties1{
+	dpi := float32(t.dpi)
+	t.bitmap, err = g.dc.CreateBitmapFromDxgiSurface(surf, &d2d.BitmapProperties1{
 		PixelFormat:   d2d.PixelFormat{Format: dxgi.FORMAT_B8G8R8A8_UNORM, AlphaMode: d2d.ALPHA_MODE_PREMULTIPLIED},
 		DpiX:          dpi,
 		DpiY:          dpi,
 		BitmapOptions: d2d.BITMAP_OPTIONS_TARGET | d2d.BITMAP_OPTIONS_CANNOT_DRAW,
 	})
-	if err != nil {
+	if err = t.s.inject("createBitmap", err); err != nil {
+		t.s.release("ID2D1Bitmap1", &t.bitmap.Ptr) // an injected failure created one
 		return err
 	}
-	sf.bitmapDPI = sf.dpi
+	t.bitmapDPI = t.dpi
 	return nil
 }
 
 // releaseChain releases the surface's rendering objects: the composition
 // tree is emptied and committed first, then every object goes with its
 // last reference. It does nothing without a chain.
-func (sf *surface) releaseChain() {
-	s := sf.s
-	sf.backdrop.release(s.leak)
-	s.release("ID2D1Bitmap1", &sf.bitmap.Ptr)
-	if !sf.visual.IsNil() {
-		_ = sf.visual.SetContent(0) // fails only on a lost device; released anyway
+func (t *swapTarget) releaseChain() {
+	s := t.s
+	t.backdrop.release(s.leak)
+	s.release("ID2D1Bitmap1", &t.bitmap.Ptr)
+	if !t.visual.IsNil() {
+		_ = t.visual.SetContent(0) // fails only on a lost device; released anyway
 	}
-	if !sf.ctarget.IsNil() {
-		_ = sf.ctarget.SetRoot(dcomp.Visual{})
+	if !t.ctarget.IsNil() {
+		_ = t.ctarget.SetRoot(dcomp.Visual{})
 	}
-	if s.gpu != nil && (!sf.visual.IsNil() || !sf.ctarget.IsNil()) {
+	if s.gpu != nil && (!t.visual.IsNil() || !t.ctarget.IsNil()) {
 		_ = s.gpu.comp.Commit()
 	}
-	s.release("IDCompositionVisual", &sf.visual.Ptr)
-	s.release("IDCompositionTarget", &sf.ctarget.Ptr)
-	sf.closeWaitable()
-	s.release("IDXGISwapChain1", &sf.chain.Ptr)
-	sf.pxW, sf.pxH, sf.bitmapDPI = 0, 0, 0
+	s.release("IDCompositionVisual", &t.visual.Ptr)
+	s.release("IDCompositionTarget", &t.ctarget.Ptr)
+	t.closeWaitable()
+	s.release("IDXGISwapChain1", &t.chain.Ptr)
+	t.pxW, t.pxH, t.bitmapDPI = 0, 0, 0
 }
 
 // fitChain gives the swap chain the client area's pixel size and the
 // target bitmap the window's DPI. The bitmap is released before
 // ResizeBuffers (it holds the back buffer) and recreated after it. A lost
-// device starts the recovery and returns its error.
-func (sf *surface) fitChain() error {
-	if sf.chain.IsNil() {
+// device (from ResizeBuffers or the bitmap) starts the recovery and
+// returns its error.
+func (t *swapTarget) fitChain() error {
+	if t.chain.IsNil() {
 		return nil
 	}
-	w, h := sf.chainSize()
-	if w == sf.pxW && h == sf.pxH && sf.dpi == sf.bitmapDPI && !sf.bitmap.IsNil() {
+	w, h := t.chainSize()
+	if w == t.pxW && h == t.pxH && t.dpi == t.bitmapDPI && !t.bitmap.IsNil() {
 		return nil
 	}
-	sf.s.release("ID2D1Bitmap1", &sf.bitmap.Ptr)
-	if w != sf.pxW || h != sf.pxH {
-		err := sf.s.inject("ResizeBuffers", sf.chain.ResizeBuffers(0, w, h, dxgi.FORMAT_UNKNOWN, chainFlags))
+	t.s.release("ID2D1Bitmap1", &t.bitmap.Ptr)
+	if w != t.pxW || h != t.pxH {
+		err := t.s.inject("ResizeBuffers", t.chain.ResizeBuffers(0, w, h, dxgi.FORMAT_UNKNOWN, chainFlags))
 		if err != nil {
-			if isDeviceLost(err) {
-				sf.s.deviceLost(err)
-			}
-			return err
+			return t.s.lost(err)
 		}
-		sf.pxW, sf.pxH = w, h
+		t.pxW, t.pxH = w, h
 	}
-	return sf.createBitmap()
+	return t.s.lost(t.createBitmap())
 }
 
 // paint handles WM_PAINT: the update region is validated and the frame is
 // drawn and presented (render).
-func (sf *surface) paint() {
-	sf.invalid = false
+func (t *swapTarget) paint() {
+	t.invalid = false
 	var ps w32.PaintStruct
-	if _, err := w32.BeginPaint(sf.hwnd, &ps); err == nil {
-		defer w32.EndPaint(sf.hwnd, &ps)
+	if _, err := w32.BeginPaint(t.hwnd, &ps); err == nil {
+		defer w32.EndPaint(t.hwnd, &ps)
 	}
-	if sf.dead {
+	if t.dead {
 		return
 	}
-	sf.paintErr, sf.renderErr = sf.render()
+	t.paintErr, t.renderErr = t.render()
 	if debugChecks {
-		if sf.paintErr != nil {
-			log.Print(sf.paintErr)
+		if t.paintErr != nil {
+			log.Print(t.paintErr)
 		}
-		if sf.renderErr != nil {
-			log.Printf("win32: rendering: %v", sf.renderErr)
+		if t.renderErr != nil {
+			log.Printf("win32: rendering: %v", t.renderErr)
 		}
 	}
 }
@@ -191,28 +209,35 @@ func (sf *surface) paint() {
 // inside one BeginDraw/EndDraw. The canvas's resources are released after
 // EndDraw, before Present (and before a device-loss recovery releases the
 // context). paintErr is the recorder's contract errors (Shell.debug only);
-// err is the rendering error. A lost device (from ResizeBuffers, EndDraw
-// or Present) recreates every chain and returns its error; the repaint
-// follows at the next frame. Without a chain Paint is not called.
-func (sf *surface) render() (paintErr, err error) {
-	s := sf.s
-	if sf.chain.IsNil() {
-		if err := sf.createChain(); err != nil {
+// err is the rendering error. A lost device (from creating the chain,
+// fitChain, EndDraw, Present or Commit: the policy in gpu.go) recreates
+// every chain and returns its error; the repaint follows at the next
+// frame. Without a chain Paint is not called.
+func (t *swapTarget) render() (paintErr, err error) {
+	s := t.s
+	if t.chain.IsNil() {
+		if err := s.lost(t.createChain()); err != nil {
 			return nil, err
 		}
 	}
-	if err := sf.fitChain(); err != nil {
+	if err := t.fitChain(); err != nil {
 		return nil, err
 	}
 	g := s.gpu
 	dc := g.dc
-	dc.SetTarget(sf.bitmap.Ptr)
-	dpi := float32(sf.dpi)
+	ft := &s.clock.frameTimer
+	// QPC: time.Now on Windows moves only at the interrupt timer's rate.
+	var start, begun, painted, drawn time.Duration
+	if ft.Active() {
+		start = s.clock.now()
+	}
+	dc.SetTarget(t.bitmap.Ptr)
+	dpi := float32(t.dpi)
 	dc.SetDpi(dpi, dpi)
 	dc.BeginDraw()
-	dc.Clear(clearColor(s.appearance))
-	c := newCanvas(g, sf.size, dpi, s.debug)
-	c.target = blurTarget{bmp: sf.bitmap, w: sf.pxW, h: sf.pxH, scratch: &sf.backdrop}
+	dc.Clear(t.win.background())
+	c := newCanvas(g, t.size, dpi, s.debug)
+	c.target = blurTarget{bmp: t.bitmap, w: t.pxW, h: t.pxH, scratch: &t.backdrop}
 	c.images = &s.images
 	c.text = s.text
 	// A panicking Paint still ends the frame and frees its resources; the
@@ -226,36 +251,45 @@ func (sf *surface) render() (paintErr, err error) {
 			c.release(s.leak)
 		}
 	}()
+	if ft.Active() {
+		begun = s.clock.now()
+	}
 	func() {
-		s.painting = sf
+		s.painting = t
 		defer func() { s.painting = nil }()
-		sf.h.Paint(c)
+		t.win.paintContent(c)
 	}()
+	if ft.Active() {
+		painted = s.clock.now()
+	}
 	paintErr = c.finish()
 	err = s.inject("EndDraw", dc.EndDraw())
 	dc.SetTarget(0) // the context lets go of the back buffer between frames
 	failures := c.failures()
 	c.release(s.leak)
 	ended = true
+	if ft.Active() {
+		drawn = s.clock.now()
+	}
 	if err != nil {
-		if isDeviceLost(err) {
-			s.deviceLost(err)
-		}
-		return paintErr, err
+		return paintErr, s.lost(err)
 	}
-	if s.onDrawn != nil {
-		s.onDrawn(sf)
+	if s.hooks.onDrawn != nil {
+		s.hooks.onDrawn(t)
 	}
-	_, err = sf.chain.Present(1, 0)
+	_, err = t.chain.Present(1, 0)
 	if err = s.inject("Present", err); err != nil {
-		if isDeviceLost(err) {
-			s.deviceLost(err)
-		}
-		return paintErr, err
+		return paintErr, s.lost(err)
 	}
-	sf.presented()
-	if err := g.comp.Commit(); err != nil {
+	t.presented()
+	if err := s.lost(s.inject("Commit", g.comp.Commit())); err != nil { // g is gone after a loss
 		return paintErr, fmt.Errorf("win32: committing the composition: %w", err)
+	}
+	if s.clock.presentObserver != nil {
+		t.presentFeedback()
+	}
+	if ft.Active() {
+		ft.Painted(painted-begun, begun-start+drawn-painted, s.clock.now()-drawn)
 	}
 	if failures != nil {
 		return paintErr, fmt.Errorf("win32: creating drawing resources: %w", failures)
@@ -264,32 +298,7 @@ func (sf *surface) render() (paintErr, err error) {
 }
 
 // backBuffer returns back buffer 0 as a texture (tests read it back).
-func (sf *surface) backBuffer() (d3d11.Texture2D, error) {
-	p, err := sf.chain.Buffer(0, &d3d11.IID_ID3D11Texture2D)
+func (t *swapTarget) backBuffer() (d3d11.Texture2D, error) {
+	p, err := t.chain.Buffer(0, &d3d11.IID_ID3D11Texture2D)
 	return d3d11.Texture2D{Ptr: p}, err
-}
-
-// openWaitable keeps the chain's frame-latency waitable object for the
-// clock, with a frame latency of 1; the waitable starts with one signal.
-// Without one (no IDXGISwapChain2), the clock's hold alone paces the
-// surface.
-func (sf *surface) openWaitable() {
-	sf.ticket, sf.debt = false, 0
-	c2, err := sf.chain.SwapChain2()
-	if err != nil {
-		return
-	}
-	defer c2.Release()
-	if c2.SetMaximumFrameLatency(1) == nil {
-		sf.waitable = c2.FrameLatencyWaitableObject()
-	}
-}
-
-// closeWaitable closes the waitable object, if any.
-func (sf *surface) closeWaitable() {
-	if sf.waitable != 0 {
-		_ = windows.CloseHandle(sf.waitable)
-		sf.waitable = 0
-	}
-	sf.ticket, sf.debt = false, 0
 }

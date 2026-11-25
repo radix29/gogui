@@ -141,6 +141,10 @@ func ringOf(dump string) string {
 // appearance change, at once with Reduce Motion.
 func TestFocusRingAnimation(t *testing.T) {
 	sh := fake.New()
+	// No caret blink: its repaints would be frames after the ring settled.
+	noBlink := driver.DefaultAppearance()
+	noBlink.CaretBlink = driver.CaretBlink{}
+	sh.SetAppearance(noBlink)
 	d := New(sh)
 	h := &appLog{}
 	h.onReady = func() {
@@ -163,7 +167,7 @@ func TestFocusRingAnimation(t *testing.T) {
 		w.Show()
 		clk.Advance(time.Second)
 		// Show focused tf (initial focus, S3.2e); start without a focus.
-		if !tf.el.HasFocus() {
+		if !tf.view.HasFocus() {
 			t.Fatal("Show did not focus the first field")
 		}
 		aw.Router().SetFocus(nil)
@@ -190,15 +194,15 @@ func TestFocusRingAnimation(t *testing.T) {
 					t.Fatalf("%s frame %d: %d frames ran", what, k, n)
 				}
 				p := ease.At(float64(time.Duration(k)*fake.FrameInterval) / float64(200*time.Millisecond))
-				if got := tf.el.ring.Progress(); abs(got-p) > 1e-9 {
+				if got := tf.view.ring.Progress(); abs(got-p) > 1e-9 {
 					t.Fatalf("%s frame %d: progress %v, want %v", what, k, got, p)
 				}
-				if got, want := ringOf(sf.Dump()), refRing(t, onSurface, 4, p, a); got != want {
+				if got, want := ringOf(sf.Dump()), refRing(t, onSurface, 0, p, a); got != want {
 					t.Fatalf("%s frame %d:\n got %q\nwant %q", what, k, got, want)
 				}
 			}
 			clk.Advance(fake.FrameInterval)
-			if got, want := ringOf(sf.Dump()), refRing(t, onSurface, 4, 1, a); got != want || tf.el.ring.Progress() != 1 {
+			if got, want := ringOf(sf.Dump()), refRing(t, onSurface, 0, 1, a); got != want || tf.view.ring.Progress() != 1 {
 				t.Fatalf("%s: last frame %q", what, got)
 			}
 			if clk.Advance(time.Second) > 1 || clk.Requested() {
@@ -210,22 +214,22 @@ func TestFocusRingAnimation(t *testing.T) {
 		}
 		align()
 		tf.Focus()
-		if !tf.el.ring.Visible() || tf.el.ring.Progress() != 0 || !clk.Requested() {
+		if !tf.view.ring.Visible() || tf.view.ring.Progress() != 0 || !clk.Requested() {
 			t.Fatal("focus did not start the ring")
 		}
 		runIn("focus")
-		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) r=5.5 w=3 solid #007aff80" {
+		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80" {
 			t.Fatalf("settled ring %q", got)
 		}
 
 		// Blur (focus moves to the other field): gone at once, and the other
 		// field's ring animates in.
 		other.Focus()
-		if tf.el.ring.Visible() || tf.el.ring.Progress() != 0 || !sf.Invalid() {
+		if tf.view.ring.Visible() || tf.view.ring.Progress() != 0 || !sf.Invalid() {
 			t.Fatal("blur kept the ring")
 		}
 		clk.Advance(fake.FrameInterval)
-		if strings.Contains(sf.Dump(), "(8.5,36.5,103,25)") || other.el.ring.Progress() <= 0 {
+		if strings.Contains(sf.Dump(), "(8.5,36.5,103,25)") || other.view.ring.Progress() <= 0 {
 			t.Fatal("blur: old ring painted or new one not running")
 		}
 		clk.Advance(time.Second)
@@ -235,7 +239,7 @@ func TestFocusRingAnimation(t *testing.T) {
 		tf.Focus()
 		clk.Advance(3 * fake.FrameInterval)
 		sh.Deactivate()
-		if tf.el.ring.Visible() || tf.el.ring.Progress() != 0 || aw.Router().Focused() != ElementOf(tf) {
+		if tf.view.ring.Visible() || tf.view.ring.Progress() != 0 || aw.Router().Focused() != ElementOf(tf) {
 			t.Fatal("inactive window kept the ring or lost the focus")
 		}
 		clk.Advance(time.Second)
@@ -250,10 +254,10 @@ func TestFocusRingAnimation(t *testing.T) {
 		dark := aw.Appearance()
 		dark.Dark = true
 		sh.SetAppearance(dark)
-		if tf.el.ring.Progress() != 1 || clk.Advance(time.Second) > 1 {
+		if tf.view.ring.Progress() != 1 || clk.Advance(time.Second) > 1 {
 			t.Fatal("appearance change restarted the ring")
 		}
-		if got := ringOf(sf.Dump()); got != refRing(t, onSurface, 4, 1, dark) {
+		if got := ringOf(sf.Dump()); got != refRing(t, onSurface, 0, 1, dark) {
 			t.Fatalf("dark ring %q", got)
 		}
 
@@ -262,7 +266,7 @@ func TestFocusRingAnimation(t *testing.T) {
 		hc.IncreaseContrast = true
 		sh.SetAppearance(hc)
 		clk.Advance(time.Second)
-		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) r=5.5 w=3 solid #007aff" {
+		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) w=3 solid #007aff" {
 			t.Fatalf("contrast ring %q", got)
 		}
 
@@ -272,17 +276,17 @@ func TestFocusRingAnimation(t *testing.T) {
 		sh.SetAppearance(rm)
 		other.Focus()
 		tf.Focus()
-		if tf.el.ring.Progress() != 1 || tf.el.ring.v.Running() {
-			t.Fatalf("Reduce Motion: progress %v", tf.el.ring.Progress())
+		if tf.view.ring.Progress() != 1 || tf.view.ring.v.Running() {
+			t.Fatalf("Reduce Motion: progress %v", tf.view.ring.Progress())
 		}
 		clk.Advance(time.Second)
-		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) r=5.5 w=3 solid #007aff" {
+		if got := ringOf(sf.Dump()); got != "strokeRRect (8.5,36.5,103,25) w=3 solid #007aff" {
 			t.Fatalf("Reduce Motion ring %q", got)
 		}
 
 		// Hidden: the focus and the ring go.
 		tf.SetHidden(true)
-		if tf.el.ring.Visible() || tf.el.ring.Progress() != 0 {
+		if tf.view.ring.Visible() || tf.view.ring.Progress() != 0 {
 			t.Fatal("hidden field kept its ring")
 		}
 		if err := sf.PaintErr(); err != nil {
@@ -304,12 +308,12 @@ func abs(x float64) float64 {
 // TestFocusRingWithoutTimeline: a window made with NewWindow has no
 // timeline, so the ring appears at once; focus before Show (an inactive
 // window) shows it only when the window becomes key. Every focusable
-// placeholder draws it.
+// control draws it.
 func TestFocusRingWithoutTimeline(t *testing.T) {
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	h := &winLog{}
-	w, err := NewWindow(s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 300, H: 200}, Style: allStyles}, h)
+	w, err := NewWindow(s, services(s), driver.WindowConfig{Title: "W", Size: driver.Size{W: 300, H: 200}, Style: allStyles}, h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,21 +322,20 @@ func TestFocusRingWithoutTimeline(t *testing.T) {
 	tf.SetFrame(driver.Rect{X: 10, Y: 10, W: 100, H: 22})
 	w.SetContent(tf)
 	tf.Focus()
-	if tf.el.ring.Visible() || tf.el.ring.Progress() != 0 {
+	if tf.view.ring.Visible() || tf.view.ring.Progress() != 0 {
 		t.Fatal("a ring in a window that is not key")
 	}
 	w.Show()
-	if tf.el.ring.Progress() != 1 {
-		t.Fatalf("after Show: %v", tf.el.ring.Progress())
+	if tf.view.ring.Progress() != 1 {
+		t.Fatalf("after Show: %v", tf.view.ring.Progress())
 	}
-	if got := ringOf(paint(t, s, sf)); got != "strokeRRect (8.5,36.5,103,25) r=5.5 w=3 solid #007aff80" {
+	if got := ringOf(paint(t, s, sf)); got != "strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80" {
 		t.Fatalf("ring %q", got)
 	}
 
-	// The other focusable placeholders draw it too, around their own
-	// rounded rect, last in their Paint.
-	for _, wd := range []driver.Widget{
-		d.NewPopUpButton(nil), d.NewTextView(nil)} {
+	// The PopUpButton draws it too, around its bezel, last in its Paint
+	// (the TextView: textview_test.go).
+	for _, wd := range []driver.Widget{d.NewPopUpButton(nil)} {
 		wd.SetFrame(driver.Rect{X: 20, Y: 20, W: 60, H: 6})
 		w.SetContent(wd)
 		e := ElementOf(wd)
@@ -347,9 +350,8 @@ func TestFocusRingWithoutTimeline(t *testing.T) {
 				found = i
 			}
 		}
-		// The ring follows the placeholder's border and caption.
-		if found < 0 || !strings.HasPrefix(lines[found-1], "strokeRRect (20.5,48.5,59,5) r=2.5 w=1") &&
-			!strings.HasPrefix(lines[found-1], "text") {
+		// The ring follows the indicator (too low for its chevrons).
+		if found < 0 || !strings.HasPrefix(lines[found-1], "fillRRect (62,50,16,2) r=1 solid #007aff") {
 			t.Errorf("%T: ring missing or out of order:\n%s", wd, strings.Join(lines, "\n"))
 		}
 	}
@@ -359,7 +361,7 @@ func TestFocusRingWithoutTimeline(t *testing.T) {
 		}
 	}
 
-	// An empty placeholder draws no ring, even focused.
+	// An empty field draws no ring, even focused.
 	tf.SetFrame(driver.Rect{X: 10, Y: 10})
 	w.SetContent(tf)
 	tf.Focus()

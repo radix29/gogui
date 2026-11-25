@@ -166,7 +166,7 @@ func TestWindowContext(t *testing.T) {
 
 	// A window before Show is not key; content focused then is inactive.
 	s := startShell(t)
-	w, err := NewWindow(s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles}, &winLog{})
+	w, err := NewWindow(s, services(s), driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles}, &winLog{})
 	if err != nil {
 		t.Fatal(err)
 	}

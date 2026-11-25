@@ -22,12 +22,12 @@ var ErrRunTwice = errors.New("headless: Run called more than once")
 //
 // The embedded stub.Driver provides the factories, the appearance, the menu
 // bar, alerts and the User… simulations, and records state for tests.
-// Driver replaces Run, Quit, Post, Quitting and UserQuit with versions built
-// on a mainthread.Queue.
+// Driver adds Name, Run, Quit, Queue, ObserveFrames, Quitting and UserQuit,
+// built on a mainthread.Queue.
 //
 // A Driver runs once: Run may be called only once, and it returns after
-// Quit. Every method except Post and Queue must be called on the UI
-// goroutine (the one that called Run).
+// Quit. Every method except Queue must be called on the UI goroutine (the
+// one that called Run).
 type Driver struct {
 	*stub.Driver
 
@@ -109,7 +109,7 @@ func (d *Driver) Run(cfg driver.AppConfig, h driver.AppHandler) error {
 }
 
 // Quit implements driver.Driver. It closes every open window (each gets
-// WindowHandler.Closed), closes the queue so later Post, Do and DoSync calls
+// WindowHandler.Closed), closes the queue so later Do and DoSync calls
 // are dropped, and makes Run return once the current work is done.
 func (d *Driver) Quit() {
 	d.closeWindows()
@@ -136,16 +136,12 @@ func (d *Driver) UserQuit() bool {
 	return true
 }
 
-// Post implements driver.Driver. It is safe for concurrent use. Before Run
-// and after Quit it drops fn.
-func (d *Driver) Post(fn func()) {
-	if q := d.q.Load(); q != nil {
-		q.Do(fn)
-	}
-}
-
 func (d *Driver) closeWindows() {
 	for len(d.Windows) > 0 {
 		d.Windows[len(d.Windows)-1].Close()
 	}
 }
+
+// ObserveFrames implements driver.Driver. The headless driver draws
+// nothing, so it has no frame clock: it returns nil and never calls fn.
+func (d *Driver) ObserveFrames(func(driver.FrameTiming)) func() time.Duration { return nil }

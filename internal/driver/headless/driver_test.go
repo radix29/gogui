@@ -75,9 +75,9 @@ func TestQuitFromPostedWork(t *testing.T) {
 	d := New(nil)
 	var got []int
 	h := &app{onReady: func() {
-		d.Post(func() {
+		d.Queue().Do(func() {
 			got = append(got, 1)
-			d.Post(func() { got = append(got, 3); d.Quit() }) // queued from the loop
+			d.Queue().Do(func() { got = append(got, 3); d.Quit() }) // queued from the loop
 			got = append(got, 2)
 		})
 	}}
@@ -93,9 +93,9 @@ func TestQueuedWorkRunsOnceAfterQuit(t *testing.T) {
 	d := New(nil)
 	ran := 0
 	h := &app{onReady: func() {
-		d.Post(func() { ran++ })
+		d.Queue().Do(func() { ran++ })
 		d.Quit()
-		d.Post(func() { ran += 100 }) // after Quit: dropped
+		d.Queue().Do(func() { ran += 100 }) // after Quit: dropped
 	}}
 	if err := run(t, d, h); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestFIFOFromGoroutines(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				for i := 1; i <= per; i++ {
-					d.Post(func() {
+					d.Queue().Do(func() {
 						if i != last[p]+1 {
 							bad = append(bad, "out of order")
 						}
@@ -157,7 +157,7 @@ func TestDoSync(t *testing.T) {
 			if !ok {
 				t.Error("DoSync from a goroutine returned false")
 			}
-			d.Post(d.Quit)
+			d.Queue().Do(d.Quit)
 		}()
 	}}
 	if err := run(t, d, h); err != nil {
@@ -177,20 +177,19 @@ func TestDoSync(t *testing.T) {
 	}
 }
 
-func TestPostBeforeRun(t *testing.T) {
+// TestQueueBeforeAndAfterRun: there is no queue before Run, and after Run
+// the queue is closed, so work queued then is dropped.
+func TestQueueBeforeAndAfterRun(t *testing.T) {
 	d := New(nil)
-	ran := false
-	d.Post(func() { ran = true }) // no queue yet: dropped
 	if d.Queue() != nil {
 		t.Fatal("Queue before Run is not nil")
 	}
-	if err := run(t, d, &app{onReady: func() { d.Post(d.Quit) }}); err != nil {
+	if err := run(t, d, &app{onReady: func() { d.Queue().Do(d.Quit) }}); err != nil {
 		t.Fatal(err)
 	}
-	if ran {
-		t.Error("work posted before Run ran")
+	if d.Queue().Do(func() { t.Error("work queued after Run ran") }) {
+		t.Error("Do after Run returned true")
 	}
-	d.Post(func() { t.Error("work posted after Run ran") })
 	d.Queue().Drain()
 }
 
@@ -240,8 +239,8 @@ func TestQuitClosesWindows(t *testing.T) {
 			}
 			p.Show()
 		}
-		d.Post(func() {
-			d.Post(func() { d.NewWindow(driver.WindowConfig{}, late) }) // queued before Quit
+		d.Queue().Do(func() {
+			d.Queue().Do(func() { d.NewWindow(driver.WindowConfig{}, late) }) // queued before Quit
 			d.Quit()
 		})
 	}}
@@ -283,7 +282,7 @@ func TestPanicPropagates(t *testing.T) {
 
 func TestPanicInPostedWork(t *testing.T) {
 	d := New(nil)
-	h := &app{onReady: func() { d.Post(func() { panic("posted") }) }}
+	h := &app{onReady: func() { d.Queue().Do(func() { panic("posted") }) }}
 	defer func() {
 		if r := recover(); r != "posted" {
 			t.Errorf("recovered %v, want posted", r)
@@ -339,5 +338,13 @@ func TestRunBlocksWithoutWork(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte(Notice)) {
 		t.Errorf("child output %q, want the notice", out.String())
+	}
+}
+
+// TestObserveFrames: the headless driver has no frame clock (R7).
+func TestObserveFrames(t *testing.T) {
+	d := New(nil)
+	if now := d.ObserveFrames(func(driver.FrameTiming) { t.Error("frame observed") }); now != nil {
+		t.Error("ObserveFrames returned a clock")
 	}
 }

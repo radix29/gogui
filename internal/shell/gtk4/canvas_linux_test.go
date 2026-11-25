@@ -1025,7 +1025,7 @@ func TestCanvasGTKConcat(t *testing.T) {
 		c.Restore()
 		c.Save()
 		c.Translate(100, 100)
-		c.Concat(render.Rotation(math.Pi / 2))
+		c.Concat(rotation(math.Pi / 2))
 		c.FillRoundedRect(render.Rect{X: 10, Y: 0, W: 20, H: 10}, render.Radii{}, render.Solid(cnGreen))
 		c.Restore()
 		c.FillRoundedRect(render.Rect{X: 1, Y: 1, W: 2, H: 2}, render.Radii{}, render.Solid(cnBlue))

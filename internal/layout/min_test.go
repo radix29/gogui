@@ -125,24 +125,43 @@ func TestMeasureCache(t *testing.T) {
 		}
 	}
 
-	// Within one pass the same node and max are measured once.
+	// Within one pass the same node and max are measured once, and the
+	// leaf's unbounded fitting size is asked once (P7).
 	l, pr := pl(30, 10)
 	var p Pass
+	entries := func() int {
+		e, ok := p.lookup(l.Props())
+		if !ok {
+			return 0
+		}
+		return e.n
+	}
 	p.Measure(l, driver.Size{W: 50, H: 50})
 	before := pr.measures
 	p.Measure(l, driver.Size{W: 50, H: 50})
-	if pr.measures != before {
+	if pr.measures != before || entries() != 1 {
 		t.Error("the same measurement was not cached")
 	}
 	p.Measure(l, driver.Size{W: 40, H: 50})
-	if pr.measures == before {
+	if entries() != 2 {
 		t.Error("a different max must be measured again")
 	}
-	before = pr.measures
+	if pr.measures != before {
+		t.Errorf("the unbounded fitting size was asked %d more times", pr.measures-before)
+	}
 	p.Measure(l, driver.Size{W: -1, H: 50}) // normalized: same key as W 0
 	p.Measure(l, driver.Size{W: 0, H: 50})
+	if entries() != 3 {
+		t.Errorf("normalized keys: %d measurements, want 3", entries())
+	}
+	p.reset()
+	if entries() != 0 {
+		t.Error("reset kept a measurement")
+	}
+	before = pr.measures
+	p.Measure(l, driver.Size{W: 50, H: 50})
 	if pr.measures != before+1 {
-		t.Errorf("normalized keys: %d new measurements, want 1", pr.measures-before)
+		t.Error("the fitting size survived reset")
 	}
 	var nilPass *Pass
 	before = pr.measures
@@ -192,4 +211,49 @@ func BenchmarkLayout1000(b *testing.B) {
 	for b.Loop() {
 		root.Layout(driver.Size{W: 1600, H: 3000})
 	}
+}
+
+// TestLayoutMin: LayoutMin frames the tree as Layout does and returns
+// MinSize's result, measuring each leaf no more often than Layout and
+// MinSize together, and less where their measurements meet (S6.2e: the
+// window's layout pass shares one Pass).
+func TestLayoutMin(t *testing.T) {
+	tree := func() (*Root, []*probe) {
+		a, pa := pl(50, 10)
+		b, pb := pl(30, 15)
+		c, pc := pl(80, 20)
+		c.Props().SetMin(Horizontal, 20)
+		v := NewVStack(6, NewHStack(4, a, b), c).SetPadding(driver.UniformInsets(2))
+		return NewRoot(v), []*probe{pa, pb, pc}
+	}
+	size := driver.Size{W: 300, H: 200}
+	sep, sp := tree()
+	sep.Layout(size)
+	wantMin := sep.MinSize()
+	one, op := tree()
+	gotMin := one.LayoutMin(size)
+	wantSize(t, "LayoutMin", gotMin, wantMin)
+	sepN, oneN := 0, 0
+	for i := range sp {
+		if op[i].frame != sp[i].frame {
+			t.Errorf("leaf %d: frame %v, want %v", i, op[i].frame, sp[i].frame)
+		}
+		sepN += sp[i].measures
+		oneN += op[i].measures
+		if op[i].measures > sp[i].measures {
+			t.Errorf("leaf %d: measured %d times, Layout and MinSize %d", i, op[i].measures, sp[i].measures)
+		}
+	}
+	if oneN >= sepN {
+		t.Errorf("LayoutMin measured the leaves %d times, Layout and MinSize %d", oneN, sepN)
+	}
+}
+
+// TestLayoutMinExample: the controls example's tree, as TestLayoutMin.
+func TestLayoutMinExample(t *testing.T) {
+	size := driver.Size{W: 520, H: 560}
+	sep := layoutControls(size).root
+	want := sep.MinSize()
+	one := layoutControls(size).root
+	wantSizeNear(t, "controls LayoutMin", one.LayoutMin(size), want)
 }

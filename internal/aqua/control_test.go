@@ -5,6 +5,7 @@ import (
 
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/shell"
+	"github.com/radix29/gogui/internal/shell/fake"
 )
 
 // clicker is a probe that tracks its presses with a pressTracker and logs
@@ -325,10 +326,12 @@ func TestSpaceActivates(t *testing.T) {
 	// Space reaches the root; check the guard directly as well.
 	r.focus = btn
 	box.disabled = true
+	treeChange() // set without SetEnabled
 	if r.spaceActivates(shell.KeyEvent{Down: true, Key: driver.KeySpace}) {
 		t.Fatal("disabled element pressed")
 	}
 	box.disabled = false
+	treeChange() // set without SetEnabled
 	if err := sf.PaintErr(); err != nil {
 		t.Error(err)
 	}
@@ -336,8 +339,8 @@ func TestSpaceActivates(t *testing.T) {
 
 // TestSpaceOnButton: Space presses a focused Button like a click (its
 // Activate), toggles a focused Checkbox (S3.3f) and turns on a focused
-// Radio (S3.3g), and is not consumed on a focused placeholder without a
-// primary action yet.
+// Radio (S3.3g), and is not consumed on a focused PopUpButton outside a
+// window, which opens no menu (S5.5k; TestPopUpButtonMenuKeys opens one).
 func TestSpaceOnButton(t *testing.T) {
 	d := startDriver(t)
 	var clicks int
@@ -358,7 +361,88 @@ func TestSpaceOnButton(t *testing.T) {
 	if !rb.view.Focus() || !r.Event(space) || !rb.IsOn {
 		t.Fatal("Space on a Radio")
 	}
-	if !pop.el.Focus() || r.Event(space) {
-		t.Fatal("Space consumed by a placeholder without an action")
+	if !pop.view.Focus() || r.Event(space) {
+		t.Fatal("Space consumed by a pop-up button outside a window")
+	}
+}
+
+// TestKeyFlash (R2): a press by key (Space on the focused control, Return
+// on the default button) draws a button, checkbox or radio pressed for
+// keyFlash, as AppKit's performClick: does, and acts at once; a click, a
+// repeat and a disabled control do not flash.
+func TestKeyFlash(t *testing.T) {
+	d := startDriver(t)
+	clk := d.sh.(*fake.Shell).FakeClock()
+	var clicks int
+	b := d.NewButton(clickCounter{&clicks}).(*Button)
+	cb := d.NewCheckbox(nil).(*Checkbox)
+	rb := d.NewRadio(nil).(*Radio)
+	root := newProbe(&[]string{}, "root", 0, 0, 100, 100)
+	root.SetChildren(ElementOf(b), ElementOf(cb), ElementOf(rb))
+	b.view.SetFrame(driver.Rect{W: 80, H: 20})
+	r := NewRouter(root)
+	space := shell.KeyEvent{Down: true, Key: driver.KeySpace}
+	for _, c := range []struct {
+		name string
+		v    interface {
+			keyFlasher
+			Focus() bool
+			Flashing() bool
+			State() ControlState
+		}
+	}{{"button", b.view}, {"checkbox", cb.view}, {"radio", rb.view}} {
+		if !c.v.Focus() || !r.Event(space) || !c.v.Flashing() || c.v.State().Interaction != InteractionPressed {
+			t.Errorf("%s: Space did not flash", c.name)
+		}
+		clk.Advance(keyFlash / 2)
+		if !c.v.Flashing() {
+			t.Errorf("%s: flash ended early", c.name)
+		}
+		clk.Advance(keyFlash / 2)
+		if c.v.Flashing() || c.v.State().Interaction == InteractionPressed {
+			t.Errorf("%s: flash still on", c.name)
+		}
+		// A repeat activates nothing and does not flash.
+		if !r.Event(shell.KeyEvent{Down: true, Repeat: true, Key: driver.KeySpace}) || c.v.Flashing() {
+			t.Errorf("%s: repeat flashed", c.name)
+		}
+	}
+	if clicks != 1 || cb.Value != driver.StateOn || !rb.IsOn {
+		t.Errorf("actions: %d clicks, checkbox %v, radio %v", clicks, cb.Value, rb.IsOn)
+	}
+
+	// A click does not flash.
+	r.Event(down(10, 10))
+	r.Event(up(10, 10))
+	if clicks != 2 || b.view.Flashing() {
+		t.Errorf("click: %d clicks, flashing %v", clicks, b.view.Flashing())
+	}
+
+	// A disabled control neither acts nor flashes.
+	b.view.SetEnabled(false)
+	if activateByKey(b.view) || b.view.Flashing() || clicks != 2 {
+		t.Errorf("disabled: flashing %v, %d clicks", b.view.Flashing(), clicks)
+	}
+}
+
+// TestDefaultButtonKeyFlash (R2): Return on a window's default button
+// flashes it and clicks it.
+func TestDefaultButtonKeyFlash(t *testing.T) {
+	s := startShell(t)
+	d := newDriver(s)
+	w, sf, _ := openWindow(t, s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles})
+	var clicks int
+	b := d.NewButton(clickCounter{&clicks}).(*Button)
+	b.view.SetFrame(driver.Rect{X: 10, Y: 10, W: 80, H: 20})
+	b.view.SetDefaultButton(true)
+	box := newProbe(&[]string{}, "box", 0, 0, 200, 100)
+	box.SetChildren(b.view)
+	w.SetContent(contentWidget{box})
+	if !sf.Key(driver.KeyReturn, 0) || clicks != 1 || !b.view.Flashing() {
+		t.Fatalf("Return: %d clicks, flashing %v", clicks, b.view.Flashing())
+	}
+	s.FakeClock().Advance(keyFlash)
+	if b.view.Flashing() {
+		t.Error("flash still on")
 	}
 }

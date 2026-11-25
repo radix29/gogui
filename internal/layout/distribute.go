@@ -35,9 +35,16 @@ type span struct {
 // rounding gap, about 2 % of random inputs), the sum is the float just below
 // space; it never exceeds it. The result depends only on the input.
 func distribute(items []span, space float64) []float64 {
-	sizes := make([]float64, len(items))
-	lo := make([]float64, len(items))
-	hi := make([]float64, len(items))
+	return distributeIn(nil, items, space)
+}
+
+// distributeIn is distribute with its slices lent by p (P7): the sizes it
+// returns are p's scratch, valid until the caller releases its mark.
+func distributeIn(p *Pass, items []span, space float64) []float64 {
+	buf := p.floatBuf(3 * len(items))
+	n := len(items)
+	sizes, lo, hi := buf[:n:n], buf[n:2*n:2*n], buf[2*n:]
+
 	var natural, minimum float64
 	for i, it := range items {
 		lo[i] = finite(it.min)
@@ -62,7 +69,8 @@ func distribute(items []span, space float64) []float64 {
 
 // grow shares leftover among the expanding items, capped by hi.
 func grow(items []span, sizes, hi []float64, space, leftover float64) {
-	var active []int
+	var buf [16]int // most stacks have fewer expanders
+	active := buf[:0]
 	for i, it := range items {
 		if it.expand && sizes[i] < hi[i] {
 			active = append(active, i)
@@ -70,7 +78,7 @@ func grow(items []span, sizes, hi []float64, space, leftover float64) {
 	}
 	for len(active) > 0 {
 		share := leftover / float64(len(active))
-		next := active[:0:0]
+		next := active[:0] // filtered in place
 		for _, i := range active {
 			if sizes[i]+share >= hi[i] {
 				leftover -= hi[i] - sizes[i]

@@ -1,9 +1,7 @@
 package stub
 
 import (
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/radix29/gogui/internal/driver"
 )
@@ -54,15 +52,13 @@ func (w *windowEvents) Closed()                      { w.closed++ }
 func (w *windowEvents) KeyChanged(k bool)            { w.key = append(w.key, k) }
 
 type appEvents struct {
-	ready      int
 	appearance []driver.Appearance
-	allowQuit  bool
 	menu       []int
 }
 
-func (a *appEvents) Ready()                                { a.ready++ }
+func (a *appEvents) Ready()                                {}
 func (a *appEvents) AppearanceChanged(x driver.Appearance) { a.appearance = append(a.appearance, x) }
-func (a *appEvents) QuitRequested() bool                   { return a.allowQuit }
+func (a *appEvents) QuitRequested() bool                   { return false }
 func (a *appEvents) MenuItemSelected(id int)               { a.menu = append(a.menu, id) }
 
 func TestBaseState(t *testing.T) {
@@ -392,7 +388,7 @@ func TestWindow(t *testing.T) {
 	}
 }
 
-func TestDriverWindowsAndQuit(t *testing.T) {
+func TestDriverWindows(t *testing.T) {
 	d := NewDriver()
 	h1, h2 := &windowEvents{}, &windowEvents{}
 	pw1, _ := d.NewWindow(driver.WindowConfig{}, h1)
@@ -409,11 +405,6 @@ func TestDriverWindowsAndQuit(t *testing.T) {
 	if len(d.Windows) != 1 {
 		t.Errorf("closed window still tracked: %d", len(d.Windows))
 	}
-
-	d.Quit()
-	if len(d.Windows) != 0 || h1.closed != 1 || !d.Quitting() {
-		t.Errorf("Quit must close every window: open=%d closed=%d", len(d.Windows), h1.closed)
-	}
 }
 
 func TestDriverAppearance(t *testing.T) {
@@ -425,7 +416,9 @@ func TestDriverAppearance(t *testing.T) {
 	if !d.Appearance().Dark || len(h.appearance) != 1 {
 		t.Fatalf("dark: %+v events=%d", d.Appearance(), len(h.appearance))
 	}
-	d.SetSystemAppearance(driver.Appearance{Dark: true, Accent: driver.DefaultAccent})
+	dark := driver.DefaultAppearance()
+	dark.Dark = true
+	d.SetSystemAppearance(dark)
 	if len(h.appearance) != 1 {
 		t.Error("no change must not be reported")
 	}
@@ -461,14 +454,6 @@ func TestDriverMenuBar(t *testing.T) {
 	if len(h.menu) != 1 || h.menu[0] != 1 {
 		t.Errorf("menu events = %v", h.menu)
 	}
-
-	if d.UserQuit() || d.Quitting() {
-		t.Error("QuitRequested=false must cancel")
-	}
-	h.allowQuit = true
-	if !d.UserQuit() || !d.Quitting() {
-		t.Error("UserQuit did not quit")
-	}
 }
 
 func TestDriverAlert(t *testing.T) {
@@ -490,54 +475,32 @@ func TestDriverAlert(t *testing.T) {
 	d.Alerts[0].Dismiss(0) // nil done is allowed
 }
 
-func TestDriverRunAndPost(t *testing.T) {
-	d := NewDriver()
-	h := &appEvents{}
-
-	var order []int
-	var mu sync.Mutex
-	add := func(i int) { mu.Lock(); order = append(order, i); mu.Unlock() }
-
-	done := make(chan error, 1)
-	go func() {
-		// Run on its own goroutine here; the real drivers need the main
-		// thread, the stub does not.
-		done <- d.Run(driver.AppConfig{Name: "Test"}, h)
-	}()
-
-	var wg sync.WaitGroup
-	for range 10 { // Post is safe from any goroutine
-		wg.Add(1)
-		go func() { defer wg.Done(); d.Post(func() {}) }()
-	}
-	wg.Wait()
-	d.Post(func() {
-		add(1)
-		d.Post(func() { add(3); d.Quit() }) // posted from the loop
-		add(2)
-	})
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+// TestDisabledAncestor (V7): a disabled container, box or scroll view
+// disables its subtree, as on aqua; the control's own Disabled is unchanged.
+func TestDisabledAncestor(t *testing.T) {
+	h := &clicks{}
+	b := NewButton(h)
+	c := NewContainer()
+	c.SetChildren([]driver.Widget{b})
+	box := NewBox()
+	box.SetContent(c)
+	sv := NewScrollView(nil)
+	sv.SetDocument(box)
+	for _, anc := range []driver.Widget{c, box, sv} {
+		anc.SetEnabled(false)
+		b.UserClick()
+		if h.n != 0 || b.Enabled() || b.Disabled {
+			t.Fatalf("%T disabled: clicks %d, Enabled %v, Disabled %v", anc, h.n, b.Enabled(), b.Disabled)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not return after Quit")
+		anc.SetEnabled(true)
 	}
-	if h.ready != 1 || d.Config.Name != "Test" {
-		t.Errorf("ready=%d config=%+v", h.ready, d.Config)
+	b.UserClick()
+	if h.n != 1 || !b.Enabled() {
+		t.Fatalf("enabled again: clicks %d", h.n)
 	}
-	if len(order) != 3 || order[0] != 1 || order[1] != 2 || order[2] != 3 {
-		t.Errorf("order = %v", order)
-	}
-}
-
-func TestDrain(t *testing.T) {
-	d := NewDriver()
-	n := 0
-	d.Post(func() { n++; d.Post(func() { n++ }) })
-	if got := d.Drain(); got != 2 || n != 2 {
-		t.Errorf("Drain = %d, n = %d", got, n)
+	c.SetChildren(nil) // out of the tree: only its own state counts
+	c.SetEnabled(false)
+	if !b.Enabled() {
+		t.Fatal("a former parent still disables it")
 	}
 }

@@ -1,8 +1,9 @@
 // Package goldentest holds the OS-neutral parts of the gallery golden tests
-// (PLAN.md S3.6, S4.3e) that every shell shares: the variant table (light
-// and dark at 1× and 2×, with their file names), the conversion of a
-// premultiplied BGRA readback to straight-alpha RGBA, and the
-// compare-and-report flow against the committed PNGs.
+// (PLAN.md S3.6, S4.3e, S6.1h) that every shell shares: the variant table
+// (light and dark at 1× and 2×; key, inactive and with Increase Contrast;
+// with their file names), the conversion of a premultiplied BGRA readback
+// to straight-alpha RGBA, and the compare-and-report flow against the
+// committed PNGs.
 //
 // It is imported only by tests (the win32 gallery test, and the gtk4 one
 // from S4.3g). It has no build tags and imports only the standard library
@@ -19,22 +20,50 @@ import (
 	"github.com/radix29/gogui/internal/aqua/gallery/golden"
 )
 
-// Variant is one golden render: the appearance and the backing scale.
+// Variant is one golden render: the appearance, the backing scale and,
+// since S6.1h, the window's state.
 type Variant struct {
 	Dark  bool
 	Scale float64 // 1 or 2
+
+	// Inactive renders the gallery in a window that is not key (S6.1h).
+	Inactive bool
+	// Contrast renders it with Increase Contrast (S6.1h).
+	Contrast bool
 }
 
-// Variants are the four golden renders, in the order the shells render
-// them.
-var Variants = []Variant{{false, 1}, {true, 1}, {false, 2}, {true, 2}}
+// Variants are the four golden renders of a key window without Increase
+// Contrast, in the order the shells render them. Linux renders these.
+var Variants = []Variant{{false, 1, false, false}, {true, 1, false, false}, {false, 2, false, false}, {true, 2, false, false}}
+
+// PolishVariants are the inactive and the increased-contrast galleries
+// (S6.1h), light and dark at 1× and 2×, in Variants' order within each.
+// Windows renders them; the Linux ones join S4.3j's follow-up.
+var PolishVariants = polish()
+
+func polish() []Variant {
+	var out []Variant
+	for _, state := range []Variant{{Inactive: true}, {Contrast: true}} {
+		for _, v := range Variants {
+			v.Inactive, v.Contrast = state.Inactive, state.Contrast
+			out = append(out, v)
+		}
+	}
+	return out
+}
 
 // Name is the variant's golden file name without ".png", such as
-// "gallery-dark-x2".
+// "gallery-dark-x2" or "gallery-light-inactive-x1".
 func (v Variant) Name() string {
 	mode := "light"
 	if v.Dark {
 		mode = "dark"
+	}
+	if v.Inactive {
+		mode += "-inactive"
+	}
+	if v.Contrast {
+		mode += "-contrast"
 	}
 	return fmt.Sprintf("gallery-%s-x%g", mode, v.Scale)
 }
@@ -77,7 +106,7 @@ type Check struct {
 	Dir string
 
 	// Options is the tolerance (golden.DefaultOptions on Windows; Linux
-	// gets its own, S4.3i).
+	// gets its own, calibrated in S4.3j; with the text boxes in Mask).
 	Options golden.Options
 
 	// Update rewrites the goldens instead of comparing. Only the caller
@@ -149,4 +178,40 @@ func (c *Check) Run(t testing.TB, v Variant, got *image.NRGBA) golden.Result {
 	}
 	report("%s differs from %s: %v; wrote %s", name, path, res, files)
 	return res
+}
+
+// SweepThresholds are the thresholds Sweep compares at: around
+// pixelmatch's 0.1, up to a tolerance that would hide real colour changes.
+var SweepThresholds = []float64{0.05, 0.1, 0.15, 0.2, 0.3}
+
+// Sweep is the calibration material of a tolerance (S4.3i): it compares
+// got with the golden of v under c.Options at each of SweepThresholds,
+// once without a mask and, when c.Options has one, once with it, and
+// returns one line per comparison ("t=0.1 mask=off: <Result>"). It
+// neither fails nor writes files; it errs only when the golden cannot be
+// read.
+func (c *Check) Sweep(v Variant, got *image.NRGBA) ([]string, error) {
+	want, err := golden.ReadPNG(filepath.Join(c.Dir, v.Name()+".png"))
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	for _, th := range SweepThresholds {
+		opt := c.Options
+		opt.Threshold = th
+		masks := [][]image.Rectangle{nil}
+		if len(c.Options.Mask) > 0 {
+			masks = append(masks, c.Options.Mask)
+		}
+		for _, m := range masks {
+			opt.Mask = m
+			res, _ := golden.Compare(want, got, opt)
+			on := "off"
+			if m != nil {
+				on = fmt.Sprintf("on (%d rects)", len(m))
+			}
+			lines = append(lines, fmt.Sprintf("t=%g mask=%s: %v", th, on, res))
+		}
+	}
+	return lines, nil
 }

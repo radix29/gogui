@@ -37,9 +37,9 @@ func TestButton(t *testing.T) {
 		if len(log) != 3 {
 			t.Errorf("disabled or destroyed button fired: %v", log)
 		}
-		b.SetTitle("x") // only records
-		if p.Title != "Hello" {
-			t.Error("setter reached a destroyed peer")
+		mustPanic(t, "Button.SetTitle on a destroyed widget", func() { b.SetTitle("x") })
+		if p.Title != "Hello" || b.Title() != "Hello" {
+			t.Error("setter reached a destroyed peer, or Title lost the last value")
 		}
 	})
 }
@@ -78,6 +78,9 @@ func TestCheckbox(t *testing.T) {
 		}
 		c.SetEnabled(false)
 		checkboxEvents{c}.StateChanged(StateOff)
+		if c.State() != StateOff { // B14: the cache follows, only the handler is skipped
+			t.Errorf("disabled checkbox: state %v, want the reported off", c.State())
+		}
 		c.SetEnabled(true)
 		unsub()
 		p.UserClick()
@@ -143,10 +146,11 @@ func TestRadioGroup(t *testing.T) {
 				t.Error("radio not disabled with its group")
 			}
 		}
-		radioEvents{g, 0}.StateChanged(StateOn) // reported anyway
-		if g.Selected() != 1 || len(got) != 5 {
-			t.Errorf("disabled group: selected %d, events %v", g.Selected(), got)
+		radioEvents{g, 0}.StateChanged(StateOn) // reported anyway, B14: the cache follows
+		if g.Selected() != 0 || len(got) != 5 || !slices.Equal(on(), []bool{true, false, false}) {
+			t.Errorf("disabled group: selected %d, on %v, events %v", g.Selected(), on(), got)
 		}
+		g.SetSelected(1)
 		g.SetEnabled(true).SetControlSize(ControlSizeSmall).SetTooltip("Size").Focus()
 		if r := radios[1].(*stub.Radio); r.ControlSize != ControlSizeSmall || r.FocusCalls != 1 || r.Tooltip != "Size" {
 			t.Errorf("radio 1: %+v", r.Base)
@@ -192,10 +196,11 @@ func TestRadioGroupLayout(t *testing.T) {
 		if len(box.Children) != 0 {
 			t.Errorf("container still has %d children", len(box.Children))
 		}
-		radioEvents{g, 0}.StateChanged(StateOn)
-		g.SetSelected(2)
-		if g.Selected() != 2 {
-			t.Error("destroyed group doesn't record the selection")
+		sel := g.Selected()
+		radioEvents{g, 2}.StateChanged(StateOn) // ignored: the group is destroyed
+		mustPanic(t, "RadioGroup.SetSelected on a destroyed widget", func() { g.SetSelected(2) })
+		if g.Selected() != sel {
+			t.Error("a destroyed group changed its selection")
 		}
 	})
 }

@@ -36,7 +36,7 @@ import (
 type Label struct {
 	*stub.Label
 	peerBase
-	view *label // the element (peerBase.el is nil)
+	view *label // the element
 }
 
 // NewLabel returns a label.
@@ -71,13 +71,7 @@ func (l *Label) FittingSize(max driver.Size) driver.Size {
 
 // TextFont returns the font the label draws with: its Font with a zero
 // Size replaced by the theme's system size for its control size.
-func (l *Label) TextFont() driver.Font {
-	f := l.Font
-	if f.Size <= 0 {
-		f.Size = tokens.Typography.FontSize.At(l.ControlSize)
-	}
-	return f
-}
+func (l *Label) TextFont() driver.Font { return sizedFont(l.Font, l.ControlSize) }
 
 // label is the element of a Label.
 type label struct {
@@ -85,9 +79,11 @@ type label struct {
 	d *Driver
 	p *Label
 
-	// The last layout and what it was made from.
-	cache    render.TextLayout
-	cacheKey labelKey
+	// The last two layouts (P13): a label is measured at one width (the
+	// layout's FittingSize) and painted at another (its frame's), so one
+	// entry would thrash between them. last is the entry used last.
+	cache [2]labelLayout
+	last  int
 }
 
 type labelKey struct {
@@ -96,17 +92,60 @@ type labelKey struct {
 	width float64 // the wrap width, 0 for none
 }
 
-// layout returns the laid-out text, wrapped at width when the label wraps
-// (a width that is not positive and finite means no wrapping).
-func (e *label) layout(width float64) render.TextLayout {
+// labelLayout is one cached layout and, once a centred or trailing paint
+// needed them, its lines laid out one by one.
+type labelLayout struct {
+	key    labelKey
+	layout render.TextLayout
+	lines  []lineLayout
+	split  bool // lines is filled
+}
+
+// lineLayout is one non-empty visual line of a layout, laid out on its own,
+// and its top.
+type lineLayout struct {
+	layout render.TextLayout
+	y      float64
+}
+
+// entry returns the cache entry for the text wrapped at width when the
+// label wraps (a width that is not positive and finite means no
+// wrapping), laying it out on a miss in place of the entry used less
+// recently.
+func (e *label) entry(width float64) *labelLayout {
 	k := labelKey{text: e.p.Text, font: e.p.TextFont()}
 	if e.p.Wraps && width > 0 && !math.IsInf(width, 1) {
 		k.width = width
 	}
-	if e.cache == nil || e.cacheKey != k {
-		e.cache, e.cacheKey = e.d.sh.TextSystem().NewLayout(k.text, k.font, k.width), k
+	for _, i := range [2]int{e.last, 1 - e.last} {
+		if c := &e.cache[i]; c.layout != nil && c.key == k {
+			e.last = i
+			return c
+		}
 	}
-	return e.cache
+	e.last = 1 - e.last
+	c := &e.cache[e.last]
+	*c = labelLayout{key: k, layout: e.d.text.NewLayout(k.text, k.font, k.width)}
+	return c
+}
+
+// layout returns the laid-out text, wrapped at width when the label wraps
+// (a width that is not positive and finite means no wrapping).
+func (e *label) layout(width float64) render.TextLayout { return e.entry(width).layout }
+
+// lineLayouts returns c's non-empty lines, each laid out on its own,
+// split and laid out once per entry.
+func (e *label) lineLayouts(c *labelLayout) []lineLayout {
+	if !c.split {
+		ts := e.d.text
+		for _, ln := range lines(c.layout) {
+			if ln.text != "" {
+				c.lines = append(c.lines, lineLayout{ts.NewLayout(ln.text, c.layout.Font(), 0), ln.y})
+			}
+		}
+		c.split = true
+	}
+	return c.lines
 }
 
 // FittingSize returns the peer's FittingSize.
@@ -132,7 +171,8 @@ func (e *label) Paint(c render.Canvas) {
 	if b.Empty() || e.p.Text == "" {
 		return
 	}
-	l := e.layout(b.W)
+	ent := e.entry(b.W)
+	l := ent.layout
 	if s := l.Size(); s.W > b.W || s.H > b.H {
 		c.ClipRoundedRect(b, render.Radii{})
 	}
@@ -151,13 +191,8 @@ func (e *label) Paint(c render.Canvas) {
 		return
 	}
 	// One layout per line, each aligned on its own.
-	ts := e.d.sh.TextSystem()
-	for _, ln := range lines(l) {
-		if ln.text == "" {
-			continue
-		}
-		ll := ts.NewLayout(ln.text, l.Font(), 0)
-		c.DrawText(ll, driver.Point{X: max(0, (b.W-ll.Size().W)*f), Y: ln.y}, col)
+	for _, ln := range e.lineLayouts(ent) {
+		c.DrawText(ln.layout, driver.Point{X: max(0, (b.W-ln.layout.Size().W)*f), Y: ln.y}, col)
 	}
 }
 

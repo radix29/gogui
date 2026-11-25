@@ -53,3 +53,15 @@ fillRRect (148,40,9,24) r=4.5 solid #000000bf
 fillRRect (145,38,15,100) solid #2b2b2b
 fillRRect (145,38,1,100) solid #ffffff66
 fillRRect (148,40,9,24) r=4.5 solid #ffffffbf
+## inactive
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000014
+fillRRect (148,40,9,24) r=4.5 solid #00000073
+## inactive, increased contrast
+fillRRect (145,38,15,100) solid #fafafa
+fillRRect (145,38,1,100) solid #00000066
+fillRRect (148,40,9,24) r=4.5 solid #000000bf
+## dark, inactive, increased contrast
+fillRRect (145,38,15,100) solid #2b2b2b
+fillRRect (145,38,1,100) solid #ffffff66
+fillRRect (148,40,9,24) r=4.5 solid #ffffffbf

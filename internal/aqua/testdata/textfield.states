@@ -1,0 +1,410 @@
+## empty, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+## placeholder, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,28,16) "Name" 13pt #0000003f clip=(11,39,98,20)
+## placeholder focused, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,28,16) "Name" 13pt #0000003f clip=(11,39,98,20)
+fillRRect (13,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## placeholder truncated, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,84,16) "A very long…" 13pt #0000003f clip=(11,39,98,20)
+## text, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## text focused, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+fillRRect (48,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## caret inside, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+fillRRect (27,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## selection, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+fillRRect (21,41,21,16) solid #b2d7ff clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## selection inactive, normal focused-inactive inactive light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+fillRRect (21,41,21,16) solid #dcdcdc clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## caret inactive, normal focused-inactive inactive light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## selection unfocused, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## disabled, normal unfocused disabled key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #00000040 clip=(11,39,98,20)
+## disabled placeholder, normal unfocused disabled key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,28,16) "Name" 13pt #0000003f clip=(11,39,98,20)
+## read-only focused, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## read-only selection, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+fillRRect (14,41,35,16) solid #b2d7ff clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## secure, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,21,16) "•••" 13pt #000000 clip=(11,39,98,20)
+## secure focused, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,21,16) "•••" 13pt #000000 clip=(11,39,98,20)
+fillRRect (34,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## secure selection, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+fillRRect (21,41,7,16) solid #b2d7ff clip=(11,39,98,20)
+text (14,41,21,16) "•••" 13pt #000000 clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow focused, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (-69,41,175,16) "The quick brown fox jumps" 13pt #000000 clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow caret start, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,175,16) "The quick brown fox jumps" 13pt #000000 clip=(11,39,98,20)
+fillRRect (13,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow unfocused, normal unfocused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,175,16) "The quick brown fox jumps" 13pt #000000 clip=(11,39,98,20)
+## centred, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (53,41,14,16) "Hi" 13pt #000000 clip=(11,39,98,20)
+fillRRect (66,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## trailing, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (92,41,14,16) "Hi" 13pt #000000 clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## small, normal focused key light
+fillRRect (10,38,100,19) solid #ffffff
+shadow (10,38,100,19) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,18) w=1 solid #0000002e
+text (13,40.731,29.615,13.538) "Hello" 11pt #000000 clip=(11,39,98,17)
+fillRRect (42,41,2,13) solid #007aff clip=(11,39,98,17)
+strokeRRect (8.5,36.5,103,22) w=3 solid #007aff80
+## increase contrast, normal unfocused key light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## increase contrast, placeholder, normal unfocused key light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+text (14,41,28,16) "Name" 13pt #00000080 clip=(11,39,98,20)
+## increase contrast, focused, normal focused key light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+fillRRect (48,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff
+## increase contrast, selection, normal focused key light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+fillRRect (21,41,21,16) solid #80bcff clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff
+## increase contrast, selection inactive, normal focused-inactive inactive light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+fillRRect (21,41,21,16) solid #dcdcdc clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #000000 clip=(11,39,98,20)
+## increase contrast, disabled, normal unfocused disabled key light contrast
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #00000099
+text (14,41,35,16) "Hello" 13pt #00000080 clip=(11,39,98,20)
+## composing, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "aにほんb" 13pt #000000 clip=(11,39,98,20)
+fillRRect (21,54,20,1) solid #000000 clip=(11,39,98,20)
+fillRRect (41,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## composing, selected clause, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (14,41,35,16) "ab日本語" 13pt #000000 clip=(11,39,98,20)
+fillRRect (28,54,13,2) solid #000000 clip=(11,39,98,20)
+fillRRect (42,54,6,1) solid #000000 clip=(11,39,98,20)
+fillRRect (41,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## composing overflow, normal focused key light
+fillRRect (10,38,100,22) solid #ffffff
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000014 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #0000002e
+text (-69,41,175,16) "The quick brown foxじゃんぷした" 13pt #000000 clip=(11,39,98,20)
+fillRRect (64,54,41,1) solid #000000 clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## empty, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+## placeholder, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,28,16) "Name" 13pt #ffffff3f clip=(11,39,98,20)
+## placeholder focused, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,28,16) "Name" 13pt #ffffff3f clip=(11,39,98,20)
+fillRRect (13,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## placeholder truncated, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,84,16) "A very long…" 13pt #ffffff3f clip=(11,39,98,20)
+## text, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## text focused, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (48,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## caret inside, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (27,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## selection, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+fillRRect (21,41,21,16) solid #3e638b clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## selection inactive, normal focused-inactive inactive dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+fillRRect (21,41,21,16) solid #464646 clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## caret inactive, normal focused-inactive inactive dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## selection unfocused, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## disabled, normal unfocused disabled key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff40 clip=(11,39,98,20)
+## disabled placeholder, normal unfocused disabled key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,28,16) "Name" 13pt #ffffff3f clip=(11,39,98,20)
+## read-only focused, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## read-only selection, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+fillRRect (14,41,35,16) solid #3e638b clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## secure, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,21,16) "•••" 13pt #ffffff clip=(11,39,98,20)
+## secure focused, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,21,16) "•••" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (34,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## secure selection, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+fillRRect (21,41,7,16) solid #3e638b clip=(11,39,98,20)
+text (14,41,21,16) "•••" 13pt #ffffff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow focused, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (-69,41,175,16) "The quick brown fox jumps" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow caret start, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,175,16) "The quick brown fox jumps" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (13,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## overflow unfocused, normal unfocused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,175,16) "The quick brown fox jumps" 13pt #ffffff clip=(11,39,98,20)
+## centred, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (53,41,14,16) "Hi" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (66,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## trailing, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (92,41,14,16) "Hi" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## small, normal focused key dark
+fillRRect (10,38,100,19) solid #1e1e1e
+shadow (10,38,100,19) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,18) w=1 solid #ffffff26
+text (13,40.731,29.615,13.538) "Hello" 11pt #ffffff clip=(11,39,98,17)
+fillRRect (42,41,2,13) solid #007aff clip=(11,39,98,17)
+strokeRRect (8.5,36.5,103,22) w=3 solid #007aff80
+## increase contrast, normal unfocused key dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## increase contrast, placeholder, normal unfocused key dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+text (14,41,28,16) "Name" 13pt #ffffff80 clip=(11,39,98,20)
+## increase contrast, focused, normal focused key dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (48,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff
+## increase contrast, selection, normal focused key dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+fillRRect (21,41,21,16) solid #2d6aac clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff
+## increase contrast, selection inactive, normal focused-inactive inactive dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+fillRRect (21,41,21,16) solid #464646 clip=(11,39,98,20)
+text (14,41,35,16) "Hello" 13pt #ffffff clip=(11,39,98,20)
+## increase contrast, disabled, normal unfocused disabled key dark contrast
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff99
+text (14,41,35,16) "Hello" 13pt #ffffff80 clip=(11,39,98,20)
+## composing, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "aにほんb" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (21,54,20,1) solid #ffffff clip=(11,39,98,20)
+fillRRect (41,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## composing, selected clause, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (14,41,35,16) "ab日本語" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (28,54,13,2) solid #ffffff clip=(11,39,98,20)
+fillRRect (42,54,6,1) solid #ffffff clip=(11,39,98,20)
+fillRRect (41,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80
+## composing overflow, normal focused key dark
+fillRRect (10,38,100,22) solid #1e1e1e
+shadow (10,38,100,22) off=(0,0.5) blur=1 #00000033 inset
+strokeRRect (10.5,38.5,99,21) w=1 solid #ffffff26
+text (-69,41,175,16) "The quick brown foxじゃんぷした" 13pt #ffffff clip=(11,39,98,20)
+fillRRect (64,54,41,1) solid #ffffff clip=(11,39,98,20)
+fillRRect (105,41,2,16) solid #007aff clip=(11,39,98,20)
+strokeRRect (8.5,36.5,103,25) w=3 solid #007aff80

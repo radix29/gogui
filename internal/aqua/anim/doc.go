@@ -1,7 +1,6 @@
 // Package anim is the animation engine of the drawn aqua driver (PLAN.md
 // §5.5): cubic-bezier timing curves (Curve), damped springs in closed form
-// (Spring, Motion) and linear interpolation of the driver's value types
-// (Lerp, LerpColor, LerpPoint, LerpSize, LerpRect), all pure; and floats
+// (Spring, Motion) and linear interpolation (Lerp), all pure; and floats
 // animated by them (Value: tweens, delayed tweens, springs released with
 // the current or an explicit velocity, exponential momentum decays that
 // end at a rest position, and repeating 0…1 loops) on a Timeline that the

@@ -36,6 +36,26 @@ import (
 //     on the host); ResizeBuffers leaves it alone.
 //
 // Without a pacing surface (none visible) the hold alone paces the frames.
+// After a frame that presented, on surfaces that all have a waitable and
+// outside a modal loop, the hold is only half a period after the frame's
+// start (S6.2e): the waitables pace the next frame, which starts as soon
+// as the display has taken this one, not only at DWM's next vblank. With
+// several monitors DWM's grid (16.680 ms on the host's four in S6.2d) is
+// not the displays' (16.666 ms), and a frame held to it started late in
+// the composition's period for seconds at a time, missing vblanks with
+// work that fitted the frame; with one monitor the waitable signals about
+// 0.2 ms after the vblank, so nothing changes there. A frame that
+// presented nothing still holds the next one to its target vblank, so it
+// runs once per refresh.
+// With open surfaces but no window on screen (every surface hidden or
+// minimized, no popup shown: Shell.offScreen) the hold is at least
+// hiddenInterval after the previous frame's start, so a running animation
+// costs 4 frames a second, not one per refresh; its time keeps moving, so
+// a value still ends (S6.2b). Showing or restoring a window ends the low
+// rate at once: the next arm uses the vsync hold again. A fully occluded
+// window keeps the vsync rate: the Present of a composition swap chain
+// reports no DXGI_STATUS_OCCLUDED (DirectComposition, not DXGI, knows what
+// is visible), and nothing else tells it cheaply.
 // The loop waits in MsgWaitForMultipleObjectsEx on the timer or the
 // waitables and the message queue, so input keeps flowing; a waitable that
 // stays unsignaled for stallTimeout counts as signaled. Idle means no
@@ -44,8 +64,11 @@ import (
 //
 // Modal loops (the size/move loop between WM_ENTERSIZEMOVE and
 // WM_EXITSIZEMOVE, the menu loop) run their own message loop, so there a
-// frame comes from a posted msgFrame or, during the hold, the listener's
-// WM_TIMER (coarse; WM_SIZE paints synchronously anyway).
+// frame comes from the listener's WM_TIMER, never a posted msgFrame,
+// which would come before the loop's input (coarse; WM_SIZE paints
+// synchronously anyway). A frame there still waits for a pacing surface's
+// waitable (chainReady), polled on the WM_TIMER, since a frame started
+// early blocks the loop.
 
 // defaultPeriod is the refresh period when DWM reports no timing.
 const defaultPeriod = time.Second / 60
@@ -54,6 +77,10 @@ const defaultPeriod = time.Second / 60
 // before it takes the frame anyway (a stuck chain). It is a deadline, not a
 // per-wait timeout, so messages arriving meanwhile don't extend it.
 const stallTimeout = 100 * time.Millisecond
+
+// hiddenInterval is the shortest time between two frame starts while no
+// window is on screen (S6.2b): 4 Hz.
+const hiddenInterval = time.Second / 4
 
 // timerFrame is the listener's WM_TIMER ID for frames in a modal loop.
 const timerFrame = 1
@@ -70,6 +97,7 @@ type clock struct {
 
 	requested bool // a frame is requested
 	inFrame   bool // the frame function or the paint pass runs
+	inFn      bool // the frame function runs: Invalidate requests no frame
 
 	last   time.Duration // start of the last frame; -1 before the first
 	target time.Duration // target time of the last frame
@@ -90,10 +118,23 @@ type clock struct {
 	// timeline (tests replace it).
 	timing func() (period, vblank time.Duration, ok bool)
 
-	// Counters (tests): frames run, waits armed with a timer, a timeout or
-	// a waitable, the waits on waitables, those that timed out, and the
-	// frames run from a modal loop.
-	frames, waits, chainWaits, stalls, modalFrames int
+	// The presents of the running frame and whether one was on a window
+	// without a waitable (S6.2e).
+	framePresents int
+	unpaced       bool
+
+	stats clockStats // counters (tests)
+
+	// timer measures each frame for the observer (SetFrameObserver).
+	frameTimer shell.FrameTimer
+	// presentObserver receives the presentation feedback
+	// (SetPresentObserver, pacing.go).
+	presentObserver func(shell.PresentTiming)
+
+	// handles is the scratch of arm's and chainReady's wait handles
+	// (review P17): their callers are done with them before the next
+	// idle step.
+	handles []windows.Handle
 }
 
 var _ shell.FrameClock = (*clock)(nil)
@@ -122,6 +163,12 @@ func (c *clock) Now() time.Duration {
 func (c *clock) SetFrameFunc(fn func(frameTime time.Duration)) {
 	c.s.q.Check("win32.Clock.SetFrameFunc")
 	c.fn = fn
+}
+
+// SetFrameObserver implements shell.FrameClock.
+func (c *clock) SetFrameObserver(fn func(shell.FrameTiming)) {
+	c.s.q.Check("win32.Clock.SetFrameObserver")
+	c.frameTimer.SetObserver(fn)
 }
 
 // RequestFrame implements shell.FrameClock. Outside a modal loop the
@@ -209,24 +256,27 @@ func (c *clock) arm() (handles []windows.Handle, ms uint32, now bool) {
 		return nil, w32.INFINITE, false
 	}
 	t := c.now()
-	if t < c.hold {
-		if c.setTimer(c.hold, t) {
-			return []windows.Handle{c.timer}, w32.INFINITE, false
+	if hold := c.due(); t < hold {
+		if c.setTimer(hold, t) {
+			c.handles = append(c.handles[:0], c.timer)
+			return c.handles, w32.INFINITE, false
 		}
-		return nil, uint32((c.hold - t + time.Millisecond - 1) / time.Millisecond), false
+		return nil, uint32((hold - t + time.Millisecond - 1) / time.Millisecond), false
 	}
 	c.cancelTimer()
 	pacing := c.s.pacingSurfaces()
 	if len(pacing) == 0 {
 		return nil, 0, true
 	}
+	handles = c.handles[:0]
 	for _, sf := range pacing {
 		if sf.ticket {
 			return nil, 0, true
 		}
 		handles = append(handles, sf.waitable)
 	}
-	c.chainWaits++
+	c.handles = handles
+	c.stats.chainWaits++
 	if c.chainSince < 0 {
 		c.chainSince = t
 	}
@@ -238,6 +288,16 @@ func (c *clock) arm() (handles []windows.Handle, ms uint32, now bool) {
 	return handles, uint32((left + time.Millisecond - 1) / time.Millisecond), false
 }
 
+// due returns when the requested frame may start: the hold, but with no
+// window on screen at least hiddenInterval after the previous frame's
+// start (S6.2b).
+func (c *clock) due() time.Duration {
+	if c.last >= 0 && c.s.offScreen() {
+		return max(c.hold, c.last+hiddenInterval)
+	}
+	return c.hold
+}
+
 // signaled handles a signaled handle of arm's wait: a waitable pays its
 // surface's debt or gives it a ticket; the timer only ends the hold.
 func (c *clock) signaled(h windows.Handle) {
@@ -245,7 +305,7 @@ func (c *clock) signaled(h windows.Handle) {
 		c.timerDue = -1
 		return
 	}
-	for _, sf := range c.s.surfaces {
+	for sf := range c.s.allWindows() {
 		if sf.waitable == h {
 			sf.signal()
 			return
@@ -256,8 +316,8 @@ func (c *clock) signaled(h windows.Handle) {
 // stalled handles a wait on the waitables that timed out: every surface
 // waited on gets a ticket.
 func (c *clock) stalled(handles []windows.Handle) {
-	c.stalls++
-	for _, sf := range c.s.surfaces {
+	c.stats.stalls++
+	for sf := range c.s.allWindows() {
 		for _, h := range handles {
 			if sf.waitable == h {
 				sf.debt, sf.ticket = 0, true
@@ -306,103 +366,74 @@ func (c *clock) frame() {
 	c.last = t
 	c.requested = false
 	c.chainSince = -1
-	c.frames++
+	c.stats.frames++
+	c.framePresents, c.unpaced = 0, false
+	if c.s.offScreen() {
+		c.stats.hiddenFrames++
+	}
 	c.inFrame = true
 	defer func() {
-		c.inFrame = false
+		c.inFrame, c.inFn = false, false
 		if c.requested && c.modal() {
 			c.scheduleModal()
 		}
 	}()
+	c.frameTimer.Begin(c.target)
 	if c.fn != nil {
+		var start time.Duration // QPC, as in render
+		if c.frameTimer.Active() {
+			start = c.now()
+		}
+		c.inFn = true
 		c.fn(c.target)
+		c.inFn = false
+		if c.frameTimer.Active() {
+			c.frameTimer.FrameFunc(c.now() - start)
+		}
 	}
 	if c.paint != nil {
 		c.paint(c.target)
 	}
+	if c.framePresents > 0 && !c.unpaced && !c.s.offScreen() && !c.modal() {
+		// The waitables pace the next frame (S6.2e): it may start as soon
+		// as the display has taken this one, not only at the next vblank.
+		c.hold = c.last + period/2
+		c.stats.waitPaced++
+	}
+	c.frameTimer.End()
 }
 
-// modal reports whether a surface is in a modal size/move or menu loop.
-func (c *clock) modal() bool {
-	for _, sf := range c.s.surfaces {
-		if (sf.sizing || sf.menuLoop) && !sf.dead {
-			return true
-		}
-	}
-	return false
-}
-
-// modalChanged follows a surface entering or leaving a modal loop.
-func (c *clock) modalChanged() {
-	if !c.modal() {
-		c.stopModal() // the message loop takes over
-		return
-	}
-	c.cancelTimer()
-	if c.requested && !c.inFrame {
-		c.scheduleModal()
+// invalidated requests the frame that paints a window just invalidated,
+// except while the frame function runs: the paint pass of that frame
+// paints it, so an animation whose last change invalidates ends without
+// an empty frame after it (PLAN.md S6.2a).
+func (c *clock) invalidated() {
+	if !c.inFn {
+		c.RequestFrame()
 	}
 }
 
-// scheduleModal arranges a frame inside a modal loop: a msgFrame once the
-// hold has passed, else the listener's WM_TIMER.
-func (c *clock) scheduleModal() {
-	if c.scheduled || c.s.quit || c.s.listener == 0 {
-		return
-	}
-	c.scheduled = true
-	if wait := c.hold - c.now(); wait > 0 {
-		ms := uint32((wait + time.Millisecond - 1) / time.Millisecond)
-		if w32.SetTimer(c.s.listener, timerFrame, ms) == nil {
-			c.modalTimer = true
-			return
-		}
-	}
-	// Fails only once the listener is gone.
-	_ = w32.PostMessage(c.s.listener, msgFrame, frameModal, 0)
-}
-
-func (c *clock) stopModal() {
-	if c.modalTimer {
-		_ = w32.KillTimer(c.s.listener, timerFrame)
-		c.modalTimer = false
-	}
-	c.scheduled = false
-}
-
-// modalFrame runs on the posted msgFrame and the WM_TIMER: the frame, if
-// still in a modal loop (else the message loop runs it).
-func (c *clock) modalFrame() {
-	c.stopModal()
-	if !c.modal() || !c.requested || c.inFrame {
-		return
-	}
-	if c.now() < c.hold {
-		c.scheduleModal()
-		return
-	}
-	c.modalFrames++
-	c.frame()
-}
-
-// pacingSurfaces returns the surfaces whose waitables pace the next frame:
-// the visible ones with a waitable, only the invalid ones if any are, at
-// most MAXIMUM_WAIT_OBJECTS-1.
-func (s *Shell) pacingSurfaces() []*surface {
-	var all, invalid []*surface
+// offScreen reports whether the shell has an open surface and no window
+// (surface or popup) on screen, the clock's low rate (S6.2b). Without any
+// surface (before the first, after the last) it is false, so the frames of
+// start-up keep the vsync rate.
+func (s *Shell) offScreen() bool {
+	open := false
 	for _, sf := range s.surfaces {
-		if sf.waitable == 0 || !sf.paintable() {
-			continue
-		}
-		all = append(all, sf)
-		if sf.invalid {
-			invalid = append(invalid, sf)
+		if !sf.dead {
+			open = true
+			break
 		}
 	}
-	if len(invalid) > 0 {
-		all = invalid
+	if !open {
+		return false
 	}
-	return all[:min(len(all), w32.MAXIMUM_WAIT_OBJECTS-1)]
+	for sf := range s.allWindows() {
+		if sf.paintable() {
+			return false
+		}
+	}
+	return true
 }
 
 // wait is one idle step of the message loop, with the queue empty: the
@@ -419,7 +450,7 @@ func (s *Shell) wait() error {
 		return nil
 	}
 	if len(handles) > 0 || ms != w32.INFINITE {
-		c.waits++
+		c.stats.waits++
 	}
 	r, err := w32.MsgWaitForMultipleObjectsEx(handles, ms, w32.QS_ALLINPUT, w32.MWMO_INPUTAVAILABLE)
 	switch {
@@ -433,22 +464,15 @@ func (s *Shell) wait() error {
 	return nil
 }
 
-// signal takes a signal from the surface's waitable: a debt is paid,
-// else the surface gets its ticket.
-func (sf *surface) signal() {
-	if sf.debt > 0 {
-		sf.debt--
-		return
-	}
-	sf.ticket = true
-}
-
-// presented accounts for a Present: it spends the ticket or adds a debt.
-func (sf *surface) presented() {
-	sf.presents++
-	if sf.ticket {
-		sf.ticket = false
-		return
-	}
-	sf.debt++
+// clockStats are the clock's counters, read by tests.
+type clockStats struct {
+	frames      int // frames run
+	waits       int // waits armed with a timer, a timeout or a waitable
+	chainWaits  int // waits on waitables
+	stalls      int // waits on waitables that timed out
+	modalFrames int // frames run from a modal loop
+	// hiddenFrames are the frames run with no window on screen (S6.2b).
+	hiddenFrames int
+	// waitPaced are the frames whose successor the waitables pace alone (S6.2e).
+	waitPaced int
 }

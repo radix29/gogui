@@ -20,16 +20,28 @@ import (
 //     sharp corners stay sharp), padded by 3σ. Inset: a ring, a rect around
 //     the shape (grown by 3σ plus the offset, so the shifted ring still
 //     covers the shape) with the shape shrunk by Spread cut out.
-//   - The shadow effect gets the mask, σ = Blur/2 (DIPs) and the color; its
-//     output is drawn at the shape's origin plus Offset under the current
-//     transform, so the shadow follows translations, scales and rotations.
+//   - The shadow: the Shadow effect gets the mask, σ = Blur/2 (DIPs) and the
+//     color; its output is baked (S6.2e) into a bitmap of the mask's size
+//     and DPI on the mask context, once, and that bitmap is drawn at the
+//     shape's origin plus Offset under the current transform, so the
+//     shadow follows translations, scales and rotations. The mask's padding
+//     holds the blur's 3σ, so the bitmap loses nothing that shows. Baking
+//     takes the blur off the frame: before it the effect ran on every
+//     EndDraw, about 0.4 ms of the gallery's 1 ms submit on the host.
 //   - The clip: a geometry layer, the outside of the shape (a rect around
 //     the drawn shadow with the shape cut out) for outer shadows, the shape
 //     itself for inset ones.
-//   - Caches for the frame: masks by shape size, radii, spread, blur, inset
-//     and the inset ring's margin; effects by mask and color (an effect's
-//     input and properties are only set when it is made, so two shadows in a
-//     batch never share a mutated effect). release frees them after EndDraw.
+//   - The cache (S6.2e) is the device's (gpu.shadows), kept across frames:
+//     masks by shape size, radii, spread, blur, inset, the inset ring's
+//     margin and the DPI; baked shadows by mask and color. A steady frame
+//     makes no bitmap and runs no effect: before the cache the masks'
+//     CreateBitmap and their EndDraw on the mask context were about half of
+//     the gallery's PaintTree (S6.2c). After each paint (trim, from
+//     canvas.release, after EndDraw) an entry unused for shadowKeep paints
+//     goes, and so do the least recently used masks (with their shadows)
+//     beyond shadowMaxMasks or shadowMaxPixels, never one the paint used.
+//     The device's release (device loss, the last surface closed) frees
+//     the rest.
 //   - A semantic or transparent color, a shape with no area, an outer shape
 //     shrunk away by a negative spread, or values that don't narrow draw
 //     nothing.
@@ -45,27 +57,123 @@ type maskKey struct {
 	blur   float64
 	ext    float64 // the inset ring's margin around the shape (0 for outer)
 	inset  bool
+	dpi    float32 // the mask's (the surface's)
 }
 
-// shadowMask is a mask bitmap and where its origin lies relative to the
-// shape's top-left corner, in user-space points.
+// shadowMask is a mask bitmap, its size in pixels and where its origin
+// lies relative to the shape's top-left corner, in user-space points.
 type shadowMask struct {
 	bmp    d2d.Bitmap1
+	pw, ph uint32
 	origin render.Point
 }
 
-// effectKey identifies a cached shadow effect.
-type effectKey struct {
+// shadowKey identifies a baked shadow.
+type shadowKey struct {
 	mask  maskKey
 	color d2d.ColorF
 }
 
-// shadowEffect is a shadow effect on a mask and its output (one reference
-// each).
-type shadowEffect struct {
-	effect d2d.Effect
-	out    d2d.Image
+// The cache's bounds (shadowCache.trim): an entry unused for shadowKeep
+// paints goes (4 s of a 60 Hz animation in one window); beyond
+// shadowMaxMasks masks or shadowMaxPixels pixels of masks and baked shadows
+// (32 MB) the least recently used masks go.
+const (
+	shadowKeep      = 240
+	shadowMaxMasks  = 256
+	shadowMaxPixels = 8 << 20
+)
+
+// shadowCache is the device's masks and baked shadows, kept across frames.
+type shadowCache struct {
+	paint  uint64 // counts the canvases (newCanvas)
+	masks  map[maskKey]*cachedMask
+	baked  map[shadowKey]*cachedShadow
+	pixels int                 // of the masks and baked shadows
+	brush  d2d.SolidColorBrush // on the mask context
 }
+
+type cachedMask struct {
+	shadowMask
+	used uint64 // the last paint that drew it
+}
+
+// cachedShadow is a baked shadow: its bitmap, the size of its mask's.
+type cachedShadow struct {
+	bmp  d2d.Bitmap1
+	used uint64
+}
+
+// begin starts a paint (newCanvas).
+func (sc *shadowCache) begin() {
+	sc.paint++
+	if sc.masks == nil {
+		sc.masks = map[maskKey]*cachedMask{}
+		sc.baked = map[shadowKey]*cachedShadow{}
+	}
+}
+
+// trim drops what the bounds rule out (the file comment). A shadow is
+// drawn only with its mask, so a mask that goes takes its shadows along.
+func (sc *shadowCache) trim(last func(what string, p *com.Ptr)) {
+	stale := func(used uint64) bool { return used+shadowKeep < sc.paint }
+	for k, m := range sc.masks {
+		if stale(m.used) {
+			sc.dropMask(k, last)
+		}
+	}
+	for len(sc.masks) > shadowMaxMasks || sc.pixels > shadowMaxPixels {
+		var oldest maskKey
+		at := uint64(math.MaxUint64)
+		for k, m := range sc.masks {
+			if m.used < at {
+				oldest, at = k, m.used
+			}
+		}
+		if at >= sc.paint {
+			break // every one drawn by this paint
+		}
+		sc.dropMask(oldest, last)
+	}
+	for k, b := range sc.baked {
+		if stale(b.used) {
+			sc.dropShadow(k, b, last)
+		}
+	}
+}
+
+func (sc *shadowCache) dropShadow(k shadowKey, b *cachedShadow, last func(what string, p *com.Ptr)) {
+	m := sc.masks[k.mask]
+	sc.pixels -= int(m.pw) * int(m.ph)
+	last("ID2D1Bitmap1 (shadow)", &b.bmp.Ptr)
+	delete(sc.baked, k)
+}
+
+// dropMask releases a mask and every shadow baked from it.
+func (sc *shadowCache) dropMask(k maskKey, last func(what string, p *com.Ptr)) {
+	for bk, b := range sc.baked {
+		if bk.mask == k {
+			sc.dropShadow(bk, b, last)
+		}
+	}
+	m := sc.masks[k]
+	sc.pixels -= int(m.pw) * int(m.ph)
+	last("ID2D1Bitmap1 (shadow mask)", &m.bmp.Ptr)
+	delete(sc.masks, k)
+}
+
+// release frees every entry and the mask brush (the device's release).
+func (sc *shadowCache) release(last func(what string, p *com.Ptr)) {
+	for k := range sc.masks {
+		sc.dropMask(k, last)
+	}
+	if !sc.brush.IsNil() {
+		last("ID2D1SolidColorBrush (mask)", &sc.brush.Ptr)
+	}
+}
+
+// len returns the number of cached masks and baked shadows (tests).
+func (sc *shadowCache) len() (masks, baked int) { return len(sc.masks), len(sc.baked) }
 
 // grow returns r grown by d on every side (shrunk for negative d).
 func grow(r render.Rect, d float64) render.Rect {
@@ -102,7 +210,7 @@ func (c *canvas) DrawShadow(r render.Rect, radii render.Radii, s render.Shadow) 
 		return
 	}
 	radii = radii.Clamped(r)
-	key := maskKey{w: r.W, h: r.H, radii: radii, spread: s.Spread, blur: s.Blur, inset: s.Inset}
+	key := maskKey{w: r.W, h: r.H, radii: radii, spread: s.Spread, blur: s.Blur, inset: s.Inset, dpi: c.dpi}
 	if s.Inset {
 		key.ext = 3*s.Blur/2 + math.Abs(s.Offset.X) + math.Abs(s.Offset.Y) + math.Max(-s.Spread, 0) + 1
 	}
@@ -114,7 +222,7 @@ func (c *canvas) DrawShadow(r render.Rect, radii render.Radii, s render.Shadow) 
 	if !ok {
 		return
 	}
-	e, ok := c.shadowEffect(effectKey{mask: key, color: color}, m)
+	b, ok := c.shadow(shadowKey{mask: key, color: color}, m)
 	if !ok {
 		return
 	}
@@ -122,14 +230,14 @@ func (c *canvas) DrawShadow(r render.Rect, radii render.Radii, s render.Shadow) 
 	if !ok {
 		return
 	}
-	c.dc.PushLayer(&d2d.LayerParameters1{
+	c.drawDC().PushLayer(&d2d.LayerParameters1{
 		ContentBounds:     d2d.InfiniteRect(),
 		GeometricMask:     clip.Ptr,
 		MaskAntialiasMode: d2d.ANTIALIAS_MODE_PER_PRIMITIVE,
 		MaskTransform:     d2d.IdentityMatrix(),
 		Opacity:           1,
 	})
-	c.dc.DrawImage(e.out, &at, nil, d2d.INTERPOLATION_MODE_LINEAR, d2d.COMPOSITE_MODE_SOURCE_OVER)
+	c.drawDC().DrawImage(b.Image(), &at, nil, d2d.INTERPOLATION_MODE_LINEAR, d2d.COMPOSITE_MODE_SOURCE_OVER)
 	c.dc.PopLayer()
 }
 
@@ -149,12 +257,14 @@ func (c *canvas) shadowClip(r render.Rect, radii render.Radii, s render.Shadow) 
 	return g.Geometry(), ok
 }
 
-// shadowMask returns the frame's mask for key, drawing it on the mask
+// shadowMask returns the cached mask for key, drawing it on the mask
 // context if there is none yet.
 func (c *canvas) shadowMask(key maskKey) (shadowMask, bool) {
-	if m, ok := c.masks[key]; ok {
+	sc := c.shadows
+	if m, ok := sc.masks[key]; ok {
 		c.maskHits++
-		return m, true
+		m.used = sc.paint
+		return m.shadowMask, true
 	}
 	shape := render.Rect{W: key.w, H: key.h}
 	pad := 3*key.blur/2 + 1 // 3σ, and a pixel for the antialiased edge
@@ -181,7 +291,7 @@ func (c *canvas) shadowMask(key maskKey) (shadowMask, bool) {
 			addRoundedRect(&path, g, gr)
 		}
 	}
-	dpi := c.dpi
+	dpi := key.dpi
 	if !(dpi > 0) {
 		dpi = 96
 	}
@@ -209,20 +319,15 @@ func (c *canvas) shadowMask(key maskKey) (shadowMask, bool) {
 		}
 		geom = g.Geometry()
 	}
-	if c.maskBrush.IsNil() {
+	if sc.brush.IsNil() {
 		b, err := c.mask.CreateSolidColorBrush(d2d.ColorF{R: 1, G: 1, B: 1, A: 1}, d2d.DefaultBrushProperties())
 		if err != nil {
 			c.fail(err)
 			return shadowMask{}, false
 		}
-		c.maskBrush = b
+		sc.brush = b
 	}
-	bmp, err := c.mask.CreateBitmap(d2d.SizeU{Width: uint32(pw), Height: uint32(ph)}, nil, 0, &d2d.BitmapProperties1{
-		PixelFormat:   d2d.PixelFormat{Format: dxgi.FORMAT_B8G8R8A8_UNORM, AlphaMode: d2d.ALPHA_MODE_PREMULTIPLIED},
-		DpiX:          dpi,
-		DpiY:          dpi,
-		BitmapOptions: d2d.BITMAP_OPTIONS_TARGET,
-	})
+	bmp, err := c.maskBitmap(uint32(pw), uint32(ph), dpi)
 	if err != nil {
 		c.fail(err)
 		return shadowMask{}, false
@@ -234,9 +339,9 @@ func (c *canvas) shadowMask(key maskKey) (shadowMask, bool) {
 	mc.Clear(d2d.ColorF{})
 	mc.SetTransform(xf)
 	if fill != nil {
-		mc.FillRoundedRectangle(rr, c.maskBrush.Brush())
+		mc.FillRoundedRectangle(rr, sc.brush.Brush())
 	} else {
-		mc.FillGeometry(geom, c.maskBrush.Brush())
+		mc.FillGeometry(geom, sc.brush.Brush())
 	}
 	mc.SetTransform(d2d.IdentityMatrix())
 	err = mc.EndDraw()
@@ -246,34 +351,78 @@ func (c *canvas) shadowMask(key maskKey) (shadowMask, bool) {
 		bmp.Release()
 		return shadowMask{}, false
 	}
-	m := shadowMask{bmp: bmp, origin: render.Point{X: bounds.X, Y: bounds.Y}}
-	c.masks[key] = m
+	m := shadowMask{bmp: bmp, pw: uint32(pw), ph: uint32(ph), origin: render.Point{X: bounds.X, Y: bounds.Y}}
+	sc.masks[key] = &cachedMask{shadowMask: m, used: sc.paint}
+	sc.pixels += int(pw) * int(ph)
+	c.masksMade++
 	return m, true
 }
 
-// shadowEffect returns the frame's shadow effect for key on the mask m.
-func (c *canvas) shadowEffect(key effectKey, m shadowMask) (shadowEffect, bool) {
-	if e, ok := c.effects[key]; ok {
-		return e, true
+// maskBitmap makes a premultiplied BGRA target bitmap on the mask context.
+func (c *canvas) maskBitmap(pw, ph uint32, dpi float32) (d2d.Bitmap1, error) {
+	return c.mask.CreateBitmap(d2d.SizeU{Width: pw, Height: ph}, nil, 0, &d2d.BitmapProperties1{
+		PixelFormat:   d2d.PixelFormat{Format: dxgi.FORMAT_B8G8R8A8_UNORM, AlphaMode: d2d.ALPHA_MODE_PREMULTIPLIED},
+		DpiX:          dpi,
+		DpiY:          dpi,
+		BitmapOptions: d2d.BITMAP_OPTIONS_TARGET,
+	})
+}
+
+// shadow returns the cached baked shadow for key on the mask m, baking it
+// if there is none: a Shadow effect on the mask context (an effect belongs
+// to the context that made it), drawn once into a bitmap of the mask's
+// size and DPI, then released.
+func (c *canvas) shadow(key shadowKey, m shadowMask) (d2d.Bitmap1, bool) {
+	sc := c.shadows
+	if b, ok := sc.baked[key]; ok {
+		b.used = sc.paint
+		return b.bmp, true
 	}
-	eff, err := c.dc.CreateEffect(&d2d.CLSID_D2D1Shadow)
+	mc := c.mask
+	eff, err := mc.CreateEffect(&d2d.CLSID_D2D1Shadow)
 	if err != nil {
 		c.fail(err)
-		return shadowEffect{}, false
+		return d2d.Bitmap1{}, false
 	}
+	defer eff.Release()
 	col := key.color
 	if err := firstErr(
 		eff.SetFloat(d2d.SHADOW_PROP_BLUR_STANDARD_DEVIATION, float32(key.mask.blur/2)),
 		eff.SetVector4(d2d.SHADOW_PROP_COLOR, d2d.Vector4F{X: col.R, Y: col.G, Z: col.B, W: col.A}),
 	); err != nil {
 		c.fail(err)
-		eff.Release()
-		return shadowEffect{}, false
+		return d2d.Bitmap1{}, false
+	}
+	dpi := key.mask.dpi
+	if !(dpi > 0) {
+		dpi = 96
+	}
+	bmp, err := c.maskBitmap(m.pw, m.ph, dpi)
+	if err != nil {
+		c.fail(err)
+		return d2d.Bitmap1{}, false
 	}
 	eff.SetInput(0, m.bmp.Image())
-	e := shadowEffect{effect: eff, out: eff.Output()}
-	c.effects[key] = e
-	return e, true
+	out := eff.Output()
+	mc.SetTarget(bmp.Ptr)
+	mc.SetDpi(dpi, dpi)
+	mc.BeginDraw()
+	mc.Clear(d2d.ColorF{})
+	mc.SetTransform(d2d.IdentityMatrix())
+	mc.DrawImage(out, &d2d.Point2F{}, nil, d2d.INTERPOLATION_MODE_LINEAR, d2d.COMPOSITE_MODE_SOURCE_OVER)
+	err = mc.EndDraw()
+	mc.SetTarget(0)
+	out.Release()
+	eff.SetInput(0, d2d.Image{}) // the effect lets go of the mask
+	if err != nil {
+		c.fail(err)
+		bmp.Release()
+		return d2d.Bitmap1{}, false
+	}
+	sc.baked[key] = &cachedShadow{bmp: bmp, used: sc.paint}
+	sc.pixels += int(m.pw) * int(m.ph)
+	c.shadowsBaked++
+	return bmp, true
 }
 
 // firstErr returns the first non-nil error.
@@ -284,22 +433,4 @@ func firstErr(errs ...error) error {
 		}
 	}
 	return nil
-}
-
-// releaseShadows releases the frame's effects (before the masks they hold
-// as inputs), masks and the mask brush; last releases what must be the last
-// reference.
-func (c *canvas) releaseShadows(last func(what string, p *com.Ptr)) {
-	for k, e := range c.effects {
-		e.out.Release() // the effect holds its output too
-		last("ID2D1Effect (shadow)", &e.effect.Ptr)
-		delete(c.effects, k)
-	}
-	for k, m := range c.masks {
-		last("ID2D1Bitmap1 (shadow mask)", &m.bmp.Ptr)
-		delete(c.masks, k)
-	}
-	if !c.maskBrush.IsNil() {
-		last("ID2D1SolidColorBrush (mask)", &c.maskBrush.Ptr)
-	}
 }

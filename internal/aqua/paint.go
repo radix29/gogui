@@ -32,8 +32,8 @@ import (
 // flag is cleared before the element paints, so an element that
 // invalidates during Paint (an animation asking for the next frame) stays
 // dirty and its root's callback runs again. The children are read once
-// before they are painted, so a Paint that changes the tree does not break
-// the traversal.
+// before they are painted (the slice is copy-on-write, so without a copy),
+// so a Paint that changes the tree does not break the traversal.
 func PaintTree(c render.Canvas, e Element) {
 	paintTree(c, e, nil, paintOverflow())
 }
@@ -102,7 +102,7 @@ func paintTree(c render.Canvas, e Element, clip *driver.Rect, margin float64) {
 			}
 			inner = &r
 		}
-		for _, ch := range b.Children() {
+		for _, ch := range b.children { // a copy-on-write snapshot
 			paintTree(c, ch, inner, margin)
 		}
 	}

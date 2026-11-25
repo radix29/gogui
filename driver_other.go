@@ -10,12 +10,11 @@ import (
 
 // newPlatformDriver creates the Windows or Linux driver: the aqua driver
 // over the OS's shell (Win32 since S2.3f, GTK 4 since S4.1d). If the OS
-// has no shell (a BSD), it returns a driver whose Run fails with the
-// native.New error.
-func newPlatformDriver() driver.Driver {
+// has no shell (a BSD), it returns the native.New error.
+func newPlatformDriver() (driver.Driver, error) {
 	sh, err := native.New()
 	if err != nil {
-		return failedDriver("aqua", err)
+		return nil, err
 	}
-	return aqua.New(sh)
+	return aqua.New(sh), nil
 }

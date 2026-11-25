@@ -10,6 +10,11 @@ import (
 // SetMinHeight, never from the document. It expands on each axis that has
 // a scroller. On those axes the document gets its natural size (at least
 // the visible area); on the others it fills the visible area.
+//
+// On Windows and Linux the scrollers follow the OS setting as macOS does:
+// overlay scrollers that show while scrolling, or legacy ones that are
+// always shown and take room (Windows: Settings, "Always show
+// scrollbars"; Linux: gtk-overlay-scrolling off).
 type ScrollView struct {
 	common[*ScrollView]
 	p        driver.ScrollView
@@ -49,7 +54,7 @@ func (s *ScrollView) SetDocument(doc Widget) *ScrollView {
 }
 
 // Document returns the document widget, or nil.
-func (s *ScrollView) Document() Widget { s.check("Document"); return s.doc }
+func (s *ScrollView) Document() Widget { s.get("Document"); return s.doc }
 
 // setDocument puts doc (nil for none) in the layout node and the peer.
 // The caller has made s the parent of doc.
@@ -118,7 +123,7 @@ func (s *ScrollView) SetMinHeight(h float64) *ScrollView {
 // Offset returns the document point shown at the top-left corner of the
 // visible area.
 func (s *ScrollView) Offset() Point {
-	s.check("Offset")
+	s.get("Offset")
 	if s.live() {
 		s.off = s.p.Offset()
 	}
@@ -162,7 +167,7 @@ func (e scrollEvents) Scrolled(offset driver.Point) {
 		return
 	}
 	s.off = offset
-	s.onScroll.each(func(fn func(Point)) { fn(offset) })
+	s.onScroll.eachLive(&s.widget, func(fn func(Point)) { fn(offset) })
 }
 
 // ViewportResized marks the window dirty: the document size depends on

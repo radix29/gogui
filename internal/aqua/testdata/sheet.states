@@ -1,0 +1,372 @@
+## sheet, key, light
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #0000004d
+fillRRect (24,16,260,270) r=10 solid #f2f2f2
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#fafafc 1:#d6d6dc]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #00000026
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #00000073
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #00000073
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #00000026
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #000000d9
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000d9
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000d9
+text (124.385,163.538,59.231,13.538) "save them." 11pt #000000d9
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,194,228,20) r=5 solid #007aff
+text (140,196,28,16) "Save" 13pt #ffffff
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,222,228,20) r=5 solid #ffffff
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #00000026
+text (119,224,70,16) "Don't Save" 13pt #000000d9
+strokeRRect (38.5,220.5,231,23) r=6.5 w=3 solid #007aff80
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,250,228,20) r=5 solid #ffffff
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #00000026
+text (133,252,42,16) "Cancel" 13pt #000000d9
+## sheet, inactive, light
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #0000004d
+fillRRect (24,16,260,270) r=10 solid #f2f2f2
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#fafafc 1:#d6d6dc]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #00000026
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #00000073
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #00000073
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #00000026
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #000000d9
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000d9
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000d9
+text (124.385,163.538,59.231,13.538) "save them." 11pt #000000d9
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,194,228,20) r=5 solid #ffffff
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #00000026
+text (140,196,28,16) "Save" 13pt #000000d9
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,222,228,20) r=5 solid #ffffff
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #00000026
+text (119,224,70,16) "Don't Save" 13pt #000000d9
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (40,250,228,20) r=5 solid #ffffff
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #00000026
+text (133,252,42,16) "Cancel" 13pt #000000d9
+## app-modal, key, light
+fillRRect (0,0,260,270) solid #f2f2f2
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#fafafc 1:#d6d6dc]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #00000026
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #00000073
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #00000073
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #000000d9
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000d9
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000d9
+text (100.385,147.538,59.231,13.538) "save them." 11pt #000000d9
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,178,228,20) r=5 solid #007aff
+text (116,180,28,16) "Save" 13pt #ffffff
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,206,228,20) r=5 solid #ffffff
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #00000026
+text (95,208,70,16) "Don't Save" 13pt #000000d9
+strokeRRect (14.5,204.5,231,23) r=6.5 w=3 solid #007aff80
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,234,228,20) r=5 solid #ffffff
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #00000026
+text (109,236,42,16) "Cancel" 13pt #000000d9
+## app-modal, inactive, light
+fillRRect (0,0,260,270) solid #f2f2f2
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#fafafc 1:#d6d6dc]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #00000026
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #00000073
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #00000073
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #000000d9
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000d9
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000d9
+text (100.385,147.538,59.231,13.538) "save them." 11pt #000000d9
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,178,228,20) r=5 solid #ffffff
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #00000026
+text (116,180,28,16) "Save" 13pt #000000d9
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,206,228,20) r=5 solid #ffffff
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #00000026
+text (95,208,70,16) "Don't Save" 13pt #000000d9
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000033
+fillRRect (16,234,228,20) r=5 solid #ffffff
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #00000026
+text (109,236,42,16) "Cancel" 13pt #000000d9
+## sheet, key, dark
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #00000080
+fillRRect (24,16,260,270) r=10 solid #2c2c2e
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#6e6e73 1:#48484c]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #ffffff26
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #ffffff8c
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #ffffff8c
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #ffffff26
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #ffffffd9
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffffd9
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffffd9
+text (124.385,163.538,59.231,13.538) "save them." 11pt #ffffffd9
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,194,228,20) r=5 solid #007aff
+text (140,196,28,16) "Save" 13pt #ffffff
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,222,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (119,224,70,16) "Don't Save" 13pt #ffffffd9
+strokeRRect (38.5,220.5,231,23) r=6.5 w=3 solid #007aff80
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,250,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (133,252,42,16) "Cancel" 13pt #ffffffd9
+## sheet, inactive, dark
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #00000080
+fillRRect (24,16,260,270) r=10 solid #2c2c2e
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#6e6e73 1:#48484c]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #ffffff26
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #ffffff8c
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #ffffff8c
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #ffffff26
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #ffffffd9
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffffd9
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffffd9
+text (124.385,163.538,59.231,13.538) "save them." 11pt #ffffffd9
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,194,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (140,196,28,16) "Save" 13pt #ffffffd9
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,222,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (119,224,70,16) "Don't Save" 13pt #ffffffd9
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (40,250,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (133,252,42,16) "Cancel" 13pt #ffffffd9
+## app-modal, key, dark
+fillRRect (0,0,260,270) solid #2c2c2e
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#6e6e73 1:#48484c]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #ffffff26
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #ffffff8c
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #ffffff8c
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #ffffffd9
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffffd9
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffffd9
+text (100.385,147.538,59.231,13.538) "save them." 11pt #ffffffd9
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,178,228,20) r=5 solid #007aff
+text (116,180,28,16) "Save" 13pt #ffffff
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,206,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (95,208,70,16) "Don't Save" 13pt #ffffffd9
+strokeRRect (14.5,204.5,231,23) r=6.5 w=3 solid #007aff80
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,234,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (109,236,42,16) "Cancel" 13pt #ffffffd9
+## app-modal, inactive, dark
+fillRRect (0,0,260,270) solid #2c2c2e
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#6e6e73 1:#48484c]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #ffffff26
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #ffffff8c
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #ffffff8c
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #ffffffd9
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffffd9
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffffd9
+text (100.385,147.538,59.231,13.538) "save them." 11pt #ffffffd9
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,178,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (116,180,28,16) "Save" 13pt #ffffffd9
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,206,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (95,208,70,16) "Don't Save" 13pt #ffffffd9
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #0000004d
+fillRRect (16,234,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #ffffff1a
+text (109,236,42,16) "Cancel" 13pt #ffffffd9
+## sheet, key, light, contrast
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #0000004d
+fillRRect (24,16,260,270) r=10 solid #ffffff
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#fafafc 1:#d6d6dc]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #000000bf
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #000000e6
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #000000e6
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #000000bf
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #000000
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000
+text (124.385,163.538,59.231,13.538) "save them." 11pt #000000
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,194,228,20) r=5 solid #007aff
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #0000008c
+text (140,196,28,16) "Save" 13pt #ffffff
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,222,228,20) r=5 solid #ffffff
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #0000008c
+text (119,224,70,16) "Don't Save" 13pt #000000
+strokeRRect (38.5,220.5,231,23) r=6.5 w=3 solid #007aff
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,250,228,20) r=5 solid #ffffff
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #0000008c
+text (133,252,42,16) "Cancel" 13pt #000000
+## sheet, inactive, light, contrast
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #0000004d
+fillRRect (24,16,260,270) r=10 solid #ffffff
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#fafafc 1:#d6d6dc]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #000000bf
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #000000e6
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #000000e6
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #000000bf
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #000000
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000
+text (124.385,163.538,59.231,13.538) "save them." 11pt #000000
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,194,228,20) r=5 solid #ffffff
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #0000008c
+text (140,196,28,16) "Save" 13pt #000000
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,222,228,20) r=5 solid #ffffff
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #0000008c
+text (119,224,70,16) "Don't Save" 13pt #000000
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (40,250,228,20) r=5 solid #ffffff
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #0000008c
+text (133,252,42,16) "Cancel" 13pt #000000
+## app-modal, key, light, contrast
+fillRRect (0,0,260,270) solid #ffffff
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#fafafc 1:#d6d6dc]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #000000bf
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #000000e6
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #000000e6
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #000000
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000
+text (100.385,147.538,59.231,13.538) "save them." 11pt #000000
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,178,228,20) r=5 solid #007aff
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #0000008c
+text (116,180,28,16) "Save" 13pt #ffffff
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,206,228,20) r=5 solid #ffffff
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #0000008c
+text (95,208,70,16) "Don't Save" 13pt #000000
+strokeRRect (14.5,204.5,231,23) r=6.5 w=3 solid #007aff
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,234,228,20) r=5 solid #ffffff
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #0000008c
+text (109,236,42,16) "Cancel" 13pt #000000
+## app-modal, inactive, light, contrast
+fillRRect (0,0,260,270) solid #ffffff
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#fafafc 1:#d6d6dc]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #000000bf
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #000000e6
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #000000e6
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #000000
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #000000
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #000000
+text (100.385,147.538,59.231,13.538) "save them." 11pt #000000
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,178,228,20) r=5 solid #ffffff
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #0000008c
+text (116,180,28,16) "Save" 13pt #000000
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,206,228,20) r=5 solid #ffffff
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #0000008c
+text (95,208,70,16) "Don't Save" 13pt #000000
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000080
+fillRRect (16,234,228,20) r=5 solid #ffffff
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #0000008c
+text (109,236,42,16) "Cancel" 13pt #000000
+## sheet, key, dark, contrast
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #00000080
+fillRRect (24,16,260,270) r=10 solid #000000
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#6e6e73 1:#48484c]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #ffffffbf
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #ffffffe6
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #ffffffe6
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #ffffffbf
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #ffffff
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffff
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffff
+text (124.385,163.538,59.231,13.538) "save them." 11pt #ffffff
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,194,228,20) r=5 solid #007aff
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (140,196,28,16) "Save" 13pt #ffffff
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,222,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (119,224,70,16) "Don't Save" 13pt #ffffff
+strokeRRect (38.5,220.5,231,23) r=6.5 w=3 solid #007aff
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,250,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (133,252,42,16) "Cancel" 13pt #ffffff
+## sheet, inactive, dark, contrast
+shadow (24,16,260,270) r=10 off=(0,8) blur=24 #00000080
+fillRRect (24,16,260,270) r=10 solid #000000
+fillRRect (122,36,64,64) r=14 linear (122,36)->(122,100) [0:#6e6e73 1:#48484c]
+strokeRRect (122.5,36.5,63,63) r=13.5 w=1 solid #ffffffbf
+strokeRRect (136.08,53.92,35.84,28.16) r=3.84 w=2 solid #ffffffe6
+strokePath [M(136.08,61.6) L(171.92,61.6)] w=2 solid #ffffffe6
+strokeRRect (24.5,16.5,259,269) r=9.5 w=1 solid #ffffffbf
+text (45.5,112,217,16) "Do you want to save the changes" 13pt w700 #ffffff
+text (42,128,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffff
+text (41.462,150,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffff
+text (124.385,163.538,59.231,13.538) "save them." 11pt #ffffff
+shadow (40,194,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,194,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,194.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (140,196,28,16) "Save" 13pt #ffffff
+shadow (40,222,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,222,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,222.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (119,224,70,16) "Don't Save" 13pt #ffffff
+shadow (40,250,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (40,250,228,20) r=5 solid #ffffff40
+strokeRRect (40.5,250.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (133,252,42,16) "Cancel" 13pt #ffffff
+## app-modal, key, dark, contrast
+fillRRect (0,0,260,270) solid #000000
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#6e6e73 1:#48484c]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #ffffffbf
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #ffffffe6
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #ffffffe6
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #ffffff
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffff
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffff
+text (100.385,147.538,59.231,13.538) "save them." 11pt #ffffff
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,178,228,20) r=5 solid #007aff
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (116,180,28,16) "Save" 13pt #ffffff
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,206,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (95,208,70,16) "Don't Save" 13pt #ffffff
+strokeRRect (14.5,204.5,231,23) r=6.5 w=3 solid #007aff
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,234,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (109,236,42,16) "Cancel" 13pt #ffffff
+## app-modal, inactive, dark, contrast
+fillRRect (0,0,260,270) solid #000000
+fillRRect (98,20,64,64) r=14 linear (98,20)->(98,84) [0:#6e6e73 1:#48484c]
+strokeRRect (98.5,20.5,63,63) r=13.5 w=1 solid #ffffffbf
+strokeRRect (112.08,37.92,35.84,28.16) r=3.84 w=2 solid #ffffffe6
+strokePath [M(112.08,45.6) L(147.92,45.6)] w=2 solid #ffffffe6
+text (21.5,96,217,16) "Do you want to save the changes" 13pt w700 #ffffff
+text (18,112,224,16) "made to the document \"Untitled\"?" 13pt w700 #ffffff
+text (17.462,134,225.077,13.538) "Your changes will be lost if you don't" 11pt #ffffff
+text (100.385,147.538,59.231,13.538) "save them." 11pt #ffffff
+shadow (16,178,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,178,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,178.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (116,180,28,16) "Save" 13pt #ffffff
+shadow (16,206,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,206,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,206.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (95,208,70,16) "Don't Save" 13pt #ffffff
+shadow (16,234,228,20) r=5 off=(0,0.5) blur=1 #00000099
+fillRRect (16,234,228,20) r=5 solid #ffffff40
+strokeRRect (16.5,234.5,227,19) r=4.5 w=1 solid #ffffff8c
+text (109,236,42,16) "Cancel" 13pt #ffffff

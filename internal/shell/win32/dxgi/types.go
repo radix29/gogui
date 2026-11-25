@@ -108,3 +108,16 @@ const (
 func (d *AdapterDesc) IsWARP() bool {
 	return d.VendorID == VendorMicrosoft && d.DeviceID == DeviceWARP
 }
+
+// FrameStatistics is DXGI_FRAME_STATISTICS: the chain's most recent
+// present the display has shown. PresentCount numbers the presents as
+// GetLastPresentCount does; PresentRefreshCount is the vblank count when
+// it was shown, SyncRefreshCount the vblank count when the statistics
+// were sampled, at SyncQPCTime (performance-counter ticks).
+type FrameStatistics struct {
+	PresentCount        uint32
+	PresentRefreshCount uint32
+	SyncRefreshCount    uint32
+	SyncQPCTime         int64 // LARGE_INTEGER
+	SyncGPUTime         int64 // LARGE_INTEGER
+}

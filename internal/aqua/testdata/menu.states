@@ -1,0 +1,440 @@
+## opaque, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f2f2f2
+text (21,8,35,16) "Small" 13pt #000000d9
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,30,42,16) "Medium" 13pt #000000d9
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+text (21,107,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## opaque, highlighted, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f2f2f2
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,30,42,16) "Medium" 13pt #000000d9
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+text (21,107,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## opaque, highlighted checked, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f2f2f2
+text (21,8,35,16) "Small" 13pt #000000d9
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+text (21,107,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## translucent, highlighted, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f6f6f6a6
+text (21,8,35,16) "Small" 13pt #000000d9
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,30,42,16) "Medium" 13pt #000000d9
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+fillRRect (5,104,116,22) r=4 solid #007aff
+text (21,107,84,16) "Custom size…" 13pt #ffffff
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## shadow, light, 150x155
+shadow (12,8,126,131) r=6 off=(0,4) blur=12 #00000040
+fillRRect (12,8,126,131) r=6 solid #f2f2f2
+text (33,16,35,16) "Small" 13pt #000000d9
+strokePath [M(22.5,46.357) L(24.286,48.143) L(27.5,43.857)] w=1.75 cap=round join=round solid #000000d9
+text (33,38,42,16) "Medium" 13pt #000000d9
+text (33,60,35,16) "Large" 13pt #00000040
+strokePath [M(22.5,90.357) L(24.286,92.143) L(27.5,87.857)] w=1.75 cap=round join=round solid #00000040
+text (33,82,28,16) "Huge" 13pt #00000040
+fillRRect (22,106,106,1) solid #0000001a
+text (33,115,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (12.5,8.5,125,130) r=5.5 w=1 solid #00000026
+## increased contrast, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #ffffff
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000
+text (21,30,42,16) "Medium" 13pt #000000
+text (21,52,35,16) "Large" 13pt #0000008c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #0000008c
+text (21,74,28,16) "Huge" 13pt #0000008c
+fillRRect (10,98,106,1) solid #00000080
+text (21,107,84,16) "Custom size…" 13pt #000000
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #000000bf
+## small, light, 114x116
+fillRRect (0,0,114,116) r=6 solid #f2f2f2
+text (21,7.731,29.615,13.538) "Small" 11pt #000000d9
+fillRRect (5,24,104,19) r=4 solid #007aff
+strokePath [M(10.5,33.857) L(12.286,35.643) L(15.5,31.357)] w=1.75 cap=round join=round solid #ffffff
+text (21,26.731,35.538,13.538) "Medium" 11pt #ffffff
+text (21,45.731,29.615,13.538) "Large" 11pt #00000040
+strokePath [M(10.5,71.857) L(12.286,73.643) L(15.5,69.357)] w=1.75 cap=round join=round solid #00000040
+text (21,64.731,23.692,13.538) "Huge" 11pt #00000040
+fillRRect (10,86,94,1) solid #0000001a
+text (21,94.731,71.077,13.538) "Custom size…" 11pt #000000d9
+strokeRRect (0.5,0.5,113,115) r=5.5 w=1 solid #00000026
+## scrolled, both arrows, light, 126x90
+fillRRect (0,0,126,90) r=6 solid #f2f2f2
+fillRRect (5,7,116,22) r=4 solid #007aff clip=(0,16,126,58)
+strokePath [M(10.5,18.357) L(12.286,20.143) L(15.5,15.857)] w=1.75 cap=round join=round solid #ffffff clip=(0,16,126,58)
+text (21,10,42,16) "Medium" 13pt #ffffff clip=(0,16,126,58)
+text (21,32,35,16) "Large" 13pt #00000040 clip=(0,16,126,58)
+strokePath [M(10.5,62.357) L(12.286,64.143) L(15.5,59.857)] w=1.75 cap=round join=round solid #00000040 clip=(0,16,126,58)
+text (21,54,28,16) "Huge" 13pt #00000040 clip=(0,16,126,58)
+fillRRect (10,78,106,1) solid #0000001a clip=(0,16,126,58)
+fillPath [M(59,10) L(63,6) L(67,10) Z] solid #000000d9
+fillPath [M(59,80) L(63,84) L(67,80) Z] solid #000000d9
+strokeRRect (0.5,0.5,125,89) r=5.5 w=1 solid #00000026
+## scrolled to the end, light, 126x90
+fillRRect (0,0,126,90) r=6 solid #f2f2f2
+text (21,11,35,16) "Large" 13pt #00000040 clip=(0,16,126,74)
+strokePath [M(10.5,41.357) L(12.286,43.143) L(15.5,38.857)] w=1.75 cap=round join=round solid #00000040 clip=(0,16,126,74)
+text (21,33,28,16) "Huge" 13pt #00000040 clip=(0,16,126,74)
+fillRRect (10,57,106,1) solid #0000001a clip=(0,16,126,74)
+fillRRect (5,63,116,22) r=4 solid #007aff clip=(0,16,126,74)
+text (21,66,84,16) "Custom size…" 13pt #ffffff clip=(0,16,126,74)
+fillPath [M(59,10) L(63,6) L(67,10) Z] solid #000000d9
+strokeRRect (0.5,0.5,125,89) r=5.5 w=1 solid #00000026
+## shortcuts, light, 227x153
+fillRRect (0,0,227,153) r=6 solid #f2f2f2
+text (21,8,21,16) "New" 13pt #000000d9
+text (164,8,42,16) "Ctrl+N" 13pt #000000d9
+text (21,30,35,16) "Open…" 13pt #000000d9
+text (164,30,42,16) "Ctrl+O" 13pt #000000d9
+text (21,52,56,16) "Save As…" 13pt #00000040
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,74,63,16) "Word Wrap" 13pt #000000d9
+text (164,74,42,16) "Ctrl+W" 13pt #000000d9
+fillRRect (10,98,207,1) solid #0000001a
+text (21,107,77,16) "Open Recent" 13pt #00000040
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #00000040
+text (21,129,70,16) "Page Setup" 13pt #000000d9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #00000026
+## shortcuts, highlighted, light, 227x153
+fillRRect (0,0,227,153) r=6 solid #f2f2f2
+text (21,8,21,16) "New" 13pt #000000d9
+text (164,8,42,16) "Ctrl+N" 13pt #000000d9
+fillRRect (5,27,217,22) r=4 solid #007aff
+text (21,30,35,16) "Open…" 13pt #ffffff
+text (164,30,42,16) "Ctrl+O" 13pt #ffffff
+text (21,52,56,16) "Save As…" 13pt #00000040
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,74,63,16) "Word Wrap" 13pt #000000d9
+text (164,74,42,16) "Ctrl+W" 13pt #000000d9
+fillRRect (10,98,207,1) solid #0000001a
+text (21,107,77,16) "Open Recent" 13pt #00000040
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #00000040
+text (21,129,70,16) "Page Setup" 13pt #000000d9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #00000026
+## shortcuts, highlighted checked, light, 227x153
+fillRRect (0,0,227,153) r=6 solid #f2f2f2
+text (21,8,21,16) "New" 13pt #000000d9
+text (164,8,42,16) "Ctrl+N" 13pt #000000d9
+text (21,30,35,16) "Open…" 13pt #000000d9
+text (164,30,42,16) "Ctrl+O" 13pt #000000d9
+text (21,52,56,16) "Save As…" 13pt #00000040
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #00000040
+fillRRect (5,71,217,22) r=4 solid #007aff
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,74,63,16) "Word Wrap" 13pt #ffffff
+text (164,74,42,16) "Ctrl+W" 13pt #ffffff
+fillRRect (10,98,207,1) solid #0000001a
+text (21,107,77,16) "Open Recent" 13pt #00000040
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #00000040
+text (21,129,70,16) "Page Setup" 13pt #000000d9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #00000026
+## shortcuts, small, light, 203x135
+fillRRect (0,0,203,135) r=6 solid #f2f2f2
+fillRRect (5,5,193,19) r=4 solid #007aff
+text (21,7.731,17.769,13.538) "New" 11pt #ffffff
+text (146.462,7.731,35.538,13.538) "Ctrl+N" 11pt #ffffff
+text (21,26.731,29.615,13.538) "Open…" 11pt #000000d9
+text (146.462,26.731,35.538,13.538) "Ctrl+O" 11pt #000000d9
+text (21,45.731,47.385,13.538) "Save As…" 11pt #00000040
+text (110.923,45.731,71.077,13.538) "Ctrl+Shift+S" 11pt #00000040
+strokePath [M(10.5,71.857) L(12.286,73.643) L(15.5,69.357)] w=1.75 cap=round join=round solid #000000d9
+text (21,64.731,53.308,13.538) "Word Wrap" 11pt #000000d9
+text (146.462,64.731,35.538,13.538) "Ctrl+W" 11pt #000000d9
+fillRRect (10,86,183,1) solid #0000001a
+text (21,94.731,65.154,13.538) "Open Recent" 11pt #00000040
+strokePath [M(177.5,97) L(182,101.5) L(177.5,106)] w=1.5 cap=round join=round solid #00000040
+text (21,113.731,59.231,13.538) "Page Setup" 11pt #000000d9
+strokeRRect (0.5,0.5,202,134) r=5.5 w=1 solid #00000026
+## inactive parent, highlighted, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f2f2f2
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000d9
+text (21,30,42,16) "Medium" 13pt #000000d9
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+text (21,107,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## inactive parent, highlighted checked, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #f2f2f2
+text (21,8,35,16) "Small" 13pt #000000d9
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #00000040
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #00000040
+text (21,74,28,16) "Huge" 13pt #00000040
+fillRRect (10,98,106,1) solid #0000001a
+text (21,107,84,16) "Custom size…" 13pt #000000d9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #00000026
+## increased contrast, highlighted checked, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #ffffff
+text (21,8,35,16) "Small" 13pt #000000
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #0000008c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #0000008c
+text (21,74,28,16) "Huge" 13pt #0000008c
+fillRRect (10,98,106,1) solid #00000080
+text (21,107,84,16) "Custom size…" 13pt #000000
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #000000bf
+## increased contrast, inactive parent, highlighted, light, 126x131
+fillRRect (0,0,126,131) r=6 solid #ffffff
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #000000
+text (21,30,42,16) "Medium" 13pt #000000
+text (21,52,35,16) "Large" 13pt #0000008c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #0000008c
+text (21,74,28,16) "Huge" 13pt #0000008c
+fillRRect (10,98,106,1) solid #00000080
+text (21,107,84,16) "Custom size…" 13pt #000000
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #000000bf
+## opaque, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #2b2b2b
+text (21,8,35,16) "Small" 13pt #ffffffd9
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,30,42,16) "Medium" 13pt #ffffffd9
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+text (21,107,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## opaque, highlighted, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #2b2b2b
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,30,42,16) "Medium" 13pt #ffffffd9
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+text (21,107,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## opaque, highlighted checked, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #2b2b2b
+text (21,8,35,16) "Small" 13pt #ffffffd9
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+text (21,107,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## translucent, highlighted, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #282828a6
+text (21,8,35,16) "Small" 13pt #ffffffd9
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,30,42,16) "Medium" 13pt #ffffffd9
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+fillRRect (5,104,116,22) r=4 solid #007aff
+text (21,107,84,16) "Custom size…" 13pt #ffffff
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## shadow, dark, 150x155
+shadow (12,8,126,131) r=6 off=(0,4) blur=12 #00000080
+fillRRect (12,8,126,131) r=6 solid #2b2b2b
+text (33,16,35,16) "Small" 13pt #ffffffd9
+strokePath [M(22.5,46.357) L(24.286,48.143) L(27.5,43.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (33,38,42,16) "Medium" 13pt #ffffffd9
+text (33,60,35,16) "Large" 13pt #ffffff40
+strokePath [M(22.5,90.357) L(24.286,92.143) L(27.5,87.857)] w=1.75 cap=round join=round solid #ffffff40
+text (33,82,28,16) "Huge" 13pt #ffffff40
+fillRRect (22,106,106,1) solid #ffffff1a
+text (33,115,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (12.5,8.5,125,130) r=5.5 w=1 solid #ffffff2e
+## increased contrast, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #000000
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #ffffff8c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff8c
+text (21,74,28,16) "Huge" 13pt #ffffff8c
+fillRRect (10,98,106,1) solid #ffffff80
+text (21,107,84,16) "Custom size…" 13pt #ffffff
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffffbf
+## small, dark, 114x116
+fillRRect (0,0,114,116) r=6 solid #2b2b2b
+text (21,7.731,29.615,13.538) "Small" 11pt #ffffffd9
+fillRRect (5,24,104,19) r=4 solid #007aff
+strokePath [M(10.5,33.857) L(12.286,35.643) L(15.5,31.357)] w=1.75 cap=round join=round solid #ffffff
+text (21,26.731,35.538,13.538) "Medium" 11pt #ffffff
+text (21,45.731,29.615,13.538) "Large" 11pt #ffffff40
+strokePath [M(10.5,71.857) L(12.286,73.643) L(15.5,69.357)] w=1.75 cap=round join=round solid #ffffff40
+text (21,64.731,23.692,13.538) "Huge" 11pt #ffffff40
+fillRRect (10,86,94,1) solid #ffffff1a
+text (21,94.731,71.077,13.538) "Custom size…" 11pt #ffffffd9
+strokeRRect (0.5,0.5,113,115) r=5.5 w=1 solid #ffffff2e
+## scrolled, both arrows, dark, 126x90
+fillRRect (0,0,126,90) r=6 solid #2b2b2b
+fillRRect (5,7,116,22) r=4 solid #007aff clip=(0,16,126,58)
+strokePath [M(10.5,18.357) L(12.286,20.143) L(15.5,15.857)] w=1.75 cap=round join=round solid #ffffff clip=(0,16,126,58)
+text (21,10,42,16) "Medium" 13pt #ffffff clip=(0,16,126,58)
+text (21,32,35,16) "Large" 13pt #ffffff40 clip=(0,16,126,58)
+strokePath [M(10.5,62.357) L(12.286,64.143) L(15.5,59.857)] w=1.75 cap=round join=round solid #ffffff40 clip=(0,16,126,58)
+text (21,54,28,16) "Huge" 13pt #ffffff40 clip=(0,16,126,58)
+fillRRect (10,78,106,1) solid #ffffff1a clip=(0,16,126,58)
+fillPath [M(59,10) L(63,6) L(67,10) Z] solid #ffffffd9
+fillPath [M(59,80) L(63,84) L(67,80) Z] solid #ffffffd9
+strokeRRect (0.5,0.5,125,89) r=5.5 w=1 solid #ffffff2e
+## scrolled to the end, dark, 126x90
+fillRRect (0,0,126,90) r=6 solid #2b2b2b
+text (21,11,35,16) "Large" 13pt #ffffff40 clip=(0,16,126,74)
+strokePath [M(10.5,41.357) L(12.286,43.143) L(15.5,38.857)] w=1.75 cap=round join=round solid #ffffff40 clip=(0,16,126,74)
+text (21,33,28,16) "Huge" 13pt #ffffff40 clip=(0,16,126,74)
+fillRRect (10,57,106,1) solid #ffffff1a clip=(0,16,126,74)
+fillRRect (5,63,116,22) r=4 solid #007aff clip=(0,16,126,74)
+text (21,66,84,16) "Custom size…" 13pt #ffffff clip=(0,16,126,74)
+fillPath [M(59,10) L(63,6) L(67,10) Z] solid #ffffffd9
+strokeRRect (0.5,0.5,125,89) r=5.5 w=1 solid #ffffff2e
+## shortcuts, dark, 227x153
+fillRRect (0,0,227,153) r=6 solid #2b2b2b
+text (21,8,21,16) "New" 13pt #ffffffd9
+text (164,8,42,16) "Ctrl+N" 13pt #ffffffd9
+text (21,30,35,16) "Open…" 13pt #ffffffd9
+text (164,30,42,16) "Ctrl+O" 13pt #ffffffd9
+text (21,52,56,16) "Save As…" 13pt #ffffff40
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,74,63,16) "Word Wrap" 13pt #ffffffd9
+text (164,74,42,16) "Ctrl+W" 13pt #ffffffd9
+fillRRect (10,98,207,1) solid #ffffff1a
+text (21,107,77,16) "Open Recent" 13pt #ffffff40
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #ffffff40
+text (21,129,70,16) "Page Setup" 13pt #ffffffd9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #ffffff2e
+## shortcuts, highlighted, dark, 227x153
+fillRRect (0,0,227,153) r=6 solid #2b2b2b
+text (21,8,21,16) "New" 13pt #ffffffd9
+text (164,8,42,16) "Ctrl+N" 13pt #ffffffd9
+fillRRect (5,27,217,22) r=4 solid #007aff
+text (21,30,35,16) "Open…" 13pt #ffffff
+text (164,30,42,16) "Ctrl+O" 13pt #ffffff
+text (21,52,56,16) "Save As…" 13pt #ffffff40
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,74,63,16) "Word Wrap" 13pt #ffffffd9
+text (164,74,42,16) "Ctrl+W" 13pt #ffffffd9
+fillRRect (10,98,207,1) solid #ffffff1a
+text (21,107,77,16) "Open Recent" 13pt #ffffff40
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #ffffff40
+text (21,129,70,16) "Page Setup" 13pt #ffffffd9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #ffffff2e
+## shortcuts, highlighted checked, dark, 227x153
+fillRRect (0,0,227,153) r=6 solid #2b2b2b
+text (21,8,21,16) "New" 13pt #ffffffd9
+text (164,8,42,16) "Ctrl+N" 13pt #ffffffd9
+text (21,30,35,16) "Open…" 13pt #ffffffd9
+text (164,30,42,16) "Ctrl+O" 13pt #ffffffd9
+text (21,52,56,16) "Save As…" 13pt #ffffff40
+text (122,52,84,16) "Ctrl+Shift+S" 13pt #ffffff40
+fillRRect (5,71,217,22) r=4 solid #007aff
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,74,63,16) "Word Wrap" 13pt #ffffff
+text (164,74,42,16) "Ctrl+W" 13pt #ffffff
+fillRRect (10,98,207,1) solid #ffffff1a
+text (21,107,77,16) "Open Recent" 13pt #ffffff40
+strokePath [M(201.5,110.5) L(206,115) L(201.5,119.5)] w=1.5 cap=round join=round solid #ffffff40
+text (21,129,70,16) "Page Setup" 13pt #ffffffd9
+strokeRRect (0.5,0.5,226,152) r=5.5 w=1 solid #ffffff2e
+## shortcuts, small, dark, 203x135
+fillRRect (0,0,203,135) r=6 solid #2b2b2b
+fillRRect (5,5,193,19) r=4 solid #007aff
+text (21,7.731,17.769,13.538) "New" 11pt #ffffff
+text (146.462,7.731,35.538,13.538) "Ctrl+N" 11pt #ffffff
+text (21,26.731,29.615,13.538) "Open…" 11pt #ffffffd9
+text (146.462,26.731,35.538,13.538) "Ctrl+O" 11pt #ffffffd9
+text (21,45.731,47.385,13.538) "Save As…" 11pt #ffffff40
+text (110.923,45.731,71.077,13.538) "Ctrl+Shift+S" 11pt #ffffff40
+strokePath [M(10.5,71.857) L(12.286,73.643) L(15.5,69.357)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,64.731,53.308,13.538) "Word Wrap" 11pt #ffffffd9
+text (146.462,64.731,35.538,13.538) "Ctrl+W" 11pt #ffffffd9
+fillRRect (10,86,183,1) solid #ffffff1a
+text (21,94.731,65.154,13.538) "Open Recent" 11pt #ffffff40
+strokePath [M(177.5,97) L(182,101.5) L(177.5,106)] w=1.5 cap=round join=round solid #ffffff40
+text (21,113.731,59.231,13.538) "Page Setup" 11pt #ffffffd9
+strokeRRect (0.5,0.5,202,134) r=5.5 w=1 solid #ffffff2e
+## inactive parent, highlighted, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #2b2b2b
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffffd9
+text (21,30,42,16) "Medium" 13pt #ffffffd9
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+text (21,107,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## inactive parent, highlighted checked, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #2b2b2b
+text (21,8,35,16) "Small" 13pt #ffffffd9
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #ffffff40
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff40
+text (21,74,28,16) "Huge" 13pt #ffffff40
+fillRRect (10,98,106,1) solid #ffffff1a
+text (21,107,84,16) "Custom size…" 13pt #ffffffd9
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffff2e
+## increased contrast, highlighted checked, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #000000
+text (21,8,35,16) "Small" 13pt #ffffff
+fillRRect (5,27,116,22) r=4 solid #007aff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #ffffff8c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff8c
+text (21,74,28,16) "Huge" 13pt #ffffff8c
+fillRRect (10,98,106,1) solid #ffffff80
+text (21,107,84,16) "Custom size…" 13pt #ffffff
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffffbf
+## increased contrast, inactive parent, highlighted, dark, 126x131
+fillRRect (0,0,126,131) r=6 solid #000000
+fillRRect (5,5,116,22) r=4 solid #007aff
+text (21,8,35,16) "Small" 13pt #ffffff
+strokePath [M(10.5,38.357) L(12.286,40.143) L(15.5,35.857)] w=1.75 cap=round join=round solid #ffffff
+text (21,30,42,16) "Medium" 13pt #ffffff
+text (21,52,35,16) "Large" 13pt #ffffff8c
+strokePath [M(10.5,82.357) L(12.286,84.143) L(15.5,79.857)] w=1.75 cap=round join=round solid #ffffff8c
+text (21,74,28,16) "Huge" 13pt #ffffff8c
+fillRRect (10,98,106,1) solid #ffffff80
+text (21,107,84,16) "Custom size…" 13pt #ffffff
+strokeRRect (0.5,0.5,125,130) r=5.5 w=1 solid #ffffffbf

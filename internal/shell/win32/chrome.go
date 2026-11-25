@@ -52,17 +52,6 @@ func (sf *surface) nonClient(dpi uint32) (w, h int32) {
 	return 2 * f.side, f.bottom
 }
 
-// frameDPI returns the DPI of the window's frame: the window's own DPI,
-// or the one the surface converts with when Windows doesn't know it yet.
-func (sf *surface) frameDPI() uint32 {
-	if sf.hwnd != 0 {
-		if d := w32.GetDpiForWindow(sf.hwnd); d != 0 {
-			return d
-		}
-	}
-	return sf.dpi
-}
-
 // clientRect returns the client rectangle for the window rectangle wr:
 // wr without the side and bottom frames or, maximized, without the frame
 // on every side (Windows places a maximized window with its frame beyond
@@ -227,19 +216,6 @@ func (sf *surface) hitAt(p w32.Point) uintptr {
 		scale: sf.px(), resize: sf.resizable && !maximized, outside: w32.HTNOWHERE,
 		regions: sf.regions}
 	return hitTest(in)
-}
-
-// screenClient returns the client rectangle in screen pixels.
-func (sf *surface) screenClient() (w32.Rect, error) {
-	rc, err := w32.GetClientRect(sf.hwnd)
-	if err != nil {
-		return w32.Rect{}, err
-	}
-	var o w32.Point
-	if err := w32.ClientToScreen(sf.hwnd, &o); err != nil {
-		return w32.Rect{}, err
-	}
-	return w32.Rect{Left: o.X, Top: o.Y, Right: o.X + rc.Right, Bottom: o.Y + rc.Bottom}, nil
 }
 
 // frameAttrs are the DWM settings of a surface's frame for an appearance.

@@ -189,7 +189,8 @@ func TestButtonKeys(t *testing.T) {
 	if b.view.Activate() || clicks != 1 {
 		t.Fatal("Activate while disabled")
 	}
-	// Other placeholders and Base have no primary action.
+	// Base has no primary action, and a pop-up button outside a window
+	// opens no menu (S5.5k).
 	if ElementOf(d.NewPopUpButton(nil)).Activate() || (&Base{}).Activate() {
 		t.Fatal("Activate without an action")
 	}

@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/radix29/gogui/internal/driver"
+	"github.com/radix29/gogui/internal/render"
 	"github.com/radix29/gogui/internal/shell"
+	"github.com/radix29/gogui/internal/shell/gtk4/gtk"
 	"github.com/radix29/gogui/internal/shell/shellkit"
 )
 
@@ -28,12 +30,13 @@ import (
 // want remembers the size asked for last, so a fractional size reads back
 // unchanged (shellkit.FromPx at scale 1). The minimum is the GGSurface's
 // size request (a non-resizable surface requests its size). GTK 4 has no
-// maximum-size hint: the maximum clamps SetSize and SetMaxSize, but the
+// maximum-size hint: the maximum clamps SetSize and SetSizeLimits, but the
 // user can still make a resizable window larger.
 //
 // Position. GTK 4 cannot place a toplevel (the compositor places windows
 // on Wayland, and GTK 4 dropped gtk_window_move on X11 too), so Center and
-// SurfaceConfig.Center do nothing.
+// SurfaceConfig.Center do nothing; a modal surface is placed by the window
+// manager over its transient parent (modal.go).
 //
 // Scale. The fractional gdk_surface_get_scale (GTK 4.12+, required since
 // the 4.14 floor); a change (notify::scale of the GdkSurface) reports
@@ -44,7 +47,7 @@ import (
 //
 // Layout. Resized from an allocation runs inside GTK's size_allocate of
 // that window (Shell.inLayout), so what a handler does to the native
-// window then (SetSize, SetMinSize, SetMaxSize, Close, Shell.Quit) is
+// window then (SetSize, SetSizeLimits, Close, Shell.Quit) is
 // posted and runs right after; the reported size changes at once.
 //
 // Painting. Invalidate marks the surface and requests a frame; the frame's
@@ -60,6 +63,7 @@ type windowConfig struct {
 	width, height int32 // the default size: the drawable area
 	minW, minH    int32 // the GGSurface's size request
 	resizable     bool
+	modal         bool // gtk_window_set_modal (modal.go, S5.7f)
 }
 
 // windowPeer is the Go side of a native window: the GGSurface's vfuncs and
@@ -96,6 +100,13 @@ type window interface {
 	// layout, changed or not (gtk_widget_queue_resize).
 	queueResize()
 	present()
+	// setTransientFor makes the window transient for parent's window
+	// (gtk_window_set_transient_for; nil: for none), for a modal surface
+	// (modal.go).
+	setTransientFor(parent window)
+	// setSensitive makes the window take input or not
+	// (gtk_widget_set_sensitive; off while a modal surface blocks it).
+	setSensitive(on bool)
 	minimize()
 	setMaximized(on bool)
 	maximized() bool
@@ -130,6 +141,9 @@ type window interface {
 	// keyBase returns the keyval at level 0 of keycode in the layout group
 	// of the key event the key controller c handles now (0 if unknown).
 	keyBase(c uintptr, keycode uint32) uint32
+	// keyShifted returns the keyval of keycode at the Shift level in the
+	// same layout group (0 if unknown), for KeyEvent.Shifted (S5.6h).
+	keyShifted(c uintptr, keycode uint32) uint32
 	// keyvalToUnicode is gdk_keyval_to_unicode (0 for none).
 	keyvalToUnicode(kv uint32) rune
 	// imFilter passes the key event the key controller c handles now to the
@@ -142,8 +156,25 @@ type window interface {
 	// imFocus tells the input method that the surface gained or lost the
 	// keyboard focus.
 	imFocus(in bool)
+	// imAttach gives the key controller the input method (on: it filters
+	// every key before "key-pressed" and "key-released") or takes it away
+	// (resetting it); a no-op when the state does not change (ime.go).
+	imAttach(on bool)
+	// imCursor sets the input method's cursor location in the GGSurface's
+	// coordinates.
+	imCursor(a gtk.Allocation)
+	// imEventTime returns the time of the key event the key controller
+	// handles now, 0 outside one.
+	imEventTime() uint32
+	// releaseIM drops the last reference to the input method. It is the
+	// one method called after destroy, outside the event that closed the
+	// surface (ime.go).
+	releaseIM()
 	// commitString returns the C string of a commit (NULL gives "").
 	commitString(p uintptr) string
+	// preedit reads the input method's preedit (ime.go): its UTF-8
+	// text, its cursor in characters and its Pango attributes.
+	preedit() (text string, cursor int, attrs []preeditAttr)
 	// pastDragThreshold reports whether a press that moved by dx, dy
 	// (points) has passed GTK's drag threshold.
 	pastDragThreshold(dx, dy float64) bool
@@ -154,6 +185,9 @@ type window interface {
 	// destroy disconnects the signal handlers, destroys the window and
 	// releases the GGSurface.
 	destroy()
+	// readback renders the GGSurface's last drawn frame at scale with the
+	// window's GSK renderer and downloads it (readback.go).
+	readback(scale float64) (readbackFrame, error)
 }
 
 // resizeMode is how SetSize resizes a mapped window.
@@ -228,8 +262,13 @@ type surface struct {
 
 	cursor   shell.Cursor
 	regions  []shell.ChromeRegion // hit-tested by the caption gestures (chrome.go)
+	ime      ime                  // the text input (ime.go)
 	paints   int                  // paints so far (tests)
 	paintErr error                // the recorder errors of the last paint (debugChecks)
+	// keepText makes every paint keep its text boxes in textBoxes (the
+	// recorder's, so only with debugChecks; the golden test, S4.3i).
+	keepText  bool
+	textBoxes []render.Rect
 
 	drag     captionDrag // the caption drag gesture's press
 	zoomTime uint32      // the event time of the last caption double-click (0: none)
@@ -238,6 +277,21 @@ type surface struct {
 	ptr pointerState // the pointer (input.go)
 	scr scrollState  // scrolling (scroll.go)
 	kbd keyState     // the keyboard (keyboard.go)
+
+	// The render seams (readback.go): a scale and a key state the golden
+	// tests fix, whatever the display and the window manager say.
+	fixedScale float64  // 0: the GdkSurface's
+	fixedKey   keyFixed // keyNative: gtk_window_is_active
+
+	// pop is set when this is the child GGSurface of a popup (popup.go,
+	// S5.5f): its allocation, measure and "closed" go to the popup.
+	pop *popup
+
+	// Modal surfaces (modal.go, S5.7f): Modal and Owner from the config,
+	// whether its first Show has run, the surface key at that Show, and
+	// whether a modal surface blocks this one.
+	modal, modalShown, blocked bool
+	owner, prevKey             *surface
 }
 
 var (
@@ -257,11 +311,16 @@ func (s *Shell) NewSurface(cfg shell.SurfaceConfig, h shell.SurfaceHandler) (she
 	if s.quit {
 		return nil, ErrQuit
 	}
+	owner, err := s.modalOwner(cfg)
+	if err != nil {
+		return nil, err
+	}
 	sf := &surface{s: s, h: h, min: cfg.MinSize, max: cfg.MaxSize,
-		resizable: cfg.Style&driver.StyleResizable != 0, creating: true, invalid: true}
+		resizable: cfg.Style&driver.StyleResizable != 0 && !cfg.Modal, creating: true, invalid: true,
+		modal: cfg.Modal, owner: owner}
 	sf.want = shellkit.ClampSize(cfg.Size, sf.min, sf.max)
 	sf.size = sf.want
-	wc := windowConfig{title: noNUL(cfg.Title), resizable: sf.resizable}
+	wc := windowConfig{title: noNUL(cfg.Title), resizable: sf.resizable, modal: sf.modal}
 	wc.width, wc.height = px(sf.want)
 	wc.minW, wc.minH = sf.request()
 	w, err := s.loop.newWindow(wc, sf)
@@ -276,6 +335,7 @@ func (s *Shell) NewSurface(cfg shell.SurfaceConfig, h shell.SurfaceHandler) (she
 	sf.scale = w.scale()
 	s.surfaces = append(s.surfaces, sf)
 	sf.creating = false
+	s.applyBlocking() // a surface created under a modal one is blocked
 	return sf, nil
 }
 
@@ -379,18 +439,11 @@ func (sf *surface) resizeTo(size driver.Size) {
 	}
 }
 
-// SetMinSize implements shell.Surface.
-func (sf *surface) SetMinSize(size driver.Size) {
-	if sf.change("SetMinSize") {
-		sf.min = size
-		sf.applyLimits()
-	}
-}
-
-// SetMaxSize implements shell.Surface.
-func (sf *surface) SetMaxSize(size driver.Size) {
-	if sf.change("SetMaxSize") {
-		sf.max = size
+// SetSizeLimits implements shell.Surface: one clamp against both limits
+// and one size request.
+func (sf *surface) SetSizeLimits(min, max driver.Size) {
+	if sf.change("SetSizeLimits") {
+		sf.min, sf.max = min, max
 		sf.applyLimits()
 	}
 }
@@ -414,10 +467,19 @@ func (sf *surface) Scale() float64 {
 func (sf *surface) Center() { sf.change("Center") }
 
 // Show implements shell.Surface (gtk_window_present, which also restores
-// a minimized surface where the windowing system allows it).
+// a minimized surface where the windowing system allows it). The first
+// Show of a modal surface makes it transient and blocks the others; Show
+// on a blocked surface presents the active modal after it (modal.go).
 func (sf *surface) Show() {
 	if !sf.change("Show") {
 		return
+	}
+	first := sf.modal && !sf.modalShown
+	if first {
+		sf.firstModalShow()
+		if sf.dead {
+			return
+		}
 	}
 	sf.w.present()
 	rethrow()
@@ -431,11 +493,18 @@ func (sf *surface) Show() {
 	if sf.invalid {
 		sf.s.clock.RequestFrame()
 	}
+	switch {
+	case first:
+		sf.becomeModal()
+	case sf.blocked:
+		sf.s.modalKey()
+	}
 }
 
-// Minimize implements shell.Surface. It does nothing for a hidden surface.
+// Minimize implements shell.Surface. It does nothing for a hidden or a
+// modal surface.
 func (sf *surface) Minimize() {
-	if !sf.change("Minimize") || !sf.shown {
+	if !sf.change("Minimize") || !sf.shown || sf.modal {
 		return
 	}
 	sf.w.minimize()
@@ -474,19 +543,41 @@ func (sf *surface) Close() {
 	rethrow()
 }
 
-// closeNow implements openSurface: the surface leaves the shell and the
-// frame clock, the window is destroyed and, unless silent, Closed is
-// called.
+// closeNow implements openSurface: the modal surfaces it owns close first
+// (modal.go), the surface leaves the shell, the modality and the frame
+// clock, the input method loses the focus, the window is destroyed (the
+// input method detached first) and, unless silent, Closed is called; a
+// modal surface that was key then hands the key on. The last reference to
+// the input method goes once the event being handled is over
+// (releaseLater).
 func (sf *surface) closeNow(silent bool) {
 	if sf.dead {
 		return
 	}
-	sf.dead = true // tickWidget returns 0 from here on
+	sf.closeOwned(silent)
+	if sf.dead { // a Closed of them closed it
+		return
+	}
+	sf.s.closePopupsOf(sf, silent) // unparented before this GGSurface goes
+	if sf.dead {                   // a popup's Closed closed it
+		return
+	}
+	wasKey := sf.key
+	sf.dead = true // tickWidget returns 0 from here on, no IM signal is delivered
 	sf.s.removeSurface(sf)
+	if sf.modal {
+		sf.leaveModality()
+	}
 	sf.s.clock.detach(sf.w.widget())
-	sf.w.destroy()
+	sf.imTeardown()
+	w := sf.w
+	w.destroy()
+	sf.s.releaseLater(w.releaseIM)
 	if !silent {
 		sf.h.Closed()
+	}
+	if sf.modal && wasKey && !silent {
+		sf.handKey()
 	}
 }
 
@@ -508,7 +599,7 @@ func (sf *surface) Invalidate() {
 
 func (sf *surface) invalidate() {
 	sf.invalid = true
-	sf.s.clock.RequestFrame()
+	sf.s.clock.invalidated()
 }
 
 // SetCursor implements shell.Surface: the GGSurface's cursor, so GTK's
@@ -535,7 +626,12 @@ func (sf *surface) SetChromeRegions(regions []shell.ChromeRegion) {
 
 // measure implements surfacePeer: no size of its own; the size request
 // is the minimum and the default size the size.
-func (sf *surface) measure(int32, int32) (int32, int32) { return 0, 0 }
+func (sf *surface) measure(orientation, _ int32) (int32, int32) {
+	if sf.pop != nil {
+		return sf.pop.measure(orientation)
+	}
+	return 0, 0
+}
 
 // sizeAllocate implements surfacePeer: the drawable area's new size. The
 // first allocation can miss the asked size by the window's own CSS padding
@@ -546,6 +642,19 @@ func (sf *surface) sizeAllocate(width, height, _ int32) {
 	if sf.dead {
 		return
 	}
+	if sf.pop != nil {
+		sf.pop.allocated(width, height)
+		return
+	}
+	resized := (sf.allocW != 0 || sf.allocH != 0) && (width != sf.allocW || height != sf.allocH)
+	sf.allocateSurface(width, height)
+	if !sf.dead && !sf.creating {
+		sf.s.parentAllocated(sf, resized)
+	}
+}
+
+// allocateSurface is sizeAllocate for a toplevel's GGSurface.
+func (sf *surface) allocateSurface(width, height int32) {
 	if sf.allocW == 0 && sf.allocH == 0 && !sf.creating {
 		asked := sf.want
 		if aw, ah := px(asked); aw != width || ah != height {
@@ -600,6 +709,14 @@ func (sf *surface) snapshot(s uintptr) {
 	if sf.dead || sf.creating {
 		return
 	}
+	if sf.pop != nil && !sf.pop.placed { // the first Paint follows the first Placed
+		return
+	}
+	ft := &sf.s.clock.frameTimer
+	var start, painted time.Time
+	if ft.Active() {
+		start = time.Now()
+	}
 	sf.invalid = false
 	c := newCanvas(sf.w.snapshotter(s), sf.size, sf.scale, debugChecks)
 	c.images = &sf.s.images
@@ -613,20 +730,34 @@ func (sf *surface) snapshot(s uintptr) {
 		}
 		prev := sf.paintErr
 		sf.paintErr = c.finish()
+		if done && ft.Active() {
+			ft.Painted(painted.Sub(start), time.Since(painted), 0)
+		}
+		if sf.keepText {
+			sf.textBoxes = c.textBoxes()
+		}
 		// Logged once per new error text, not at the frame rate.
 		if err := sf.paintErr; err != nil && debugChecks && (prev == nil || prev.Error() != err.Error()) {
 			log.Printf("gtk4: paint: %v", err)
 		}
 	}()
 	sf.h.Paint(c)
+	if ft.Active() {
+		painted = time.Now()
+	}
 	done = true
 }
 
 // boolSignal implements boolSignalPeer: GtkWindow::close-request, the
 // user or the compositor asking to close. The surface closes itself when
-// CloseRequested agrees; GTK's own handling is always stopped (TRUE).
+// CloseRequested agrees; GTK's own handling is always stopped (TRUE). A
+// blocked surface refuses without asking and presents the active modal.
 func (sf *surface) boolSignal(k kind, _ uintptr) bool {
 	if k != kindCloseRequest || sf.dead || sf.creating {
+		return true
+	}
+	if sf.blocked {
+		sf.s.modalKey()
 		return true
 	}
 	if sf.h.CloseRequested() && !sf.dead {
@@ -644,35 +775,26 @@ func (sf *surface) pointerSignal(k kind, instance, arg uintptr) {
 	}
 	switch k {
 	case kindActive:
-		if key := sf.w.active(); key != sf.key && !sf.creating {
-			sf.key = key
-			sf.keyFocus(key)
-			sf.h.KeyChanged(key)
-		}
+		sf.activeChanged()
 	case kindScale:
-		sc := sf.w.scale()
-		if !(sc > 0) || sc == sf.scale {
-			return
-		}
-		sf.scale = sc
-		if sf.creating {
-			return
-		}
-		sf.h.Resized(sf.size, sc)
+		sf.scaleChanged()
 		if !sf.dead {
-			sf.invalidate()
+			sf.s.parentScaleChanged(sf)
 		}
 	case kindIMCommit:
 		if sf.keyLive() {
 			sf.commit(sf.w.commitString(arg))
 		}
 	case kindPointerCancel:
-		if sf.pointerLive() {
+		if sf.pointerLive() && sf.grabbed() == nil { // the child holds the buttons during a grab
 			sf.cancel(instance)
 		}
 	case kindState:
 		if m := sf.w.minimized(); m != sf.minimized {
 			sf.minimized = m
+			if m {
+				sf.dismissGrabOf()
+			}
 			sf.s.clock.surfacesChanged()
 			if !m && sf.invalid {
 				sf.s.clock.RequestFrame()
@@ -699,10 +821,17 @@ func (s *Shell) removeSurface(sf *surface) {
 // invalidated, shown surface, and GTK snapshots it in the same frame.
 // Hidden surfaces stay invalid until shown.
 func (s *Shell) paintInvalid(t time.Duration) {
-	s.stepMomentum(t)
+	s.clock.deferInvalidate(func() { s.stepMomentum(t) })
 	for _, o := range s.surfaces {
 		if sf, ok := o.(*surface); ok && sf.invalid && sf.shown && !sf.dead {
 			sf.w.queueDraw()
+			s.clock.frameTimer.Expect(1)
+		}
+	}
+	for _, p := range s.popups { // after the surfaces
+		if p.c.invalid && p.placed && !p.dead {
+			p.nw.queueDraw()
+			s.clock.frameTimer.Expect(1)
 		}
 	}
 	rethrow()
@@ -716,14 +845,37 @@ func (s *Shell) notPainting(what string) {
 }
 
 // voidSignal implements voidSignalPeer: the motion controller's "leave"
-// (input.go) and the scroll controller's "scroll-begin" and "scroll-end"
-// (scroll.go).
+// (input.go), the scroll controller's "scroll-begin" and "scroll-end"
+// (scroll.go), and the input method's preedit signals (ime.go), which
+// are not pointer input.
 func (sf *surface) voidSignal(k kind, instance uintptr) {
+	switch k {
+	case kindIMPreeditStart, kindIMPreeditChanged, kindIMPreeditEnd:
+		sf.imPreedit(k)
+		return
+	case kindPopoverClosed:
+		if sf.pop != nil {
+			sf.pop.closedSignal()
+		}
+		return
+	}
 	if !sf.pointerLive() {
+		return
+	}
+	if g := sf.grabbed(); g != nil { // the child has the pointer during a grab
+		switch k {
+		case kindPointerLeave:
+			g.parentLeft()
+		case kindScrollBegin, kindScrollEnd:
+			g.fromParentScroll(k, instance, 0, 0)
+		}
 		return
 	}
 	switch k {
 	case kindPointerLeave:
+		if sf.pop != nil && sf.pop.deferLeave() {
+			return // maybe into the track (popup.go)
+		}
 		sf.leave(instance)
 	case kindScrollBegin:
 		sf.scrollBegin()
@@ -736,15 +888,24 @@ func (sf *surface) voidSignal(k kind, instance uintptr) {
 // controller's "scroll" (scroll.go). It always reports the scroll
 // handled, so GTK does not pass it on.
 func (sf *surface) boolDoubleDouble(k kind, instance uintptr, dx, dy float64) bool {
-	if k == kindScroll && sf.pointerLive() {
-		sf.scroll(dx, dy, instance)
+	if k != kindScroll || !sf.pointerLive() {
+		return true
 	}
+	if g := sf.grabbed(); g != nil {
+		g.fromParentScroll(k, instance, dx, dy) // over the track only
+		return true
+	}
+	sf.scroll(dx, dy, instance)
 	return true
 }
 
 // boolUintUintUint implements boolUintUintUintPeer: the key controller's
-// "key-pressed" (keyboard.go), keyval, keycode and state.
+// "key-pressed" (keyboard.go), keyval, keycode and state. A blocked
+// surface consumes the key (modal.go).
 func (sf *surface) boolUintUintUint(k kind, instance uintptr, kv, keycode, state uint32) bool {
+	if k == kindKeyPressed && !sf.dead && sf.inputBlocked() {
+		return true
+	}
 	if k != kindKeyPressed || !sf.keyLive() {
 		return false
 	}

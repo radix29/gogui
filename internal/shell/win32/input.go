@@ -35,6 +35,16 @@ import (
 //     double-click time and rectangle, so triple clicks work; a DBLCLK
 //     message counts at least 2, because Windows already judged it so.
 //   - The events carry GetMessageTime mapped onto the clock (eventTime).
+//   - The first click (S6.1c): Windows sends WM_MOUSEACTIVATE to a window
+//     that is not active before the button-down, then activates it
+//     (WM_ACTIVATE, so KeyChanged(true) comes first) and posts the press.
+//     A WM_MOUSEACTIVATE over the client area or a traffic light while the
+//     surface is not key and not blocked marks the next button-down
+//     (client or light) as Activating, if the surface is key by then; that
+//     button-down, a caption press (the OS's) and a deactivation clear the
+//     mark. DefWindowProcW still answers MA_ACTIVATE, so the window
+//     activates as before; the aqua driver drops the press (S6.1b). A
+//     blocked surface's press is not delivered at all (modal.go).
 //
 // Left and right are the primary and secondary buttons: Windows applies the
 // swapped-buttons setting before the messages. Handling the right button
@@ -54,16 +64,6 @@ func (s *Shell) eventTime() time.Duration {
 }
 
 func liveMsgTime() uint32 { return uint32(w32.GetMessageTime()) }
-
-// clickRules returns the double-click settings at the window's DPI:
-// GetDoubleClickTime and the SM_CXDOUBLECLK × SM_CYDOUBLECLK rectangle in
-// pixels.
-func (sf *surface) clickRules() shellkit.ClickRules {
-	dpi := sf.frameDPI()
-	return shellkit.ClickRules{Time: w32.GetDoubleClickTime(),
-		W: w32.GetSystemMetricsForDpi(w32.SM_CXDOUBLECLK, dpi),
-		H: w32.GetSystemMetricsForDpi(w32.SM_CYDOUBLECLK, dpi)}
-}
 
 // buttonOf returns the button of a button message, whether it is a press,
 // and whether it is a DBLCLK. ok is false for other messages.
@@ -152,6 +152,8 @@ func (sf *surface) moveTo(pos driver.Point) {
 // press delivers a press of b at the client pixel p. The first held button
 // captures the mouse.
 func (sf *surface) press(h windows.HWND, b shell.PointerButton, p w32.Point, dbl bool) {
+	activating := sf.activating && sf.key
+	sf.activating = false // only the press right after WM_MOUSEACTIVATE
 	if sf.buttons&b != 0 || sf.dead {
 		return
 	}
@@ -165,7 +167,14 @@ func (sf *surface) press(h windows.HWND, b shell.PointerButton, p w32.Point, dbl
 	}
 	sf.buttons |= b
 	sf.upClicks[buttonIndex(b)] = n
-	sf.pointer(shell.PointerDown, pos, b, n)
+	sf.deliver(shell.PointerDown, pos, b, n, activating)
+}
+
+// mouseActivate handles WM_MOUSEACTIVATE (the first click above): the low
+// word of lp is the hit-test code of the press.
+func (sf *surface) mouseActivate(lp uintptr) {
+	code := uintptr(loword(lp))
+	sf.activating = !sf.key && !sf.blocked && !sf.dead && (code == w32.HTCLIENT || isLight(code))
 }
 
 // release delivers the release of a held button at pos. The last one frees

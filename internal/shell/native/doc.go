@@ -6,8 +6,8 @@
 // cycle). On Windows New returns the Win32 shell (shell/win32,
 // native_windows.go, since S2.3f), on Linux the GTK 4 shell (shell/gtk4,
 // native_linux.go, since S4.1d). On every other OS it returns
-// ErrNotImplemented (native_other.go): macOS uses the appkit driver and
-// never asks for a shell.
+// ErrNotImplemented (native_other.go): macOS has its own driver
+// (driver_darwin.go) and never asks for a shell.
 //
 // The package uses only the standard library, internal/shell and, on
 // Windows, internal/shell/win32, on Linux internal/shell/gtk4.

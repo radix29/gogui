@@ -87,3 +87,52 @@ func TestSurfaceGTKPointer(t *testing.T) {
 		return nil
 	})
 }
+
+// TestSurfaceGTKFirstClick (S6.1c): on a real window, a key change
+// (setFixedKey, as notify::is-active) arms the first click on the clock's
+// real timeline, a "pressed" of the click gesture emitted through
+// g_signal_emitv uses it up (the press itself names no button and is
+// dropped), and the mark expires after firstClickWindow. Whether the
+// window manager made the shown window key is logged as FIRSTCLICK-RESULT;
+// the order of the activation and a real press is the user's look
+// (PLAN.md S6.1c).
+func TestSurfaceGTKFirstClick(t *testing.T) {
+	needSurfaceGTK(t)
+	runSurfaceTest(t, func(e *surfTest) error {
+		t := e.t
+		sf, g, h, err := e.open("firstclick", shell.SurfaceConfig{Title: "gogui first click",
+			Size: driver.Size{W: 320, H: 240}, Style: driver.StyleTitled | driver.StyleResizable})
+		if err != nil {
+			return err
+		}
+		if err := show(sf, g, h); err != nil {
+			return err
+		}
+		t.Logf("FIRSTCLICK-RESULT: shown window key %v (is-active %v)", sf.key, g.active())
+		pressed := gtk.GObject.SignalLookup("pressed", typeOf(g.pointer))
+		if pressed == 0 {
+			return errors.New("g_signal_lookup(pressed) returned 0")
+		}
+
+		sf.setFixedKey(keyOff)
+		sf.setFixedKey(keyOn)
+		if age := sf.s.clock.now() - sf.ptr.armedAt; !sf.ptr.armed || age < 0 || age > firstClickWindow {
+			t.Errorf("after the activation: armed %v, %v ago", sf.ptr.armed, age)
+		}
+		emitv(g.pointer, pressed, false, setInt(1), setDouble(50), setDouble(60))
+		rethrow()
+		if sf.ptr.armed {
+			t.Error("the press did not use up the first click")
+		}
+
+		sf.setFixedKey(keyOff)
+		sf.setFixedKey(keyOn)
+		iterateFor(firstClickWindow + settle)
+		if sf.firstClick() {
+			t.Errorf("a press %v after the activation is the first click", firstClickWindow+settle)
+		}
+		sf.setFixedKey(keyNative)
+		iterateFor(settle)
+		return nil
+	})
+}

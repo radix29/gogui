@@ -30,15 +30,6 @@ const (
 	Fill
 )
 
-// LayoutDirection is the reading direction of a stack or form. RightToLeft
-// is accepted but laid out as LeftToRight for now (PLAN.md §7.4).
-type LayoutDirection uint8
-
-const (
-	LeftToRight LayoutDirection = iota
-	RightToLeft
-)
-
 // Item is what a Leaf lays out. Every driver.Widget satisfies it, and aqua
 // uses it for internal parts that have no peer.
 type Item interface {
@@ -178,12 +169,12 @@ func (l *Leaf) Expands(a Axis) bool { return l.props.expand[a] }
 // is resolved first. When it differs from the fitting width, the natural
 // height (and the default min height) is the fitting height at that width
 // (height-for-width, for wrapping labels).
-func (l *Leaf) Measure(_ *Pass, max driver.Size) driver.Size {
+func (l *Leaf) Measure(p *Pass, max driver.Size) driver.Size {
 	if l.props.hidden {
 		return driver.Size{}
 	}
 	max = normSize(max)
-	fit := finiteSize(l.item.FittingSize(driver.Unbounded()))
+	fit := p.fitting(&l.props, l.item) // once per pass (P7)
 	w := l.props.resolve(Horizontal, fit.W, fit.W, max.W)
 	natH := fit.H
 	if w != fit.W {
@@ -246,3 +237,21 @@ func finite(v float64) float64 {
 
 func normSize(s driver.Size) driver.Size   { return driver.Size{W: norm(s.W), H: norm(s.H)} }
 func finiteSize(s driver.Size) driver.Size { return driver.Size{W: finite(s.W), H: finite(s.H)} }
+
+// firstLiner is the optional FirstLine method of a node.
+type firstLiner interface {
+	FirstLine(p *Pass, max driver.Size) float64
+}
+
+// firstLine returns the height of n's first line within max, for aligning
+// form labels: n's FirstLine if it has one, else its measured height.
+// Hidden nodes report 0.
+func firstLine(p *Pass, n Node, max driver.Size) float64 {
+	if n.Props().Hidden() {
+		return 0
+	}
+	if f, ok := n.(firstLiner); ok {
+		return f.FirstLine(p, normSize(max))
+	}
+	return p.Measure(n, max).H
+}

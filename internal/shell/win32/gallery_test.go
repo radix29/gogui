@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -30,8 +31,10 @@ import (
 // straight-alpha RGBA. The golden test (S3.6d) compares these images with
 // the committed PNGs.
 
-// galleryVariants are the four golden renders (goldentest.Variants).
-var galleryVariants = goldentest.Variants
+// galleryVariants are the twelve golden renders: the four of a key window
+// (goldentest.Variants) and, since S6.1h, the inactive and the
+// increased-contrast ones (goldentest.PolishVariants).
+var galleryVariants = slices.Concat(goldentest.Variants, goldentest.PolishVariants)
 
 // dpi is the window DPI of variant v.
 func dpi(v goldentest.Variant) uint32 { return uint32(96 * v.Scale) }
@@ -75,7 +78,7 @@ func withGalleryRenderer(t *testing.T, fn func(r *galleryRenderer)) {
 	t.Helper()
 	s := newTestShell()
 	s.sys = gallerySys()
-	s.warp = true
+	s.hooks.warp = true
 	d := aqua.New(s)
 	done := make(chan struct{})
 	timer := time.AfterFunc(60*time.Second, func() {
@@ -122,7 +125,9 @@ func withGalleryRenderer(t *testing.T, fn func(r *galleryRenderer)) {
 	}
 }
 
-// render renders variant v: it sets the DPI (a synthetic WM_DPICHANGED)
+// render renders variant v: it sets the DPI (a synthetic WM_DPICHANGED),
+// the OS's high-contrast theme (a WM_SETTINGCHANGE re-reads it), the
+// window's activation (a synthetic WM_ACTIVATE, the window stays hidden)
 // and the appearance, runs frames until no animation runs, paints the
 // window and returns the frame as straight-alpha RGBA. The frame must draw
 // on WARP, without rendering or recorder errors.
@@ -132,13 +137,29 @@ func (r *galleryRenderer) render(v goldentest.Variant) *image.NRGBA {
 	if r.sf.dpi != dpi(v) {
 		setDPI(t, r.sf, dpi(v))
 	}
+	if r.s.sys.(*fakeSys).hc != v.Contrast {
+		r.s.sys.(*fakeSys).hc = v.Contrast
+		w32.SendMessage(r.s.listener, w32.WM_SETTINGCHANGE, 0, 0)
+		rethrow()
+	}
+	if r.win.IsKey() == v.Inactive {
+		state := uintptr(w32.WA_ACTIVE)
+		if v.Inactive {
+			state = w32.WA_INACTIVE
+		}
+		w32.SendMessage(r.sf.hwnd, w32.WM_ACTIVATE, state, 0)
+		rethrow()
+	}
+	if r.win.IsKey() == v.Inactive {
+		t.Fatalf("%s: the window is key %v", v.Name(), r.win.IsKey())
+	}
 	mode := driver.AppearanceLight
 	if v.Dark {
 		mode = driver.AppearanceDark
 	}
 	r.d.SetAppearance(mode)
 	if a := r.win.Appearance(); a.Dark != v.Dark || !a.ReduceMotion || !a.LegacyScrollers ||
-		a.Accent != driver.DefaultAccent || a.IncreaseContrast {
+		a.Accent != driver.DefaultAccent || a.IncreaseContrast != v.Contrast {
 		t.Fatalf("%s: appearance %+v", v.Name(), a)
 	}
 	r.settle(v)
@@ -202,13 +223,15 @@ func TestGalleryRender(t *testing.T) {
 				}
 			}
 		}
-		// Back to light at 1×, after dark and 2×: the same pixels as the
-		// first render (nothing carries over between variants).
+		// Back to light at 1× after the last variant (dark, 2×, Increase
+		// Contrast; the loop above ran the inactive ones): the same pixels
+		// as the first render (nothing carries over between variants).
 		first := r.render(galleryVariants[0])
-		r.render(galleryVariants[3])
+		last := galleryVariants[len(galleryVariants)-1]
+		r.render(last)
 		if again := r.render(galleryVariants[0]); !bytes.Equal(again.Pix, first.Pix) {
 			res, _ := golden.Compare(first, again, golden.Options{})
-			t.Errorf("%s after %s differs: %v", galleryVariants[0].Name(), galleryVariants[3].Name(), res)
+			t.Errorf("%s after %s differs: %v", galleryVariants[0].Name(), last.Name(), res)
 		}
 	})
 }
@@ -217,8 +240,9 @@ func TestGalleryRender(t *testing.T) {
 // ./internal/shell/win32 -args -update).
 var updateGolden = flag.Bool("update", false, "rewrite the gallery goldens in internal/aqua/gallery/testdata/golden")
 
-// TestGalleryGolden (S3.6d) renders the four variants and compares each
-// with its golden PNG with golden.DefaultOptions; -update rewrites the
+// TestGalleryGolden (S3.6d; the inactive and increased-contrast variants
+// since S6.1h) renders every variant and compares each with its golden PNG
+// with golden.DefaultOptions; -update rewrites the
 // goldens instead. Every comparison is logged (native.sh runs this test
 // verbosely, so the report lands in its log). On a failure the actual image
 // and the diff are written to GOGUI_GOLDEN_OUT (or t.TempDir) as

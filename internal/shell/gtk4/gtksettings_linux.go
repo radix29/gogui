@@ -48,6 +48,19 @@ func (n *nativeGtkProps) boolProp(name string) (bool, bool) {
 	return gtk.GObject.ValueGetBoolean(v) != gtk.False, true
 }
 
+// intProp reads an int property as boolProp does.
+func (n *nativeGtkProps) intProp(name string) (int32, bool) {
+	if !n.has(name) {
+		return 0, false
+	}
+	v := gtk.GLib.Malloc0(unsafe.Sizeof(gtk.GValue{}))
+	defer gtk.GLib.Free(v)
+	gtk.GObject.ValueInit(v, gtk.TypeInt)
+	defer gtk.GObject.ValueUnset(v)
+	gtk.GObject.ObjectGetProperty(n.st, name, v)
+	return gtk.GObject.ValueGetInt(v), true
+}
+
 func (n *nativeGtkProps) watch(name string, p pointerSignalPeer, k kind) bool {
 	if !n.has(name) {
 		return false

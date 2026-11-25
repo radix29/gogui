@@ -39,17 +39,25 @@
 // Set/GetTextAntialiasMode, with D2D1_TEXT_ANTIALIAS_MODE and
 // D2D1_DRAW_TEXT_OPTIONS.
 //
-// Float path (com.Bind, purego): SetDpi (two FLOATs), DrawRoundedRectangle,
-// DrawGeometry (a FLOAT width), DrawBitmap (a FLOAT opacity), and
-// DrawTextLayout and the sink's
-// BeginFigure and AddLine (D2D1_POINT_2F by value: one integer register on
-// amd64, an HFA in s0/s1 on arm64). Each keeps its bound func per code
-// address (com.Method), so a call per segment doesn't go through Bind's
-// lock. Every other bound method takes integers and pointers only and goes
-// through com.Ptr.Call, structs by pointer included (and CreateBitmap's
-// D2D1_SIZE_U packed into one integer). D2D methods that return a struct
-// (GetSize, GetPixelSize, GetPixelFormat) come back through a hidden
-// pointer in MSVC's member-function ABI; none is bound.
+// Call paths (review P2). The per-draw methods (Clear, SetDpi,
+// SetTransform, the axis-aligned clip and layer pushes and pops, Fill*,
+// Draw*, DrawTextLayout, DrawImage, DrawBitmap, SolidColorBrush.SetColor
+// and the sink's figure methods) call syscall.SyscallN directly, with the
+// pointer conversions in the call expression, so a draw allocates nothing
+// (TestDrawAllocs); that is safe because none of them runs Go code (see
+// com/direct.go). Their FLOAT arguments (SetDpi, DrawRoundedRectangle's
+// and DrawGeometry's width, DrawBitmap's opacity) and D2D1_POINT_2F by
+// value (DrawTextLayout's origin, BeginFigure, AddLine) take the integer
+// slots on windows/amd64 (com.DirectFloats: the runtime mirrors the
+// first four into XMM0–3; directFloats selects the path, and the tests
+// run both); on windows/arm64, where floats go in s0–s7 and the point is
+// an HFA, they go through com.Bind (purego) with the bound func kept per
+// code address in a com.Method. The other methods (creation, effects,
+// properties) go through com.Ptr.Call and com.Ptr.CallOut, structs by
+// pointer included (and CreateBitmap's D2D1_SIZE_U packed into one
+// integer). D2D methods that return a struct (GetSize, GetPixelSize,
+// GetPixelFormat) come back through a hidden pointer in MSVC's
+// member-function ABI; none is bound.
 //
 // Enum traps the canvas maps rather than casts: CAP_STYLE is FLAT, SQUARE,
 // ROUND (render: Butt, Round, Square); render's miter join is

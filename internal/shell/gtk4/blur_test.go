@@ -251,7 +251,7 @@ func TestCanvasBlurClipOnly(t *testing.T) {
 			clipOnly([]string{"scale 1e-30,1e-30"}, "(30,10,20,20)")},
 		{"empty shape clips everything", blur(nil, render.Rect{X: 30, Y: 10, H: 20}, 4), clipOnly(nil, "(30,10,0,20)")},
 		{"negative shape clips everything", blur(nil, render.Rect{X: 30, W: -1, H: 20}, 4), clipOnly(nil, "(0,0,0,0)")},
-		{"Inf shape is ignored", blur(nil, render.Rect{X: cvInf, W: 1, H: 20}, 4), clipOnly(nil, "")},
+		{"Inf shape clips everything", blur(nil, render.Rect{X: cvInf, W: 1, H: 20}, 4), clipOnly(nil, "(0,0,0,0)")},
 		{"singular transform", blur(func(c *canvas) { c.Scale(0, 1) }, shape, 4),
 			clipOnly([]string{"scale 0,1"}, "(30,10,20,20)")},
 		{"outside the surface", blur(nil, render.Rect{X: 100, Y: 10, W: 20, H: 20}, 4), clipOnly(nil, "(100,10,20,20)")},

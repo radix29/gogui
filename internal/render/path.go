@@ -23,8 +23,9 @@ const (
 	OpClose
 )
 
-// points returns how many points a segment of kind op has.
-func (op Op) points() int {
+// Points returns how many points a segment of kind op has: the entries of
+// Segment.Pts it uses.
+func (op Op) Points() int {
 	switch op {
 	case OpMoveTo, OpLineTo:
 		return 1
@@ -54,7 +55,7 @@ func (op Op) String() string {
 }
 
 // Segment is one element of a path as seen by a backend. Only the first
-// Op.points() entries of Pts are used.
+// Op.Points() entries of Pts are used.
 type Segment struct {
 	Op  Op
 	Pts [3]Point
@@ -157,8 +158,10 @@ func (p *Path) CubicTo(c1, c2, q Point) *Path {
 //
 // The arc is stored as at most two cubic Béziers (one per quarter turn or
 // less). Without a current point it acts as MoveTo(p1). When the radius is
-// zero, negative, NaN or +Inf, or the three points are collinear or coincide, it
-// draws a line to p1.
+// zero, negative, NaN or +Inf, the three points are collinear or coincide,
+// or a point (or the arc computed from them) is not finite, it draws a line
+// to p1, so a NaN point never becomes NaN cubics (a NaN p1 stays in the
+// path, where the canvases reject it: ValidPath).
 func (p *Path) ArcTo(p1, p2 Point, radius float64) *Path {
 	if !p.hasCur {
 		return p.MoveTo(p1)
@@ -170,7 +173,8 @@ func (p *Path) ArcTo(p1, p2 Point, radius float64) *Path {
 	ax, ay := p0.X-p1.X, p0.Y-p1.Y
 	bx, by := p2.X-p1.X, p2.Y-p1.Y
 	la, lb := math.Hypot(ax, ay), math.Hypot(bx, by)
-	if r == 0 || math.IsInf(r, 1) || la == 0 || lb == 0 {
+	if r == 0 || math.IsInf(r, 1) || !ValidPoint(p0) || !ValidPoint(p1) || !ValidPoint(p2) ||
+		la == 0 || lb == 0 || math.IsInf(la, 1) || math.IsInf(lb, 1) {
 		return p.LineTo(p1)
 	}
 	ax, ay, bx, by = ax/la, ay/la, bx/lb, by/lb
@@ -190,6 +194,9 @@ func (p *Path) ArcTo(p1, p2 Point, radius float64) *Path {
 	ml := math.Hypot(mx, my)
 	h := r / math.Sin(half)
 	c := Point{X: p1.X + mx/ml*h, Y: p1.Y + my/ml*h}
+	if !ValidPoint(t0) || !ValidPoint(t1) || !ValidPoint(c) {
+		return p.LineTo(p1)
+	}
 
 	p.LineTo(t0)
 	a0 := math.Atan2(t0.Y-c.Y, t0.X-c.X)
@@ -249,7 +256,7 @@ func (p *Path) Segments() iter.Seq[Segment] {
 		i := 0
 		for _, op := range p.ops {
 			s := Segment{Op: op}
-			n := op.points()
+			n := op.Points()
 			copy(s.Pts[:n], p.pts[i:i+n])
 			i += n
 			if !yield(s) {
@@ -264,38 +271,68 @@ func (p *Path) Segments() iter.Seq[Segment] {
 // control points that lie off the curve. An empty path has the zero Rect.
 // The box ignores stroke width.
 func (p *Path) Bounds() Rect {
-	if len(p.pts) == 0 {
-		return Rect{}
-	}
-	b := bbox{minX: math.Inf(1), minY: math.Inf(1), maxX: math.Inf(-1), maxY: math.Inf(-1)}
-	var cur Point
+	var b bbox
 	for s := range p.Segments() {
-		switch s.Op {
-		case OpMoveTo, OpLineTo:
-			cur = s.Pts[0]
-			b.add(cur)
-		case OpQuadTo:
-			b.add(s.Pts[1])
-			for _, t := range quadExtrema(cur, s.Pts[0], s.Pts[1]) {
-				b.add(quadAt(cur, s.Pts[0], s.Pts[1], t))
-			}
-			cur = s.Pts[1]
-		case OpCubicTo:
-			b.add(s.Pts[2])
-			for _, t := range cubicExtrema(cur, s.Pts[0], s.Pts[1], s.Pts[2]) {
-				b.add(cubicAt(cur, s.Pts[0], s.Pts[1], s.Pts[2], t))
-			}
-			cur = s.Pts[2]
-		}
+		b.segment(s)
 	}
-	return Rect{X: b.minX, Y: b.minY, W: b.maxX - b.minX, H: b.maxY - b.minY}
+	return b.rect()
 }
 
-type bbox struct{ minX, minY, maxX, maxY float64 }
+// SegmentsBounds returns Path.Bounds of the path the segments segs make
+// (as Path.Segments yields them, a recording keeps them): the zero Rect
+// when they have no point.
+func SegmentsBounds(segs []Segment) Rect {
+	var b bbox
+	for _, s := range segs {
+		b.segment(s)
+	}
+	return b.rect()
+}
+
+// bbox accumulates the bounds of a path's segments, in order.
+type bbox struct {
+	minX, minY, maxX, maxY float64
+	cur                    Point // the current point
+	any                    bool  // a point was added
+}
 
 func (b *bbox) add(q Point) {
+	if !b.any {
+		b.minX, b.maxX, b.minY, b.maxY, b.any = q.X, q.X, q.Y, q.Y, true
+		return
+	}
 	b.minX, b.maxX = math.Min(b.minX, q.X), math.Max(b.maxX, q.X)
 	b.minY, b.maxY = math.Min(b.minY, q.Y), math.Max(b.maxY, q.Y)
+}
+
+// segment adds s: its end point and the extrema of a curve.
+func (b *bbox) segment(s Segment) {
+	switch s.Op {
+	case OpMoveTo, OpLineTo:
+		b.cur = s.Pts[0]
+		b.add(b.cur)
+	case OpQuadTo:
+		b.add(s.Pts[1])
+		ts, n := quadExtrema(b.cur, s.Pts[0], s.Pts[1])
+		for _, t := range ts[:n] {
+			b.add(quadAt(b.cur, s.Pts[0], s.Pts[1], t))
+		}
+		b.cur = s.Pts[1]
+	case OpCubicTo:
+		b.add(s.Pts[2])
+		ts, n := cubicExtrema(b.cur, s.Pts[0], s.Pts[1], s.Pts[2])
+		for _, t := range ts[:n] {
+			b.add(cubicAt(b.cur, s.Pts[0], s.Pts[1], s.Pts[2], t))
+		}
+		b.cur = s.Pts[2]
+	}
+}
+
+func (b *bbox) rect() Rect {
+	if !b.any {
+		return Rect{}
+	}
+	return Rect{X: b.minX, Y: b.minY, W: b.maxX - b.minX, H: b.maxY - b.minY}
 }
 
 func quadAt(p0, p1, p2 Point, t float64) Point {
@@ -315,41 +352,46 @@ func cubicAt(p0, p1, p2, p3 Point, t float64) Point {
 	}
 }
 
+// extrema holds the curve parameters of a segment's extrema: at most one
+// per axis for a quadratic, two for a cubic.
+type extrema [4]float64
+
 // quadExtrema returns the parameters in (0, 1) where the quadratic's x or y
-// derivative is zero.
-func quadExtrema(p0, p1, p2 Point) []float64 {
-	var ts []float64
+// derivative is zero: the first n entries of ts.
+func quadExtrema(p0, p1, p2 Point) (ts extrema, n int) {
 	for _, v := range [2][3]float64{{p0.X, p1.X, p2.X}, {p0.Y, p1.Y, p2.Y}} {
 		// B'(t) = 2[(p1-p0) + t(p2-2p1+p0)]
 		den := v[0] - 2*v[1] + v[2]
 		if den != 0 {
 			if t := (v[0] - v[1]) / den; t > 0 && t < 1 {
-				ts = append(ts, t)
+				ts[n] = t
+				n++
 			}
 		}
 	}
-	return ts
+	return ts, n
 }
 
 // cubicExtrema returns the parameters in (0, 1) where the cubic's x or y
-// derivative is zero.
-func cubicExtrema(p0, p1, p2, p3 Point) []float64 {
-	var ts []float64
+// derivative is zero: the first n entries of ts.
+func cubicExtrema(p0, p1, p2, p3 Point) (ts extrema, n int) {
 	for _, v := range [2][4]float64{{p0.X, p1.X, p2.X, p3.X}, {p0.Y, p1.Y, p2.Y, p3.Y}} {
 		// B'(t)/3 = a t² + b t + c
 		a := -v[0] + 3*v[1] - 3*v[2] + v[3]
 		b := 2 * (v[0] - 2*v[1] + v[2])
 		c := v[1] - v[0]
-		ts = appendQuadRoots(ts, a, b, c)
+		n = quadRoots(&ts, n, a, b, c)
 	}
-	return ts
+	return ts, n
 }
 
-// appendQuadRoots appends the roots in (0, 1) of a t² + b t + c.
-func appendQuadRoots(ts []float64, a, b, c float64) []float64 {
+// quadRoots stores the roots in (0, 1) of a t² + b t + c in ts from n on
+// and returns the new count.
+func quadRoots(ts *extrema, n int, a, b, c float64) int {
 	in := func(t float64) {
 		if t > 0 && t < 1 {
-			ts = append(ts, t)
+			ts[n] = t
+			n++
 		}
 	}
 	const eps = 1e-12
@@ -357,14 +399,14 @@ func appendQuadRoots(ts []float64, a, b, c float64) []float64 {
 		if b != 0 {
 			in(-c / b)
 		}
-		return ts
+		return n
 	}
 	disc := b*b - 4*a*c
 	if disc < 0 {
-		return ts
+		return n
 	}
 	sq := math.Sqrt(disc)
 	in((-b + sq) / (2 * a))
 	in((-b - sq) / (2 * a))
-	return ts
+	return n
 }

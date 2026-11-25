@@ -13,7 +13,9 @@
 // The canvas checks the Canvas contract and collects every violation as an
 // error instead of panicking: Restore without a matching Save, Pop without a
 // matching Push*, pairs still open at End, semantic colors, nil images and
-// layouts, non-finite transform arguments, and calls after End. An offending
+// layouts, non-finite transform arguments, invalid geometry (a rect that is
+// not finite or has a negative size, a non-finite point: render.ValidRect,
+// ValidPoint, ValidPath), and calls after End. An offending
 // call is ignored (nothing is recorded), as a real backend would. End returns
 // all errors joined.
 //
@@ -117,29 +119,9 @@ type Op struct {
 // offset and blur, and the clip.
 func (o Op) Bounds() render.Rect {
 	if o.Kind == FillPath || o.Kind == StrokePath {
-		var p render.Path
-		appendSegments(&p, o.Path)
-		return o.Transform.ApplyRect(p.Bounds())
+		return o.Transform.ApplyRect(render.SegmentsBounds(o.Path))
 	}
 	return o.Transform.ApplyRect(o.Rect)
-}
-
-// appendSegments replays segs into p.
-func appendSegments(p *render.Path, segs []render.Segment) {
-	for _, s := range segs {
-		switch s.Op {
-		case render.OpMoveTo:
-			p.MoveTo(s.Pts[0])
-		case render.OpLineTo:
-			p.LineTo(s.Pts[0])
-		case render.OpQuadTo:
-			p.QuadTo(s.Pts[0], s.Pts[1])
-		case render.OpCubicTo:
-			p.CubicTo(s.Pts[0], s.Pts[1], s.Pts[2])
-		case render.OpClose:
-			p.Close()
-		}
-	}
 }
 
 // frameKind says which call pushed a state frame.
@@ -180,6 +162,9 @@ type Canvas struct {
 	cur     state
 	stack   []frame
 	ops     []Op
+	segs    []render.Segment      // the arena of the ops' paths
+	stops   []render.GradientStop // the arena of their gradient stops
+	dash    []float64             // the arena of their dash patterns
 	errs    []error
 	calls   int
 	ended   bool
@@ -331,55 +316,115 @@ func (c *Canvas) Concat(t render.Transform) {
 
 // ClipRoundedRect implements render.Canvas. The recorder tracks the clip as
 // a device-space bounding box; the radii only show in the box's corners not
-// being cut.
+// being cut. An invalid rect (render.ValidRect) is reported and clips
+// everything away, as on the backends.
 func (c *Canvas) ClipRoundedRect(r render.Rect, _ render.Radii) {
 	if c.begin("ClipRoundedRect") {
-		c.clip(r)
+		c.clip("ClipRoundedRect", r)
 	}
 }
 
-func (c *Canvas) clip(r render.Rect) {
+func (c *Canvas) clip(name string, r render.Rect) {
+	if !c.validRect(name, r) {
+		c.cur.clip = rect{}
+		return
+	}
 	c.cur.clip = c.cur.clip.Intersect(c.cur.xf.ApplyRect(r))
+}
+
+// validRect reports whether r is a valid rect, and reports it if not.
+func (c *Canvas) validRect(name string, r render.Rect) bool {
+	if render.ValidRect(r) {
+		return true
+	}
+	c.fail(name, fmt.Sprintf("invalid rect %v (not finite or a negative size)", r))
+	return false
+}
+
+// validPath reports whether every point of p is finite, and reports it if
+// not.
+func (c *Canvas) validPath(name string, p *render.Path) bool {
+	if render.ValidPath(p) {
+		return true
+	}
+	c.fail(name, "path with a non-finite point")
+	return false
 }
 
 // FillRoundedRect implements render.Canvas.
 func (c *Canvas) FillRoundedRect(r render.Rect, radii render.Radii, p render.Paint) {
-	if c.begin("FillRoundedRect") && !c.semantic("FillRoundedRect", p.IsSemantic()) {
-		c.record(Op{Kind: FillRoundedRect, Rect: r, Radii: radii.Clamped(r), Paint: p.Normalized()})
+	const name = "FillRoundedRect"
+	if c.begin(name) && !c.semantic(name, p.IsSemantic()) && c.validRect(name, r) {
+		c.record(Op{Kind: FillRoundedRect, Rect: r, Radii: radii.Clamped(r), Paint: c.paint(p)})
 	}
 }
 
 // StrokeRoundedRect implements render.Canvas.
 func (c *Canvas) StrokeRoundedRect(r render.Rect, radii render.Radii, width float64, p render.Paint) {
-	if c.begin("StrokeRoundedRect") && !c.semantic("StrokeRoundedRect", p.IsSemantic()) {
-		c.record(Op{Kind: StrokeRoundedRect, Rect: r, Radii: radii.Clamped(r), Width: render.StrokeWidth(width), Paint: p.Normalized()})
+	const name = "StrokeRoundedRect"
+	if c.begin(name) && !c.semantic(name, p.IsSemantic()) && c.validRect(name, r) {
+		c.record(Op{Kind: StrokeRoundedRect, Rect: r, Radii: radii.Clamped(r), Width: render.StrokeWidth(width), Paint: c.paint(p)})
 	}
 }
 
-func segments(p *render.Path) []render.Segment {
-	if p == nil {
+// segments copies the segments of p into the canvas's segment arena (one
+// growing slice for every path of the recording, so a path costs no
+// allocation of its own) and returns them, capped so that the slice of one
+// op never grows into the next.
+func (c *Canvas) segments(p *render.Path) []render.Segment {
+	if p == nil || p.Empty() {
 		return nil
 	}
-	return slices.Collect(p.Segments())
+	i := len(c.segs)
+	c.segs = slices.AppendSeq(c.segs, p.Segments())
+	return c.segs[i:len(c.segs):len(c.segs)]
+}
+
+// paint returns p normalized, its stops copied into the canvas's stop
+// arena: Normalized may return the caller's slice, which a recording must
+// not keep.
+func (c *Canvas) paint(p render.Paint) render.Paint {
+	p = p.Normalized()
+	if len(p.Stops) > 0 {
+		i := len(c.stops)
+		c.stops = append(c.stops, p.Stops...)
+		p.Stops = c.stops[i:len(c.stops):len(c.stops)]
+	}
+	return p
+}
+
+// stroke returns s normalized, its dash pattern copied into the canvas's
+// dash arena (as paint does for stops).
+func (c *Canvas) stroke(s render.StrokeStyle) render.StrokeStyle {
+	s = s.Normalized()
+	if len(s.Dash) > 0 {
+		i := len(c.dash)
+		c.dash = append(c.dash, s.Dash...)
+		s.Dash = c.dash[i:len(c.dash):len(c.dash)]
+	}
+	return s
 }
 
 // FillPath implements render.Canvas.
 func (c *Canvas) FillPath(path *render.Path, p render.Paint) {
-	if c.begin("FillPath") && !c.semantic("FillPath", p.IsSemantic()) {
-		c.record(Op{Kind: FillPath, Path: segments(path), Paint: p.Normalized()})
+	const name = "FillPath"
+	if c.begin(name) && !c.semantic(name, p.IsSemantic()) && c.validPath(name, path) {
+		c.record(Op{Kind: FillPath, Path: c.segments(path), Paint: c.paint(p)})
 	}
 }
 
 // StrokePath implements render.Canvas.
 func (c *Canvas) StrokePath(path *render.Path, width float64, p render.Paint, s render.StrokeStyle) {
-	if c.begin("StrokePath") && !c.semantic("StrokePath", p.IsSemantic()) {
-		c.record(Op{Kind: StrokePath, Path: segments(path), Width: render.StrokeWidth(width), Paint: p.Normalized(), Stroke: s.Normalized()})
+	const name = "StrokePath"
+	if c.begin(name) && !c.semantic(name, p.IsSemantic()) && c.validPath(name, path) {
+		c.record(Op{Kind: StrokePath, Path: c.segments(path), Width: render.StrokeWidth(width), Paint: c.paint(p), Stroke: c.stroke(s)})
 	}
 }
 
 // DrawShadow implements render.Canvas.
 func (c *Canvas) DrawShadow(r render.Rect, radii render.Radii, s render.Shadow) {
-	if c.begin("DrawShadow") && !c.semantic("DrawShadow", s.IsSemantic()) {
+	const name = "DrawShadow"
+	if c.begin(name) && !c.semantic(name, s.IsSemantic()) && c.validRect(name, r) {
 		c.record(Op{Kind: DrawShadow, Rect: r, Radii: radii.Clamped(r), Shadow: s.Normalized()})
 	}
 }
@@ -391,6 +436,10 @@ func (c *Canvas) DrawText(l render.TextLayout, origin render.Point, color render
 	}
 	if l == nil {
 		c.fail("DrawText", "nil layout")
+		return
+	}
+	if !render.ValidPoint(origin) {
+		c.fail("DrawText", fmt.Sprintf("non-finite origin %v", origin))
 		return
 	}
 	sz := l.Size()
@@ -406,7 +455,9 @@ func (c *Canvas) DrawImage(img render.Image, dst render.Rect) {
 		c.fail("DrawImage", "nil image")
 		return
 	}
-	c.record(Op{Kind: DrawImage, Rect: dst, Image: img})
+	if c.validRect("DrawImage", dst) {
+		c.record(Op{Kind: DrawImage, Rect: dst, Image: img})
+	}
 }
 
 // PushOpacity implements render.Canvas.
@@ -420,14 +471,20 @@ func (c *Canvas) PushOpacity(alpha float64) {
 	c.cur.opacity *= a
 }
 
-// PushBackdropBlur implements render.Canvas.
+// PushBackdropBlur implements render.Canvas. An invalid rect is reported;
+// the layer still opens (its Pop must match), recorded with an empty rect,
+// and clips everything away.
 func (c *Canvas) PushBackdropBlur(r render.Rect, radii render.Radii, radius float64) {
 	if !c.begin("PushBackdropBlur") {
 		return
 	}
-	c.record(Op{Kind: PushBackdropBlur, Rect: r, Radii: radii.Clamped(r), Blur: render.BlurRadius(radius)})
+	o := Op{Kind: PushBackdropBlur, Blur: render.BlurRadius(radius)}
+	if render.ValidRect(r) {
+		o.Rect, o.Radii = r, radii.Clamped(r)
+	}
+	c.record(o)
 	c.stack = append(c.stack, frame{saved: c.cur, kind: frameBlur, call: c.calls})
-	c.clip(r)
+	c.clip("PushBackdropBlur", r)
 }
 
 // Dump returns the recorded ops as text, one Op.String per line, joined by

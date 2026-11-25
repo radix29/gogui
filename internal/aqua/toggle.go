@@ -27,27 +27,7 @@ func toggleStates(s driver.CheckState) a11y.States {
 // toggleFont returns the font of a toggle's title: the system font size of
 // the control size.
 func toggleFont(cs driver.ControlSize) driver.Font {
-	return driver.Font{Size: tokens.Typography.FontSize.At(cs)}
-}
-
-// toggleTitle caches the title layout of a checkbox or a radio.
-type toggleTitle struct {
-	layout render.TextLayout
-	key    buttonTitleKey
-}
-
-// get returns text on one line in font, untruncated, or nil for an empty
-// text. The layout is kept until the text or the font changes.
-func (t *toggleTitle) get(ts render.TextSystem, text string, font driver.Font) render.TextLayout {
-	if text == "" {
-		return nil
-	}
-	k := buttonTitleKey{text: text, font: font}
-	if t.layout == nil || t.key != k {
-		t.layout = ts.NewLayout(oneLine(k.text), k.font, 0)
-		t.key = k
-	}
-	return t.layout
+	return systemFont(cs)
 }
 
 // toggleSize returns the fitting size of a mark of side mark followed by
@@ -64,17 +44,17 @@ func toggleSize(mark, gap float64, l render.TextLayout) driver.Size {
 }
 
 // paintToggleTitle draws the title l of text at x in the bounds b, centred
-// vertically, truncated with an ellipsis to the width left, in
+// vertically, truncated with an ellipsis to the width left (through memo), in
 // ColorControlText (ColorDisabledControlText when disabled). Nothing is
 // drawn without room or when the line is higher than b.
-func paintToggleTitle(c render.Canvas, ts render.TextSystem, l render.TextLayout, text string, font driver.Font,
+func paintToggleTitle(c render.Canvas, memo *truncMemo, ts render.TextSystem, l render.TextLayout, text string, font driver.Font,
 	x float64, b driver.Rect, disabled bool, a driver.Appearance) {
 	avail := b.W - x
 	if l == nil || avail <= 0 {
 		return
 	}
 	if l.Size().W > avail {
-		l = truncate(ts, text, font, avail)
+		l = memo.truncate(ts, text, font, avail)
 	}
 	if l == nil || l.Size().H > b.H {
 		return

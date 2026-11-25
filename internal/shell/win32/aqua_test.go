@@ -16,6 +16,7 @@ import (
 	"github.com/radix29/gogui/internal/aqua"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/ffi"
+	"github.com/radix29/gogui/internal/shell"
 	"github.com/radix29/gogui/internal/shell/shellkit"
 	"github.com/radix29/gogui/internal/shell/win32/w32"
 	"golang.org/x/sys/windows"
@@ -44,16 +45,17 @@ func (okButton) Clicked() {}
 // framePx paints sf through WM_PAINT and returns the whole frame, read
 // back before Present. The frame must draw without rendering or recorder
 // errors.
-func framePx(t *testing.T, sf *surface) (w, h int, pix []byte) {
+func framePx(t *testing.T, win window) (w, h int, pix []byte) {
 	t.Helper()
+	sf := win.swap()
 	drawn := false
-	sf.s.onDrawn = func(d *surface) {
+	sf.s.hooks.onDrawn = func(d *swapTarget) {
 		if d == sf {
 			w, h, pix = readAll(t, sf)
 			drawn = true
 		}
 	}
-	defer func() { sf.s.onDrawn = nil }()
+	defer func() { sf.s.hooks.onDrawn = nil }()
 	w32.SendMessage(sf.hwnd, w32.WM_PAINT, 0, 0)
 	rethrow()
 	if !drawn || sf.renderErr != nil || sf.paintErr != nil {
@@ -115,7 +117,7 @@ func nearPx(a, b [4]byte, tol int) bool {
 
 // setDPI sends a synthetic WM_DPICHANGED to dpi that keeps the logical
 // size (as TestSurfaceDPIChanged).
-func setDPI(t *testing.T, sf *surface, dpi uint32) {
+func setDPI(t testing.TB, sf *surface, dpi uint32) {
 	t.Helper()
 	size := sf.Size()
 	wr, err := w32.GetWindowRect(sf.hwnd)
@@ -142,8 +144,9 @@ func setDPI(t *testing.T, sf *surface, dpi uint32) {
 // errors; inShell checks that no references are left.
 func TestSurfaceAquaWindow(t *testing.T) {
 	inShell(t, func(s *Shell) {
-		d := aqua.New(s) // only for the widget factory; never run
-		win, err := aqua.NewWindow(s, driver.WindowConfig{Title: "Hello", Size: driver.Size{W: 360, H: 180},
+		sv := shell.Services{Text: s.TextSystem(), Clock: s.Clock()}
+		d := aqua.NewWithServices(s, sv) // only for the widget factory; never run
+		win, err := aqua.NewWindow(s, sv, driver.WindowConfig{Title: "Hello", Size: driver.Size{W: 360, H: 180},
 			Style: driver.StyleTitled | driver.StyleClosable | driver.StyleMiniaturizable | driver.StyleResizable},
 			winHandler{})
 		if err != nil {
@@ -283,4 +286,50 @@ func printWindow(t *testing.T, hwnd windows.HWND) (w, h int, pix []byte) {
 		pix[i] = 255 // GDI leaves alpha undefined
 	}
 	return w, h, pix
+}
+
+// countButton counts a push button's clicks.
+type countButton struct{ n *int }
+
+func (b countButton) Clicked() { *b.n++ }
+
+// TestSurfaceAquaFirstClick (S6.1c): an aqua window on a real surface, the
+// press Windows activates it with (WM_MOUSEACTIVATE, WM_ACTIVATE, then the
+// button messages) only activates it: the push button under it does not
+// click; the next click does.
+func TestSurfaceAquaFirstClick(t *testing.T) {
+	inShell(t, func(s *Shell) {
+		sv := shell.Services{Text: s.TextSystem(), Clock: s.Clock()}
+		d := aqua.NewWithServices(s, sv) // only for the widget factory; never run
+		win, err := aqua.NewWindow(s, sv, driver.WindowConfig{Title: "First click", Size: driver.Size{W: 360, H: 180},
+			Style: driver.StyleTitled | driver.StyleClosable}, winHandler{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sf := win.Surface().(*surface)
+		defer win.Close()
+		clicks := 0
+		btn := d.NewButton(countButton{&clicks})
+		btn.SetTitle("OK")
+		btn.SetFrame(driver.Rect{X: 20, Y: 20, W: 160, H: 30})
+		win.SetContent(btn)
+		at := pxAt(sf, 100, aqua.TitleBarHeight()+35)
+		click := func() {
+			sendTo(sf.hwnd, w32.WM_MOUSEMOVE, 0, at)
+			sendTo(sf.hwnd, w32.WM_LBUTTONDOWN, w32.MK_LBUTTON, at)
+			sendTo(sf.hwnd, w32.WM_LBUTTONUP, 0, at)
+		}
+
+		sendTo(sf.hwnd, w32.WM_ACTIVATE, w32.WA_INACTIVE, 0)
+		sendTo(sf.hwnd, w32.WM_MOUSEACTIVATE, uintptr(sf.hwnd), w32.HTCLIENT|w32.WM_LBUTTONDOWN<<16)
+		sendTo(sf.hwnd, w32.WM_ACTIVATE, w32.WA_CLICKACTIVE, 0)
+		click()
+		if !win.IsKey() || clicks != 0 {
+			t.Fatalf("activating click: key %v, clicks %d, want key and 0", win.IsKey(), clicks)
+		}
+		click()
+		if clicks != 1 {
+			t.Errorf("second click: clicks %d, want 1", clicks)
+		}
+	})
 }

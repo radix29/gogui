@@ -34,7 +34,7 @@ func fakeCheckbox(title string) *fake {
 	return newFake(kindCheckbox, c)
 }
 
-func wantFrame(t *testing.T, name string, w Widget, want Rect) {
+func wantFrame(t testing.TB, name string, w Widget, want Rect) {
 	t.Helper()
 	got := frameOf(w)
 	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
@@ -52,7 +52,7 @@ func frameOf(w Widget) Rect {
 	return stubBase(w).Frame
 }
 
-// stubPeer returns w's peer, or the stub peer inside an aqua placeholder
+// stubPeer returns w's peer, or the stub peer inside an aqua
 // peer (examples_test.go runs the example trees on both drivers).
 func stubPeer(w Widget) driver.Widget {
 	p := w.peerWidget()
@@ -110,14 +110,14 @@ func wantChildren(t *testing.T, name string, w Widget, want ...Widget) {
 	}
 }
 
-func layoutAt(w Widget, size Size) { layout.NewRoot(w.node()).Layout(size) }
+func layoutAt(w Widget, size Size) { layout.NewRoot(w.node()).LayoutMin(size) }
 
 func TestHelloTree(t *testing.T) {
 	runApp(t, func(*App) {
 		greeting := NewLabel("Hello!").SetFont(BoldSystemFont(15))
 		name, greet := fakeField(), fakeButton("Greet")
 		row := HStack(8, Spacer(), greet)
-		col := VStack(12, greeting, name, row).Padding(20)
+		col := VStack(12, greeting, name, row).SetPadding(20)
 		wantChildren(t, "vstack", col, greeting, name, row)
 		wantChildren(t, "hstack", row, greet) // the spacer has no peer
 		layoutAt(col, Size{W: 360, H: 180})
@@ -152,17 +152,17 @@ func TestFormTree(t *testing.T) {
 			Row("Role:", role), Row("Plan:", plan), Row("", newsletter), Row("", terms)}
 		form := Form(rows...)
 		buttons := HStack(8, Spacer(), cancel, create)
-		col := VStack(16, form, Spacer(), buttons).Padding(20)
+		col := VStack(16, form, Spacer(), buttons).SetPadding(20)
 
 		// Row labels get a Label peer, placed before their control; "" none.
 		var want []Widget
-		for _, r := range rows {
+		for _, r := range form.rows {
 			if r.label != nil {
 				want = append(want, r.label)
 			}
 			want = append(want, r.control)
 		}
-		if len(want) != 12 || rows[5].label != nil {
+		if len(want) != 12 || form.rows[5].label != nil {
 			t.Fatalf("%d form children, want 12 (5 labels)", len(want))
 		}
 		wantChildren(t, "form", form, want...)
@@ -173,7 +173,7 @@ func TestFormTree(t *testing.T) {
 		labels := []Rect{{X: 28, Y: 3, W: 35, H: 16}, {X: 14, Y: 33, W: 49, H: 16},
 			{X: 0, Y: 63, W: 63, H: 16}, {X: 28, Y: 93, W: 35, H: 16}, {X: 28, Y: 121, W: 35, H: 16}}
 		for i, r := range labels {
-			wantFrame(t, rows[i].label.Text(), rows[i].label, r)
+			wantFrame(t, form.rows[i].label.Text(), form.rows[i].label, r)
 		}
 		wantFrame(t, "name", name, Rect{X: 71, W: 349, H: 22})
 		wantFrame(t, "password", password, Rect{X: 71, Y: 60, W: 349, H: 22})
@@ -216,14 +216,17 @@ func TestStackAddAndReparent(t *testing.T) {
 		if !stubLabel(t, lbl).Destroyed || len(f.f.Rows()) != 1 {
 			t.Error("the moved control's row label survived")
 		}
-		// The same FormRow in a second form moves the label with the control.
+		// The same FormRow in a second form (A4): the control moves, and each
+		// form has its own label; the first form's label goes with its row.
 		r := Row("Plan:", b)
 		f1 := Form(r)
+		l1 := f1.rows[0].label
 		f2 := Form(r)
+		l2 := f2.rows[0].label
 		wantChildren(t, "first form", f1)
-		wantChildren(t, "second form", f2, r.label, b)
-		if stubLabel(t, r.label).Destroyed || len(f1.rows) != 0 {
-			t.Error("reusing a FormRow destroyed its label or left a row behind")
+		wantChildren(t, "second form", f2, l2, b)
+		if l1 == l2 || !stubLabel(t, l1).Destroyed || stubLabel(t, l2).Destroyed || len(f1.rows) != 0 || l2.Text() != "Plan:" {
+			t.Error("reusing a FormRow: labels not per form, or a row left behind")
 		}
 		for _, bad := range []func(){
 			func() { s.Add(nil) },
@@ -280,7 +283,7 @@ func TestStackSettersAndInvalidate(t *testing.T) {
 		s := VStack(0)
 		h := &countingHost{}
 		s.host = h
-		var got *Stack = s.Padding(5).PaddingInsets(Insets{Top: 1, Left: 2, Bottom: 3, Right: 4}).
+		var got *Stack = s.SetPadding(5).SetPaddingInsets(Insets{Top: 1, Left: 2, Bottom: 3, Right: 4}).
 			Add(NewLabel("x")).SetHidden(false)
 		if got != s || s.s.Padding() != (Insets{Top: 1, Left: 2, Bottom: 3, Right: 4}) {
 			t.Errorf("chain or padding: %v", s.s.Padding())

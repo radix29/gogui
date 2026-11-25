@@ -29,7 +29,8 @@ func pu(p float64) int32 { return int32(p * pangoScale) }
 // tgLTR returns Pango's lines and clusters for text laid out left to
 // right: lines are Pango's {start, length} (a paragraph delimiter left
 // out, a forced break kept in), clusters start at cs, each w points wide,
-// one after the other from x 0 of their line, and lines are h tall. A
+// one after the other from x 0 of their line, and lines are h tall with
+// the baseline at 3/4 of it. A
 // cluster in a line's break is at the line's end; a cluster is white when
 // its first character is white space.
 func tgLTR(text string, lines [][2]int, cs []int, w, h float64) ([]pangoLine, []pangoCluster) {
@@ -58,7 +59,8 @@ func tgLTR(text string, lines [][2]int, cs []int, w, h float64) ([]pangoLine, []
 	pls := make([]pangoLine, len(lines))
 	for li, ln := range lines {
 		pls[li] = pangoLine{start: int32(ln[0]), length: int32(ln[1]),
-			top: pu(float64(li) * h), bottom: pu(float64(li+1) * h), endX: pu(float64(count[li]) * w)}
+			top: pu(float64(li) * h), bottom: pu(float64(li+1) * h), baseline: pu((float64(li) + 0.75) * h),
+			endX: pu(float64(count[li]) * w)}
 	}
 	return pls, pcs
 }

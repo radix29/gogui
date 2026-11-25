@@ -20,7 +20,9 @@ import (
 //   - Bezel: the frame's width, ControlHeight high (at most the frame's
 //     height), centred vertically and pixel-aligned; its shadow
 //     (BezelShadow*), its fill (Theme.ButtonFill) and, unless it is filled
-//     with the accent, its 1 pt BezelBorder (whole device pixels).
+//     with the accent, its 1 pt BezelBorder (whole device pixels); an
+//     accent-filled bezel gets the BezelOutline instead with Increase
+//     Contrast (S6.1e).
 //   - Title: one line in the system font of the control size with
 //     ButtonTitleWeight, centred in the bezel and truncated with an
 //     ellipsis to the bezel minus its padding, in Theme.ButtonText.
@@ -30,23 +32,18 @@ import (
 //     drawn as a plain one in an inactive window or while disabled;
 //     disabled draws the disabled text color and ignores the pointer.
 //   - Focus: the focus ring around the bezel (FocusControl).
-//   - Clicks go through a pressTracker: a release over the button clicks
-//     it. Activate (Return, Escape, Space, the a11y press) is a click too,
-//     refused while disabled.
+//   - Clicks go through the clickControl core: a release over the button
+//     clicks it. Activate (Return, Escape, Space, the a11y press) is a
+//     click too, refused while disabled. A press by key (Return, Escape,
+//     Space, the alert's keys) first flashes the button pressed for
+//     keyFlash, as AppKit's performClick: does.
 //   - Accessibility: a button with the title and the press action.
 type Button struct {
 	*stub.Button
 	peerBase
 	view *pushButton
 
-	// The title layout and what it was made from.
-	title    render.TextLayout
-	titleKey buttonTitleKey
-}
-
-type buttonTitleKey struct {
-	text string
-	font driver.Font
+	title layoutMemo // the title layout
 }
 
 // NewButton returns a push button.
@@ -83,7 +80,8 @@ func (b *Button) SetCancel(isCancel bool) {
 // TitleFont returns the font of the title: the system font size of the
 // control size with ButtonTitleWeight.
 func (b *Button) TitleFont() driver.Font {
-	f := driver.Font{Size: tokens.Typography.FontSize.At(b.ControlSize), Weight: tokens.Controls.ButtonTitleWeight}
+	f := systemFont(b.ControlSize)
+	f.Weight = tokens.Controls.ButtonTitleWeight
 	if f.Weight == driver.FontWeightRegular {
 		f.Weight = 0 // the same font; keeps the dumps short
 	}
@@ -93,15 +91,7 @@ func (b *Button) TitleFont() driver.Font {
 // titleLayout returns the title on one line, untruncated, or nil for an
 // empty title.
 func (b *Button) titleLayout() render.TextLayout {
-	if b.Title == "" {
-		return nil
-	}
-	k := buttonTitleKey{text: b.Title, font: b.TitleFont()}
-	if b.title == nil || b.titleKey != k {
-		b.title = b.view.d.sh.TextSystem().NewLayout(oneLine(k.text), k.font, 0)
-		b.titleKey = k
-	}
-	return b.title
+	return b.title.get(b.view.d.text, b.Title, b.TitleFont())
 }
 
 // FittingSize implements driver.Widget: the bezel size, clamped to max; a
@@ -122,11 +112,14 @@ func (b *Button) FittingSize(max driver.Size) driver.Size {
 // pushButton is the element of a Button.
 type pushButton struct {
 	Base
+	clickControl
 	d     *Driver
 	p     *Button
-	press pressTracker
-	ring  FocusRing
+	trunc truncMemo // the title truncated to the bezel
 }
+
+// keyFlash shows a press by key (clickControl.flash).
+func (e *pushButton) keyFlash() { e.flash(e, e.d) }
 
 func (e *pushButton) FittingSize(max driver.Size) driver.Size { return e.p.FittingSize(max) }
 
@@ -142,30 +135,16 @@ func (e *pushButton) bezel() (driver.Rect, float64) {
 
 // HandleEvent tracks the focus ring and the press; a release over the
 // button clicks it. A disabled button drops a press and handles nothing.
-func (e *pushButton) HandleEvent(ev Event) bool {
-	e.ring.Track(e, ev)
-	if !e.EnabledInTree() {
-		e.press.Reset(e)
-		return false
-	}
-	handled, act := e.press.Track(e, ev)
-	if act {
-		e.p.UserClick()
-	}
-	return handled
-}
+func (e *pushButton) HandleEvent(ev Event) bool { return e.handleClick(e, ev, nil) }
 
 // Activate clicks the button, refused while it is disabled.
-func (e *pushButton) Activate() bool {
-	if !e.EnabledInTree() {
-		return false
-	}
-	e.p.UserClick()
-	return true
-}
+func (e *pushButton) Activate() bool { return e.activate(e) }
 
-// State returns the button's control state, its press included.
-func (e *pushButton) State() ControlState { return e.press.State(e) }
+func (e *pushButton) click() { e.p.UserClick() }
+
+// State returns the button's control state, its press and a key flash
+// included.
+func (e *pushButton) State() ControlState { return e.state(e) }
 
 // Paint draws the shadow, the bezel, its border, the title and the focus
 // ring (nothing for an empty frame).
@@ -187,18 +166,16 @@ func (e *pushButton) Paint(c render.Canvas) {
 		Color: tokens.Metrics.BezelShadow.Value(a),
 	})
 	c.FillRoundedRect(r, radii, render.Solid(tokens.ButtonFill(a, isDefault, pressed, st.Key)))
-	if !accent {
-		bw := pixelWidth(1, scaleIn(&e.Base))
-		if r.W > 2*bw && r.H > 2*bw {
-			c.StrokeRoundedRect(r.Inset(driver.UniformInsets(bw/2)), render.UniformRadii(max(0, radius-bw/2)), bw,
-				render.Solid(tokens.Controls.BezelBorder.Value(a)))
-		}
+	if accent {
+		paintOutline(c, r, radius, scaleIn(&e.Base), a, tokens.Controls.BezelOutline.Value(a))
+	} else {
+		strokeInside(c, r, radius, pixelWidth(1, scaleIn(&e.Base)), tokens.Controls.BezelBorder.Value(a))
 	}
 	if e.p.Title != "" {
 		if avail := r.W - 2*m.PaddingX; avail > 0 {
 			l := e.p.titleLayout()
 			if l.Size().W > avail {
-				l = truncate(e.d.sh.TextSystem(), e.p.Title, e.p.TitleFont(), avail)
+				l = e.trunc.truncate(e.d.text, e.p.Title, e.p.TitleFont(), avail)
 			}
 			if l != nil && l.Size().H <= r.H {
 				s := l.Size()

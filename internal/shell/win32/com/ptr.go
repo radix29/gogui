@@ -107,11 +107,54 @@ func (p Ptr) RefCount() uint32 {
 // a reference of its own. An interface the object doesn't implement returns
 // an error wrapping E_NOINTERFACE.
 func (p Ptr) QueryInterface(iid *GUID) (Ptr, error) {
-	var out Ptr
-	err := p.CallHR("QueryInterface("+iid.String()+")", slotQueryInterface,
-		uintptr(unsafe.Pointer(iid)), uintptr(unsafe.Pointer(&out)))
-	if err != nil {
+	return p.CallOut("QueryInterface("+iid.String()+")", slotQueryInterface, uintptr(unsafe.Pointer(iid)))
+}
+
+// CallOut calls the method in vtable slot i with args followed by the
+// address of an interface pointer the method fills (the creation pattern
+// CreateX(…, &out)), and returns that pointer: with the reference the
+// method gave it on success, nil with an *Error naming op otherwise (review
+// R9). args follow Call's rules; at most 4 of them (more panics).
+//
+//go:uintptrescapes
+func (p Ptr) CallOut(op string, i int, args ...uintptr) (Ptr, error) {
+	out, r := p.callOut(i, args)
+	if err := HRESULT(int32(r)).Err(op); err != nil {
 		return 0, err
 	}
 	return out, nil
+}
+
+// GetOut is CallOut for a getter without an HRESULT (GetTarget,
+// GetImmediateContext, …): it returns the interface pointer the method
+// filled, nil when it filled none.
+//
+//go:uintptrescapes
+func (p Ptr) GetOut(i int, args ...uintptr) Ptr {
+	out, _ := p.callOut(i, args)
+	return out
+}
+
+// callOut calls slot i with args and &out. The conversion of &out has to
+// be in the call expression of Call (//go:uintptrescapes): that moves out
+// to the heap, where it stays put while native code writes it, and tells
+// the compiler the call may write it. Built any other way (a uintptr kept
+// in a slice), the compiler may keep out on the stack and read it back as
+// the zero it was initialized to.
+func (p Ptr) callOut(i int, args []uintptr) (out Ptr, r uintptr) {
+	switch len(args) {
+	case 0:
+		r = p.Call(i, uintptr(unsafe.Pointer(&out)))
+	case 1:
+		r = p.Call(i, args[0], uintptr(unsafe.Pointer(&out)))
+	case 2:
+		r = p.Call(i, args[0], args[1], uintptr(unsafe.Pointer(&out)))
+	case 3:
+		r = p.Call(i, args[0], args[1], args[2], uintptr(unsafe.Pointer(&out)))
+	case 4:
+		r = p.Call(i, args[0], args[1], args[2], args[3], uintptr(unsafe.Pointer(&out)))
+	default:
+		panic("com: CallOut with more than 4 arguments before the out pointer")
+	}
+	return out, r
 }

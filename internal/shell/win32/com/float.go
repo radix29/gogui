@@ -39,7 +39,10 @@ var (
 // binding the same method of a thousand objects of one class costs one
 // RegisterFunc. Calling the bound func on another object is fine as long
 // as that object's slot i holds the same code (same class). Bind is meant
-// for float-taking methods; integer-only ones are cheaper through Call.
+// for float-taking methods on windows/arm64 (and as the fallback the tests
+// compare with): on windows/amd64 the binding packages pass FLOATs as bits
+// in the integer slots (DirectFloats, direct.go), which allocates nothing,
+// and integer-only methods are cheaper through Call everywhere.
 //
 // Rejected with an error (and *fptr left unchanged): a nil p, a negative
 // slot, a func type without a uintptr-kind first parameter, a Go func or a
@@ -68,22 +71,6 @@ func Bind(fptr any, p Ptr, i int) error {
 			"after this in MSVC's member-function ABI; declare that out pointer as a parameter", op, t)
 	}
 	return bindAddr(op, fv, p.Slot(i))
-}
-
-// BindFunc sets *fptr to a func that calls the C function at addr through
-// the same path as Bind, with the same rules except the one for this. It is
-// for flat exports that take or return floats; the package's tests use it
-// to check the float path against the C runtime.
-func BindFunc(fptr any, addr uintptr) error {
-	op := "bind function 0x" + strconv.FormatUint(uint64(addr), 16)
-	if addr == 0 {
-		return fmt.Errorf("com: bind function: NULL address")
-	}
-	fv, err := funcVar(op, fptr)
-	if err != nil {
-		return err
-	}
-	return bindAddr(op, fv, addr)
 }
 
 // funcVar checks fptr and the parameter rules common to Bind and BindFunc,

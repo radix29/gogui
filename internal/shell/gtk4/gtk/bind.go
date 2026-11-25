@@ -122,7 +122,22 @@ var Gtk struct {
 	IMContextReset                     func(im uintptr)
 	IMContextFocusIn                   func(im uintptr)
 	IMContextFocusOut                  func(im uintptr)
-	WidgetGetDisplay                   func(w uintptr) uintptr // GdkDisplay *, transfer none
+	// The IME (S5.3h). IMMulticontextNew returns a GtkIMMulticontext
+	// (transfer full), which picks the user's input method (IBus, Fcitx,
+	// the simple context as GTK's fallback); SetUsePreedit takes a gboolean
+	// (TRUE: the client draws the preedit). GetPreeditString writes the
+	// preedit's UTF-8 text (the caller GLib.Frees it), its PangoAttrList
+	// (the caller Pango.AttrListUnrefs it) and the cursor in characters;
+	// none of the pointers may be nil. SetCursorLocation takes the caret in
+	// the client widget's coordinates (a GdkRectangle, copied).
+	// EventControllerKeySetIMContext gives the key controller an IM context
+	// that sees each key before "key-pressed" (0 unsets it).
+	IMMulticontextNew              func() uintptr
+	IMContextSetUsePreedit         func(im uintptr, usePreedit int32)
+	IMContextGetPreeditString      func(im uintptr, str, attrs *uintptr, cursorPos *int32)
+	IMContextSetCursorLocation     func(im uintptr, area *Rectangle)
+	EventControllerKeySetIMContext func(c, im uintptr)
+	WidgetGetDisplay               func(w uintptr) uintptr // GdkDisplay *, transfer none
 	// DragCheckThreshold reports whether the pointer moved from the start
 	// past the drag threshold (gtk-dnd-drag-threshold), in w's units.
 	DragCheckThreshold func(w uintptr, startX, startY, curX, curY int32) int32 // gboolean
@@ -144,11 +159,69 @@ var Gtk struct {
 	WindowClose          func(win uintptr)
 	WindowDestroy        func(win uintptr)
 
+	// WindowSetModal and WindowSetTransientFor are the modal surface's
+	// hints (S5.7f): GTK's grab in the window group while shown, and the
+	// window manager's modal dialog of parent (0: none).
+	WindowSetModal        func(win uintptr, modal int32)
+	WindowSetTransientFor func(win, parent uintptr)
+	// WidgetSetSensitive makes w and its children take input or not (a
+	// window blocked by a modal surface, S5.7f).
+	WidgetSetSensitive func(w uintptr, sensitive int32)
+
 	NativeGetRenderer func(native uintptr) uintptr // GskRenderer *, transfer none
 	NativeGetSurface  func(native uintptr) uintptr // GdkSurface *, transfer none; NULL before realize
 	// NativeGetSurfaceTransform writes where native's widget coordinates
 	// start in its GdkSurface's (the CSD shadow's width).
 	NativeGetSurfaceTransform func(native uintptr, x, y *float64)
+
+	// The popovers of the shell's popups (S5.5e, all since 4.0 except
+	// CSSProviderLoadFromString, 4.12; inside the 4.14 floor). PopoverNew
+	// returns a floating GtkPopover; WidgetSetParent sinks it into the
+	// parent (a GGSurface), WidgetUnparent drops that reference, so the
+	// popover is unparented before its parent goes. PopoverSetChild takes
+	// the popover's only child. SetHasArrow and SetAutohide take a gboolean
+	// (autohide: GTK's popup grab, closing on an outside press);
+	// SetPointingTo copies the anchor (a GdkRectangle in the parent's
+	// coordinates; nil points at the whole parent); SetPosition takes a
+	// GtkPositionType (Pos*); SetOffset moves the popover by x, y logical
+	// pixels from where its position puts it. Popup shows it and Popdown
+	// hides it, emitting "closed"; Present must be called from the
+	// parent's size_allocate so GTK places the popover's surface.
+	PopoverNew           func() uintptr
+	PopoverSetChild      func(p, child uintptr)
+	PopoverSetHasArrow   func(p uintptr, hasArrow int32)
+	PopoverSetAutohide   func(p uintptr, autohide int32)
+	PopoverSetPointingTo func(p uintptr, rect *Rectangle)
+	PopoverSetPosition   func(p uintptr, position int32)
+	PopoverSetOffset     func(p uintptr, x, y int32)
+	PopoverPopup         func(p uintptr)
+	PopoverPopdown       func(p uintptr)
+	PopoverPresent       func(p uintptr)
+	WidgetSetParent      func(w, parent uintptr)
+	WidgetUnparent       func(w uintptr)
+	// WidgetSetCanTarget takes a gboolean: FALSE lets no pointer event
+	// pick w or its children (a tooltip's popover).
+	WidgetSetCanTarget func(w uintptr, canTarget int32)
+	// WidgetAddCSSClass copies the class name.
+	WidgetAddCSSClass func(w uintptr, class string)
+	// CSSProviderNew returns a GtkCssProvider (transfer full);
+	// CSSProviderLoadFromString (4.12) parses CSS text, which it copies, and
+	// reports errors through the provider's "parsing-error" signal only.
+	// StyleContextAddProviderForDisplay (not deprecated, unlike the rest
+	// of GtkStyleContext) adds a GtkStyleProvider to every widget of
+	// display at a priority (StyleProviderPriority*) and takes its own
+	// reference to the provider.
+	CSSProviderNew                    func() uintptr
+	CSSProviderLoadFromString         func(provider uintptr, css string)
+	StyleContextAddProviderForDisplay func(display, provider uintptr, priority uint32)
+
+	// The popup placement (S5.5f, GTK 4.0): WidgetSetHalign takes a
+	// GtkAlign (AlignStart puts a GTK_POS_BOTTOM popover's left edge on
+	// its anchor's instead of centring it); WidgetSetDirection a
+	// GtkTextDirection (TextDirLTR keeps that edge the left one in an RTL
+	// locale).
+	WidgetSetHalign    func(w uintptr, align int32)
+	WidgetSetDirection func(w uintptr, dir int32)
 }
 
 // Gdk holds the gdk_* functions (inside libgtk-4).
@@ -161,7 +234,17 @@ var Gdk struct {
 	// (16667 µs) and the presentation time 0. Both pointers may be nil.
 	FrameClockGetFrameTime   func(fc uintptr) int64
 	FrameClockGetRefreshInfo func(fc uintptr, base int64, interval, presentation *int64)
-	PaintableSnapshot        func(p, s uintptr, width, height float64)
+	// The presentation feedback (S6.2d): GetFrameCounter is the counter of
+	// the clock's current frame; GetTimings the timings of an earlier one
+	// (borrowed; NULL once out of GDK's history); a timings' complete flag
+	// (gboolean) says its fields are final, its presentation time (0: none)
+	// and refresh interval are microseconds.
+	FrameClockGetFrameCounter       func(fc uintptr) int64
+	FrameClockGetTimings            func(fc uintptr, counter int64) uintptr
+	FrameTimingsGetComplete         func(t uintptr) int32
+	FrameTimingsGetPresentationTime func(t uintptr) int64
+	FrameTimingsGetRefreshInterval  func(t uintptr) int64
+	PaintableSnapshot               func(p, s uintptr, width, height float64)
 	// ToplevelGetState returns the GdkToplevelState flags of a toplevel
 	// GdkSurface (ToplevelState*).
 	ToplevelGetState func(toplevel uintptr) uint32
@@ -185,13 +268,31 @@ var Gdk struct {
 	// width×height pixels in a GdkMemoryFormat (Memory*) read from bytes,
 	// a GBytes it takes its own reference to; stride is a gsize.
 	MemoryTextureNew func(width, height, format int32, bytes, stride uintptr) uintptr
+	// PopupGetPositionX and Y (S5.5f, GDK 4.0) are where a GdkPopup landed,
+	// relative to its parent surface (in its surface coordinates).
+	PopupGetPositionX func(popup uintptr) int32
+	PopupGetPositionY func(popup uintptr) int32
+	// The clipboard (S5.2b, GTK 4.0). DisplayGetClipboard returns the
+	// display's GdkClipboard (transfer none); SetText copies text.
+	// ReadTextAsync's callback is a GAsyncReadyCallback,
+	// void (GObject *source, GAsyncResult *res, gpointer user_data), called
+	// once from the main loop; cancellable may be 0. ReadTextFinish returns
+	// the text (transfer full, g_free) or 0 and sets *err to a GError the
+	// caller frees (GLib.ErrorFree).
+	DisplayGetClipboard     func(display uintptr) uintptr
+	ClipboardSetText        func(clipboard uintptr, text string)
+	ClipboardReadTextAsync  func(clipboard, cancellable, callback, data uintptr)
+	ClipboardReadTextFinish func(clipboard, result uintptr, err *uintptr) uintptr
 }
 
 // Gsk holds the gsk_* functions (inside libgtk-4). The node getters the
 // node-tree tests use are bound in the tests only.
 var Gsk struct {
-	RenderNodeUnref       func(n uintptr)
-	RendererRenderTexture func(r, node, viewport uintptr) uintptr // GdkTexture *, transfer full
+	RenderNodeUnref func(n uintptr)
+	// RendererRenderTexture (S4.3f, the readback) renders node into a new
+	// texture of viewport's size in pixels, viewport's origin at its top
+	// left corner.
+	RendererRenderTexture func(r, node uintptr, viewport *GrapheneRect) uintptr // GdkTexture *, transfer full
 	// Paths and strokes (4.14, S4.2b). FreeToPath frees the builder and
 	// returns its GskPath (transfer full); StrokeNew returns a GskStroke
 	// with the given line width and the default caps, joins and miter
@@ -273,6 +374,8 @@ var GLib struct {
 	// ErrorFree frees a GError (S4.2j; its message is read through the
 	// GError mirror first).
 	ErrorFree func(err uintptr)
+	// SlistFree frees a GSList's cells, not their data (S5.3h).
+	SlistFree func(list uintptr)
 
 	GetMonotonicTime func() int64 // microseconds, CLOCK_MONOTONIC
 
@@ -344,7 +447,8 @@ var Pango struct {
 	// PangoGlyphItem, GlyphItem; NULL at a line's end), both the layout's;
 	// LayoutIterGetIndex is the iterator's byte index. In layout
 	// coordinates: LayoutIterGetLineYrange writes the line's top and
-	// bottom, line spacing included; LayoutIterGetLineExtents its ink and
+	// bottom, line spacing included; LayoutIterGetBaseline the line's
+	// baseline (from the layout's top); LayoutIterGetLineExtents its ink and
 	// logical rects (either may be nil); LayoutIterGetCharExtents the
 	// logical rect of the iterator's character. LayoutLineGetStartIndex
 	// and LayoutLineGetLength (1.50) are the byte range of the line's
@@ -362,6 +466,7 @@ var Pango struct {
 	LayoutIterGetRunReadonly  func(it uintptr) uintptr
 	LayoutIterGetIndex        func(it uintptr) int32
 	LayoutIterGetLineYrange   func(it uintptr, y0, y1 *int32)
+	LayoutIterGetBaseline     func(it uintptr) int32
 	LayoutIterGetLineExtents  func(it uintptr, ink, logical *PangoRectangle)
 	LayoutIterGetCharExtents  func(it uintptr, logical *PangoRectangle)
 	LayoutLineGetStartIndex   func(line uintptr) int32
@@ -374,6 +479,15 @@ var Pango struct {
 	// on FALSE it may set *err to a GError the caller frees
 	// (GLib.ErrorFree).
 	FontMapAddFontFile func(fm uintptr, filename string, err *uintptr) int32
+
+	// The preedit's attributes (S5.3h). AttrListGetAttributes (1.44)
+	// returns a GSList of copies of the list's attributes (transfer full:
+	// each is freed with AttributeDestroy, the cells with GLib.SlistFree);
+	// AttrListUnref drops a PangoAttrList. The attributes are read through
+	// the PangoAttribute and PangoAttrClass mirrors.
+	AttrListGetAttributes func(list uintptr) uintptr
+	AttrListUnref         func(list uintptr)
+	AttributeDestroy      func(attr uintptr)
 }
 
 // PangoCairo holds the pango_cairo_* functions of libpangocairo-1.0
@@ -506,6 +620,11 @@ func libraries() []library {
 			{&Gtk.IMContextReset, "gtk_im_context_reset"},
 			{&Gtk.IMContextFocusIn, "gtk_im_context_focus_in"},
 			{&Gtk.IMContextFocusOut, "gtk_im_context_focus_out"},
+			{&Gtk.IMMulticontextNew, "gtk_im_multicontext_new"},
+			{&Gtk.IMContextSetUsePreedit, "gtk_im_context_set_use_preedit"},
+			{&Gtk.IMContextGetPreeditString, "gtk_im_context_get_preedit_string"},
+			{&Gtk.IMContextSetCursorLocation, "gtk_im_context_set_cursor_location"},
+			{&Gtk.EventControllerKeySetIMContext, "gtk_event_controller_key_set_im_context"},
 			{&Gtk.WidgetGetDisplay, "gtk_widget_get_display"},
 			{&Gtk.DragCheckThreshold, "gtk_drag_check_threshold"},
 			{&Gtk.WidgetComputePoint, "gtk_widget_compute_point"},
@@ -515,6 +634,9 @@ func libraries() []library {
 			{&Gtk.WindowSetChild, "gtk_window_set_child"},
 			{&Gtk.WindowSetTitlebar, "gtk_window_set_titlebar"},
 			{&Gtk.WindowSetResizable, "gtk_window_set_resizable"},
+			{&Gtk.WindowSetModal, "gtk_window_set_modal"},
+			{&Gtk.WindowSetTransientFor, "gtk_window_set_transient_for"},
+			{&Gtk.WidgetSetSensitive, "gtk_widget_set_sensitive"},
 			{&Gtk.WindowPresent, "gtk_window_present"},
 			{&Gtk.WindowMinimize, "gtk_window_minimize"},
 			{&Gtk.WindowMaximize, "gtk_window_maximize"},
@@ -526,10 +648,34 @@ func libraries() []library {
 			{&Gtk.NativeGetRenderer, "gtk_native_get_renderer"},
 			{&Gtk.NativeGetSurface, "gtk_native_get_surface"},
 			{&Gtk.NativeGetSurfaceTransform, "gtk_native_get_surface_transform"},
+			{&Gtk.PopoverNew, "gtk_popover_new"},
+			{&Gtk.PopoverSetChild, "gtk_popover_set_child"},
+			{&Gtk.PopoverSetHasArrow, "gtk_popover_set_has_arrow"},
+			{&Gtk.PopoverSetAutohide, "gtk_popover_set_autohide"},
+			{&Gtk.PopoverSetPointingTo, "gtk_popover_set_pointing_to"},
+			{&Gtk.PopoverSetPosition, "gtk_popover_set_position"},
+			{&Gtk.PopoverSetOffset, "gtk_popover_set_offset"},
+			{&Gtk.PopoverPopup, "gtk_popover_popup"},
+			{&Gtk.PopoverPopdown, "gtk_popover_popdown"},
+			{&Gtk.PopoverPresent, "gtk_popover_present"},
+			{&Gtk.WidgetSetParent, "gtk_widget_set_parent"},
+			{&Gtk.WidgetUnparent, "gtk_widget_unparent"},
+			{&Gtk.WidgetSetCanTarget, "gtk_widget_set_can_target"},
+			{&Gtk.WidgetAddCSSClass, "gtk_widget_add_css_class"},
+			{&Gtk.CSSProviderNew, "gtk_css_provider_new"},
+			{&Gtk.CSSProviderLoadFromString, "gtk_css_provider_load_from_string"},
+			{&Gtk.StyleContextAddProviderForDisplay, "gtk_style_context_add_provider_for_display"},
+			{&Gtk.WidgetSetHalign, "gtk_widget_set_halign"},
+			{&Gtk.WidgetSetDirection, "gtk_widget_set_direction"},
 
 			{&Gdk.DisplayGetDefault, "gdk_display_get_default"},
 			{&Gdk.FrameClockGetFrameTime, "gdk_frame_clock_get_frame_time"},
 			{&Gdk.FrameClockGetRefreshInfo, "gdk_frame_clock_get_refresh_info"},
+			{&Gdk.FrameClockGetFrameCounter, "gdk_frame_clock_get_frame_counter"},
+			{&Gdk.FrameClockGetTimings, "gdk_frame_clock_get_timings"},
+			{&Gdk.FrameTimingsGetComplete, "gdk_frame_timings_get_complete"},
+			{&Gdk.FrameTimingsGetPresentationTime, "gdk_frame_timings_get_presentation_time"},
+			{&Gdk.FrameTimingsGetRefreshInterval, "gdk_frame_timings_get_refresh_interval"},
 			{&Gdk.PaintableSnapshot, "gdk_paintable_snapshot"},
 			{&Gdk.ToplevelGetState, "gdk_toplevel_get_state"},
 			{&Gdk.ToplevelBeginMove, "gdk_toplevel_begin_move"},
@@ -541,6 +687,12 @@ func libraries() []library {
 			{&Gdk.TextureGetHeight, "gdk_texture_get_height"},
 			{&Gdk.TextureDownload, "gdk_texture_download"},
 			{&Gdk.MemoryTextureNew, "gdk_memory_texture_new"},
+			{&Gdk.PopupGetPositionX, "gdk_popup_get_position_x"},
+			{&Gdk.PopupGetPositionY, "gdk_popup_get_position_y"},
+			{&Gdk.DisplayGetClipboard, "gdk_display_get_clipboard"},
+			{&Gdk.ClipboardSetText, "gdk_clipboard_set_text"},
+			{&Gdk.ClipboardReadTextAsync, "gdk_clipboard_read_text_async"},
+			{&Gdk.ClipboardReadTextFinish, "gdk_clipboard_read_text_finish"},
 
 			{&Gsk.RenderNodeUnref, "gsk_render_node_unref"},
 			{&Gsk.RendererRenderTexture, "gsk_renderer_render_texture"},
@@ -597,6 +749,7 @@ func libraries() []library {
 			{&GLib.BytesNew, "g_bytes_new"},
 			{&GLib.BytesUnref, "g_bytes_unref"},
 			{&GLib.ErrorFree, "g_error_free"},
+			{&GLib.SlistFree, "g_slist_free"},
 			{&GLib.GetMonotonicTime, "g_get_monotonic_time"},
 			{&GLib.IdleAdd, "g_idle_add"},
 			{&GLib.TimeoutAdd, "g_timeout_add"},
@@ -637,6 +790,7 @@ func libraries() []library {
 			{&Pango.LayoutIterNextLine, "pango_layout_iter_next_line"},
 			{&Pango.LayoutIterGetLineReadonly, "pango_layout_iter_get_line_readonly"},
 			{&Pango.LayoutIterGetLineYrange, "pango_layout_iter_get_line_yrange"},
+			{&Pango.LayoutIterGetBaseline, "pango_layout_iter_get_baseline"},
 			{&Pango.LayoutLineGetStartIndex, "pango_layout_line_get_start_index"},
 			{&Pango.LayoutLineGetLength, "pango_layout_line_get_length"},
 			{&Pango.LayoutLineIndexToX, "pango_layout_line_index_to_x"},
@@ -646,6 +800,9 @@ func libraries() []library {
 			{&Pango.LayoutIterGetLineExtents, "pango_layout_iter_get_line_extents"},
 			{&Pango.LayoutIterGetCharExtents, "pango_layout_iter_get_char_extents"},
 			{&Pango.LayoutGetLogAttrsReadonly, "pango_layout_get_log_attrs_readonly"},
+			{&Pango.AttrListGetAttributes, "pango_attr_list_get_attributes"},
+			{&Pango.AttrListUnref, "pango_attr_list_unref"},
+			{&Pango.AttributeDestroy, "pango_attribute_destroy"},
 		}, []binding{
 			{&Pango.FontMapAddFontFile, "pango_font_map_add_font_file"},
 		}},

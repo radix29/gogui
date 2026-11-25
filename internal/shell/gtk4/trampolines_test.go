@@ -72,6 +72,7 @@ func TestTrampolineSignatures(t *testing.T) {
 		nameSigUintUintUint:     func(inst uintptr, a, b, c uint32, data uintptr) {},
 		nameTick:                func(w, frameClock, data uintptr) int32 { return 0 },
 		nameDestroyNotify:       func(data uintptr) {},
+		nameAsyncReady:          func(source, result, data uintptr) {},
 	}
 	for _, tr := range trampolines() {
 		w, ok := want[tr.name]

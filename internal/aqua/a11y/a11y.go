@@ -41,6 +41,11 @@ const (
 	RoleSeparator
 	RoleScrollArea
 	RoleTitleBar
+	RoleMenuBar     // the title-bar menu strip (S5.6c)
+	RoleMenuBarItem // one title of the strip
+	RoleMenu        // an open menu
+	RoleMenuItem    // one item of a menu
+	RoleDialog      // an alert (S5.7a)
 )
 
 var roleNames = [...]string{
@@ -59,6 +64,11 @@ var roleNames = [...]string{
 	RoleSeparator:         "separator",
 	RoleScrollArea:        "scrollarea",
 	RoleTitleBar:          "titlebar",
+	RoleMenuBar:           "menubar",
+	RoleMenuBarItem:       "menubaritem",
+	RoleMenu:              "menu",
+	RoleMenuItem:          "menuitem",
+	RoleDialog:            "dialog",
 }
 
 // String returns the role's short name ("button"), or "role(n)" for an
@@ -166,6 +176,8 @@ func (n *Node) walk(f func(*Node, int) bool, depth int) {
 }
 
 // Find returns the first node in pre-order with the role and label, or nil.
+// Only tests call it (of aqua, its gallery and gogui), so it stays here
+// rather than in four copies.
 func (n *Node) Find(role Role, label string) *Node {
 	var found *Node
 	n.Walk(func(m *Node, _ int) bool {
@@ -175,13 +187,6 @@ func (n *Node) Find(role Role, label string) *Node {
 		return found == nil
 	})
 	return found
-}
-
-// Count returns the number of nodes in the tree rooted at n.
-func (n *Node) Count() int {
-	k := 0
-	n.Walk(func(*Node, int) bool { k++; return true })
-	return k
 }
 
 // String returns the node itself on one line, without its children:

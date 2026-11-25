@@ -326,18 +326,26 @@ func TestTextUnicode(t *testing.T) {
 
 // TestTextNoGrowth: many layouts leave the shared system collection's
 // reference count where the first ones put it (DirectWrite's caches hold a
-// few), and the format cache holds one reference per format.
+// few) once the drawn-layout cache, which holds at most maxDrawn of their
+// native layouts, is emptied, and the format cache holds one reference per
+// format.
 func TestTextNoGrowth(t *testing.T) {
 	ts := newTestText(t)
 	for i := range 3 {
 		ts.NewLayout("warm up", render.Font{Size: 13 + float64(i)}, 50)
 		ts.NewLayout("warm up", render.Font{Monospaced: true}, 0)
 	}
+	noLeak := func(what string, n uint32) { t.Errorf("%s: %d references left", what, n) }
+	ts.releaseDrawn(noLeak)
 	before := ts.system.RefCount()
 	for range 200 {
 		ts.NewLayout("Hello, World\nsecond line", render.Font{}, 60)
 		ts.NewLayout("Monospaced", render.Font{Monospaced: true}, 0)
 	}
+	if n := len(ts.drawn.m); n != maxDrawn {
+		t.Errorf("%d native layouts cached, want %d", n, maxDrawn)
+	}
+	ts.releaseDrawn(noLeak)
 	if after := ts.system.RefCount(); after != before {
 		t.Errorf("system collection references: %d after 400 layouts, %d before", after, before)
 	}
@@ -381,4 +389,36 @@ func TestShellText(t *testing.T) {
 			t.Error("text system not started after a layout")
 		}
 	})
+}
+
+// TestTextResolveMemo (review P17): a family is looked up in the font
+// collections once; the next layouts in it, at any size, weight or style,
+// make no lookups.
+func TestTextResolveMemo(t *testing.T) {
+	ts := newTestText(t)
+	mustDW(t, ts)
+	fonts := []render.Font{{}, {Family: "Arial"}, {Family: "nonexistent family"}, {Monospaced: true}}
+	for _, f := range fonts {
+		ts.NewLayout("x", f, 0)
+	}
+	first := ts.lookups
+	for _, f := range fonts {
+		g := f
+		g.Size, g.Weight, g.Italic = 20, driver.FontWeightBold, true
+		ts.NewLayout("y", g, 0)
+		memo := ts.resolve(g)
+		if fresh := ts.resolveFamily(familyQuery{g.Family, g.Monospaced}); fresh.family != memo.family || fresh.embedded != memo.embedded {
+			t.Errorf("resolve(%+v): memo %+v, fresh %+v", g, memo, fresh)
+		}
+	}
+	if first == 0 {
+		t.Error("no lookups for the first layouts")
+	}
+	before := ts.lookups
+	for _, f := range fonts {
+		ts.NewLayout("z", render.Font{Family: f.Family, Monospaced: f.Monospaced, Size: 17}, 0)
+	}
+	if n := ts.lookups - before; n != 0 {
+		t.Errorf("%d lookups for families already resolved, want 0", n)
+	}
 }

@@ -28,6 +28,18 @@ import (
 //     PLAN.md §5.5), with PointerEvent.Over telling whether the pointer is
 //     over it, and the hover chain stays frozen. After the release the hover
 //     chain is recomputed. If nothing handles the press there is no capture.
+//     CancelPointer (a grab popup opening, S5.5g) ends the capture, the
+//     hover and the latch; a release without a captured press goes
+//     nowhere unless SetStrayReleases routes it like a move, or to the
+//     root outside every element (a grab popup's router, for the press
+//     that opened it).
+//   - First click (S6.1b): a PointerDown with Activating set (the press
+//     that made the window key) only activates the window, as AppKit's
+//     default acceptsFirstMouse = NO: it updates the hover chain but goes
+//     to no element, and its release is dropped too (no press, no release,
+//     no drag, no focus move). Over an element that AcceptsFirstMouse (set
+//     on it or an ancestor; the title bar's traffic lights and menu strip)
+//     it is routed as usual. Hover and scroll events need no activation.
 //   - Moves outside a capture go to the deepest element of the hover chain
 //     and bubble up until handled.
 //   - Scroll events go to the topmost enabled element under the pointer and
@@ -44,25 +56,42 @@ import (
 //     PhaseChanged or PhaseEnded after the gesture's PhaseEnded (a stray
 //     event, not part of the latched gesture). An unhandled PhaseBegan
 //     latches nothing, and the rest of its gesture is routed by the pointer.
-//   - Key and text events go to the focused element, or to the root when
-//     nothing is focused, and bubble up to the root until handled. An
-//     unhandled Tab key-down (no modifiers but Shift) moves the focus with
-//     FocusNext, and an unhandled Space key-down (no modifiers) presses a
-//     focused FocusControl element with Activate (control.go). The result
-//     is returned to the shell, so a handled key
-//     suppresses its text and the OS default handling.
+//   - Key, text and preedit events go to the focused element, or to the
+//     root when nothing is focused, and bubble up to the root until
+//     handled. An unhandled Tab key-down (no modifiers but Shift) moves the
+//     focus with FocusNext, and an unhandled Space key-down (no modifiers)
+//     presses a focused FocusControl element with Activate (control.go).
+//     The result is returned to the shell, so a handled key suppresses its
+//     text and the OS default handling. Only a focused text element that
+//     takes IME input handles a preedit (S5.3c).
 //   - Tab order: FocusOrder, the focusable, visible and enabled elements in
 //     tree order. With full keyboard access (the default, as macOS with
 //     "Keyboard navigation" on and the Windows/Linux convention) Tab reaches
 //     every one of them; without it (SetFullKeyboardAccess(false), the macOS
-//     default) only those of FocusKind FocusText. SetFocus (a click, Focus)
+//     default) only those of FocusKind FocusText. A group that is one Tab
+//     stop (groupTabStop: the radios of a group, S5.7h) is reached at its
+//     stop only, its other members by their own keys. SetFocus (a click, Focus)
 //     can focus any focusable element in both modes.
 //   - Disabled elements get no input at all.
+//   - Cursor: the pointer shape is the Cursor of the deepest element of
+//     the hover chain (CursorArrow for an empty chain). Whenever the chain
+//     changes outside a capture the router compares that shape with the
+//     one it set last and, on a change, calls the function of
+//     SetCursorFunc (the window passes Surface.SetCursor). During a
+//     capture the shape is frozen with the hover chain (dragging a
+//     selection out of a text field keeps the I-beam); the release
+//     recomputes both. RefreshCursor re-reads it for an element whose
+//     Cursor changed under a still pointer.
 //   - Focus hook (scroll-to-focused, PLAN.md §5.6): whenever the focus
 //     moves to an element (SetFocus, Focus, FocusNext), after its
 //     FocusEvent{true}, every enclosing ScrollView, innermost first,
 //     brings it into view (ScrollView). Clearing the focus, SetActive and
 //     a focus that is lost on the way scroll nothing.
+//   - Focus-changed hook (PLAN.md S5.3d): after every change of Focused
+//     (a move, a clear, a focus dropped with the tree), once the focus
+//     events and the scroll-to-focused are done, the router calls the
+//     function of SetFocusChangedFunc (the window publishes its text input
+//     there).
 //   - The focus survives the window becoming inactive (SetActive(false)):
 //     Focused keeps the element, and FocusState reports it as
 //     FocusedInactive until the window is key again.
@@ -84,6 +113,7 @@ type Router struct {
 	root *Base
 
 	hover    []Element // root side first
+	scratch  []Element // hoverAt's buffer
 	capture  Element
 	focus    Element
 	inactive bool // the window is not key (SetActive)
@@ -96,6 +126,21 @@ type Router struct {
 	latch      Element
 	latchLost  bool
 	latchEnded bool
+
+	// The pointer shape: setCursor applies it (nil: none), cursor is the
+	// shape applied last.
+	setCursor func(shell.Cursor)
+	cursor    shell.Cursor
+
+	focusChanged func() // SetFocusChangedFunc's, or nil
+	treeChanged  func() // SetTreeChangedFunc's, or nil
+
+	cancels  uint64 // CancelPointer calls, so a press in flight sees one
+	strayUps bool   // SetStrayReleases
+
+	// swallowed holds the buttons whose activating press was dropped (the
+	// first-click rule), so their release is dropped too.
+	swallowed shell.PointerButton
 
 	pos    driver.Point // last pointer position, in the root's parent coordinates
 	inside bool         // between shell PointerEnter and PointerLeave
@@ -116,6 +161,7 @@ func NewRouter(root Element) *Router {
 	}
 	r := &Router{root: b}
 	b.router = r
+	treeChange()
 	return r
 }
 
@@ -183,6 +229,8 @@ func (r *Router) Event(ev shell.Event) bool {
 		return r.key(ev)
 	case shell.TextEvent:
 		return r.bubble(r.keyTarget(), TextEvent{ev})
+	case shell.PreeditEvent:
+		return r.bubble(r.keyTarget(), PreeditEvent{ev})
 	}
 	return false
 }
@@ -199,6 +247,7 @@ func (r *Router) pointer(ev shell.PointerEvent) bool {
 		return false
 	case shell.PointerLeave:
 		r.inside = false
+		r.swallowed = 0
 		r.cancelCapture()
 		r.setHover(nil)
 		return false
@@ -210,24 +259,56 @@ func (r *Router) pointer(ev shell.PointerEvent) bool {
 		r.setHover(r.hoverAt(ev.Pos))
 		return r.bubblePointer(PointerMove, ev)
 	case shell.PointerDown:
+		r.swallowed &^= ev.Button // a new press: an old release was lost
 		if r.capture != nil {
 			return r.sendCaptured(PointerDown, ev)
 		}
 		r.inside = true
 		r.setHover(r.hoverAt(ev.Pos))
+		if ev.Activating && (r.Hovered() == nil || !r.Hovered().base().AcceptsFirstMouse()) {
+			r.swallowed |= ev.Button // the first click only activates the window
+			return false
+		}
+		gen := r.cancels
 		for e := r.Hovered(); e != nil; e = parentOf(e) {
 			if e.HandleEvent(r.pointerEvent(PointerDown, e, ev, true)) {
-				if r.usable(e) { // a handler may have removed or disabled it
+				if r.cancels == gen && r.usable(e) {
 					r.capture = e
+				} else {
+					// The handler opened a grab popup (CancelPointer) or
+					// removed, hid or disabled its own element: the press
+					// is over before it captured, and the element must
+					// not stay pressed (B1).
+					e.HandleEvent(PointerEvent{Kind: PointerCancel, Pos: FromRoot(e, ev.Pos), Buttons: ev.Buttons, Mods: ev.Mods, Time: ev.Time})
 				}
 				return true
+			}
+			if r.cancels != gen {
+				return false
 			}
 		}
 		return false
 	case shell.PointerUp:
+		if r.swallowed&ev.Button != 0 {
+			r.swallowed &^= ev.Button
+			if r.capture == nil && ev.Buttons == 0 {
+				r.setHover(r.hoverAt(ev.Pos))
+			}
+			return false
+		}
 		if r.capture == nil {
 			if ev.Buttons == 0 {
 				r.setHover(r.hoverAt(ev.Pos))
+			}
+			if r.strayUps {
+				if r.Hovered() == nil {
+					// Released outside every element (a grab popup's
+					// press-drag-release ending off the popup): the root
+					// gets it, not over it.
+					root := r.root.self
+					return root.HandleEvent(r.pointerEvent(PointerUp, root, ev, false))
+				}
+				return r.bubblePointer(PointerUp, ev)
 			}
 			return false
 		}
@@ -277,14 +358,21 @@ func (r *Router) over(e Element, p driver.Point) bool {
 }
 
 // hoverAt returns the hover chain for the point p: the enabled part of the
-// path from the root to the topmost element under p.
+// path from the root to the topmost element under p. The chain is in a
+// scratch buffer that the next call overwrites (P15).
 func (r *Router) hoverAt(p driver.Point) []Element {
 	hit, _ := HitTest(r.root.self, p)
-	var path []Element
+	n := 0
 	for e := hit; e != nil; e = parentOf(e) {
-		path = append(path, e)
+		n++
 	}
-	slices.Reverse(path)
+	path := slices.Grow(r.scratch[:0], n)[:n]
+	r.scratch = path
+	i := n
+	for e := hit; e != nil; e = parentOf(e) {
+		i--
+		path[i] = e
+	}
 	for i, e := range path {
 		if e.base().disabled {
 			return path[:i]
@@ -295,8 +383,14 @@ func (r *Router) hoverAt(p driver.Point) []Element {
 
 // setHover replaces the hover chain, sending PointerLeave to the elements
 // that left it (deepest first) and PointerEnter to those that joined (root
-// side first).
+// side first). An unchanged chain (a move inside the same element) sends
+// nothing and allocates nothing.
 func (r *Router) setHover(chain []Element) {
+	defer r.RefreshCursor()
+	if slices.Equal(chain, r.hover) {
+		return
+	}
+	chain = slices.Clone(chain) // a handler below may reuse the scratch
 	common := 0
 	for common < len(chain) && common < len(r.hover) && chain[common] == r.hover[common] {
 		common++
@@ -328,6 +422,64 @@ func (r *Router) RefreshHover() {
 		return
 	}
 	r.setHover(r.hoverAt(r.pos))
+}
+
+// Cursor returns the pointer shape the router set last (CursorArrow
+// initially).
+func (r *Router) Cursor() shell.Cursor { return r.cursor }
+
+// SetCursorFunc sets the function that applies a new pointer shape (the
+// window passes its Surface.SetCursor); nil applies nothing. It is called
+// only on a change, not for the current shape.
+func (r *Router) SetCursorFunc(f func(shell.Cursor)) { r.setCursor = f }
+
+// SetFocusChangedFunc sets the function called after each change of the
+// focus (see Router); nil calls nothing.
+func (r *Router) SetFocusChangedFunc(f func()) { r.focusChanged = f }
+
+// RefreshCursor re-reads the Cursor of the deepest element of the hover
+// chain and applies it if it changed. It does nothing during a capture,
+// which freezes the shape.
+func (r *Router) RefreshCursor() {
+	if r.capture != nil {
+		return
+	}
+	c := shell.CursorArrow
+	if e := r.Hovered(); e != nil {
+		c = e.Cursor()
+	}
+	if c == r.cursor {
+		return
+	}
+	r.cursor = c
+	if r.setCursor != nil {
+		r.setCursor(c)
+	}
+}
+
+// SetStrayReleases sets whether a PointerUp outside a capture (a release
+// whose press the router never saw) goes to the deepest element of the
+// hover chain and bubbles up like a move, or to the root with Over false
+// when the pointer is over no element (outside the root). Off by default;
+// the router of a grab popup turns it on (S5.5g), because the press that
+// opened the popup is released over it or, ending a press-drag-release
+// that cancels the menu, outside it (S5.5i).
+func (r *Router) SetStrayReleases(on bool) { r.strayUps = on }
+
+// CancelPointer ends the router's pointer state as if the pointer had left
+// the window: the capture gets PointerCancel, the hover chain PointerLeave
+// and the scroll latch ends; the pointer counts as outside until the next
+// shell pointer event. A press that is being routed (CancelPointer called
+// from a PointerDown handler) captures nothing: the element that handles
+// it gets PointerCancel right after. The window calls it when a grab popup
+// opens (S5.5g), whose input the window then no longer gets.
+func (r *Router) CancelPointer() {
+	r.cancels++
+	r.cancelCapture()
+	r.swallowed = 0
+	r.endLatch()
+	r.inside = false
+	r.setHover(nil)
 }
 
 // cancelCapture ends the capture with PointerCancel.
@@ -443,17 +595,18 @@ func (r *Router) focusable(e Element) bool { return e.base().focusable && r.usab
 // FocusEvent{true}; focusing the focused element again does nothing.
 func (r *Router) SetFocus(e Element) bool {
 	if e == nil {
-		r.setFocus(nil)
+		r.setFocus(nil, false)
 		return true
 	}
 	if !r.focusable(e) {
 		return false
 	}
-	r.setFocus(e)
+	r.setFocus(e, false)
 	return r.focus == e
 }
 
-func (r *Router) setFocus(e Element) {
+// setFocus moves the focus; tab marks a move by FocusNext (FocusEvent.Tab).
+func (r *Router) setFocus(e Element, tab bool) {
 	old := r.focus
 	if old == e {
 		return
@@ -463,10 +616,13 @@ func (r *Router) setFocus(e Element) {
 		old.HandleEvent(FocusEvent{Focused: false})
 	}
 	if e != nil && r.focus == e {
-		e.HandleEvent(FocusEvent{Focused: true})
+		e.HandleEvent(FocusEvent{Focused: true, Tab: tab})
 	}
 	if e != nil {
 		r.revealFocus(e)
+	}
+	if r.focusChanged != nil {
+		r.focusChanged()
 	}
 }
 
@@ -492,9 +648,33 @@ func (r *Router) revealFocus(f Element) {
 }
 
 // tabStop reports whether b is in the Tab order of the current
-// keyboard-access mode (its visibility and state aside).
-func (r *Router) tabStop(b *Base) bool {
-	return b.focusable && (!r.limited || b.focusKind == FocusText)
+// keyboard-access mode (its visibility and state aside); of a group that
+// is one Tab stop only the group's stop is. gs memoises the group stop
+// among the children of b's parent, so it is found once per parent, not
+// once per radio (P14).
+func (r *Router) tabStop(b *Base, gs *groupStopMemo) bool {
+	if !b.focusable || (r.limited && b.focusKind != FocusText) {
+		return false
+	}
+	g, ok := b.self.(groupTabStop)
+	if !ok {
+		return true
+	}
+	if !gs.done {
+		gs.stop, gs.done = g.groupStop(), true
+	}
+	return gs.stop == b.self
+}
+
+// groupTabStop is an element of a group that is one Tab stop (the radios
+// of a group, radio.go, all among the children of one parent): groupStop
+// returns the group's stop, or nil when it has none.
+type groupTabStop interface{ groupStop() Element }
+
+// groupStopMemo is the group stop among the children of one parent.
+type groupStopMemo struct {
+	stop Element
+	done bool
 }
 
 // FocusOrder returns the Tab order: the elements that can take the focus
@@ -511,22 +691,24 @@ func (r *Router) FocusOrder() []Element {
 // Tab stop after it in tree order (len(order) for none); -1 without a focus.
 func (r *Router) tabOrder() (order []Element, at int, exact bool) {
 	at = -1
-	var walk func(b *Base)
-	walk = func(b *Base) {
+	var walk func(b *Base, gs *groupStopMemo)
+	walk = func(b *Base, gs *groupStopMemo) {
 		if b.hidden || b.disabled {
 			return
 		}
+		stop := r.tabStop(b, gs)
 		if r.focus != nil && r.focus.base() == b {
-			at, exact = len(order), r.tabStop(b)
+			at, exact = len(order), stop
 		}
-		if r.tabStop(b) {
+		if stop {
 			order = append(order, b.self)
 		}
+		var cgs groupStopMemo
 		for _, c := range b.children {
-			walk(c.base())
+			walk(c.base(), &cgs)
 		}
 	}
-	walk(r.root)
+	walk(r.root, &groupStopMemo{})
 	return order, at, exact
 }
 
@@ -535,7 +717,8 @@ func (r *Router) tabOrder() (order []Element, at int, exact bool) {
 // (last) one. A focus outside the Tab order (a control clicked without full
 // keyboard access) moves to the first Tab stop after it in tree order (the
 // last one before it when backward). It reports whether there was an
-// element to focus.
+// element to focus. The element it focuses gets FocusEvent{Focused: true,
+// Tab: true}.
 func (r *Router) FocusNext(backward bool) bool {
 	order, at, exact := r.tabOrder()
 	n := len(order)
@@ -555,7 +738,7 @@ func (r *Router) FocusNext(backward bool) bool {
 	default:
 		i = at % n
 	}
-	r.setFocus(order[i])
+	r.setFocus(order[i], true)
 	return true
 }
 
@@ -576,18 +759,23 @@ func (r *Router) validate() {
 		}
 	}
 	if r.focus != nil && !r.focusable(r.focus) {
-		r.setFocus(nil)
+		r.setFocus(nil, false)
+	}
+	r.RefreshCursor() // a cancelled capture unfreezes the shape
+	if r.treeChanged != nil {
+		r.treeChanged()
 	}
 }
 
+// SetTreeChangedFunc sets the function called after the router dropped
+// the state a tree change made invalid: after an element joined or left
+// the tree or was hidden, shown, disabled, enabled or made unfocusable
+// (the window's tooltips check theirs there, S5.5l); nil calls nothing.
+// It must not change the tree.
+func (r *Router) SetTreeChangedFunc(f func()) { r.treeChanged = f }
+
 // routedBy returns the router of b's tree, or nil.
-func (b *Base) routedBy() *Router {
-	e := b
-	for e.parent != nil {
-		e = e.parent
-	}
-	return e.router
-}
+func (b *Base) routedBy() *Router { return b.tree().root.router }
 
 // validateTree is validate for a possibly nil router.
 func (r *Router) validateTree() {
@@ -603,6 +791,24 @@ func (b *Base) treeChanged() {
 
 // Focusable reports whether the element can take the keyboard focus.
 func (b *Base) Focusable() bool { return b.focusable }
+
+// AcceptsFirstMouse reports whether the element takes the press that
+// activates its window (shell.PointerEvent.Activating), set by
+// SetAcceptsFirstMouse on it or an ancestor.
+func (b *Base) AcceptsFirstMouse() bool {
+	for ; b != nil; b = b.parent {
+		if b.firstMouse {
+			return true
+		}
+	}
+	return false
+}
+
+// SetAcceptsFirstMouse sets whether the element and its descendants take
+// the press that activates their window, like AppKit's acceptsFirstMouse:
+// off by default, so that press only activates the window (S6.1b); the
+// title bar turns it on for the traffic lights and the menu strip.
+func (b *Base) SetAcceptsFirstMouse(on bool) { b.firstMouse = on }
 
 // SetFocusable sets whether the element can take the keyboard focus. A
 // focused element made unfocusable loses the focus.

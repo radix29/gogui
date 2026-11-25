@@ -115,3 +115,20 @@ func TestReaders(t *testing.T) {
 		t.Errorf("ReadRoundedRect = %+v, want %+v", r, want)
 	}
 }
+
+// TestAttrType builds a PangoAttrClass and a PangoAttribute pointing at it
+// in g_malloc0 memory and reads the type back through AttrType (S5.3h).
+func TestAttrType(t *testing.T) {
+	if err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	klass := GLib.Malloc0(unsafe.Sizeof(PangoAttrClass{}))
+	defer GLib.Free(klass)
+	attr := GLib.Malloc0(unsafe.Sizeof(PangoAttribute{}))
+	defer GLib.Free(attr)
+	ffi.WriteInt32(klass, unsafe.Offsetof(PangoAttrClass{}.Type), AttrUnderline)
+	ffi.WriteUintptr(attr, unsafe.Offsetof(PangoAttribute{}.Klass), klass)
+	if got := AttrType(attr); got != AttrUnderline {
+		t.Errorf("AttrType = %d, want %d", got, AttrUnderline)
+	}
+}

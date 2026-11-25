@@ -43,10 +43,14 @@ type orderedHandler struct {
 	sfHandler
 	fw     *fakeWindow
 	onText func(shell.TextEvent)
+	keys   []shell.KeyEvent // every KeyEvent, for TestKeyModifierKeys
 }
 
 func (h *orderedHandler) Event(ev shell.Event) bool {
 	n := len(h.log)
+	if k, ok := ev.(shell.KeyEvent); ok {
+		h.keys = append(h.keys, k)
+	}
 	r := h.sfHandler.Event(ev)
 	if h.fw != nil {
 		h.fw.ims = append(h.fw.ims, h.log[n]) // not what the handler logged after it ("closed")
@@ -324,7 +328,8 @@ func TestKeyDownText(t *testing.T) {
 	wantLog(t, "window calls", fw.take())
 }
 
-// TestKeyModifierKeys: a modifier key's own modifier is in its key-down's
+// TestKeyModifierKeys: a modifier key carries its Modifier (S5.6i) on both
+// events, and its own modifier is in its key-down's
 // Mods (by its keyval or its base) and not in its key-up's.
 func TestKeyModifierKeys(t *testing.T) {
 	_, fw, h, _ := openKey(t)
@@ -335,30 +340,40 @@ func TestKeyModifierKeys(t *testing.T) {
 		wantDown string
 		wantUp   string
 		keycode  uint32
+		mod      driver.Modifiers // KeyEvent.Modifier (S5.6i)
 	}{
-		{"Shift_L", 0xffe1, 0xffe1, 0, kShift, "key-down 0x0 m=1", "key-up 0x0", 50},
-		{"Shift_R", 0xffe2, 0xffe2, 0, kShift, "key-down 0x0 m=1", "key-up 0x0", 62},
-		{"Control_L", 0xffe3, 0xffe3, 0, kCtrl, "key-down 0x0 m=2", "key-up 0x0", 37},
-		{"Control_R", 0xffe4, 0xffe4, 0, kCtrl, "key-down 0x0 m=2", "key-up 0x0", 105},
-		{"Alt_L", 0xffe9, 0xffe9, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 64},
-		{"Alt_R", 0xffea, 0xffea, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 108},
-		{"Meta_L", 0xffe7, 0xffe7, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 64},
-		{"Meta_R", 0xffe8, 0xffe8, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 108},
-		{"Super_L", 0xffeb, 0xffeb, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 133},
-		{"Super_R", 0xffec, 0xffec, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 134},
-		{"Hyper_L", 0xffed, 0xffed, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 207},
-		{"Hyper_R", 0xffee, 0xffee, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 208},
-		{"Shift_L with Ctrl held", 0xffe1, 0xffe1, kCtrl, kCtrl | kShift, "key-down 0x0 m=3", "key-up 0x0 m=2", 50},
-		{"by the base: ISO_Next_Group on Shift_R", 0xfe08, 0xffe2, kShift, kShift, "key-down 0x0 m=1", "key-up 0x0", 62},
-		{"Shift_L without the bit on its key-up", 0xffe1, 0xffe1, 0, 0, "key-down 0x0 m=1", "key-up 0x0", 50},
-		{"ISO_Level3_Shift: no modifier", 0xfe03, 0xfe03, 0, 0x80, "key-down 0x0", "key-up 0x0", 92},
-		{"Caps_Lock: no modifier", 0xffe5, 0xffe5, 0, 2, "key-down 0x0", "key-up 0x0", 66},
-		{"a letter: state only", 'a', 'a', kShift, kShift, "key-down 0x41 m=1", "key-up 0x41 m=1", kcA},
+		{"Shift_L", 0xffe1, 0xffe1, 0, kShift, "key-down 0x0 m=1", "key-up 0x0", 50, driver.ModShift},
+		{"Shift_R", 0xffe2, 0xffe2, 0, kShift, "key-down 0x0 m=1", "key-up 0x0", 62, driver.ModShift},
+		{"Control_L", 0xffe3, 0xffe3, 0, kCtrl, "key-down 0x0 m=2", "key-up 0x0", 37, driver.ModControl},
+		{"Control_R", 0xffe4, 0xffe4, 0, kCtrl, "key-down 0x0 m=2", "key-up 0x0", 105, driver.ModControl},
+		{"Alt_L", 0xffe9, 0xffe9, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 64, driver.ModOption},
+		{"Alt_R", 0xffea, 0xffea, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 108, driver.ModOption},
+		{"Meta_L", 0xffe7, 0xffe7, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 64, driver.ModOption},
+		{"Meta_R", 0xffe8, 0xffe8, 0, kAlt, "key-down 0x0 m=4", "key-up 0x0", 108, driver.ModOption},
+		{"Super_L", 0xffeb, 0xffeb, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 133, driver.ModCommand},
+		{"Super_R", 0xffec, 0xffec, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 134, driver.ModCommand},
+		{"Hyper_L", 0xffed, 0xffed, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 207, driver.ModCommand},
+		{"Hyper_R", 0xffee, 0xffee, 0, kSuper, "key-down 0x0 m=8", "key-up 0x0", 208, driver.ModCommand},
+		{"Shift_L with Ctrl held", 0xffe1, 0xffe1, kCtrl, kCtrl | kShift, "key-down 0x0 m=3", "key-up 0x0 m=2", 50, driver.ModShift},
+		{"by the base: ISO_Next_Group on Shift_R", 0xfe08, 0xffe2, kShift, kShift, "key-down 0x0 m=1", "key-up 0x0", 62, driver.ModShift},
+		{"Shift_L without the bit on its key-up", 0xffe1, 0xffe1, 0, 0, "key-down 0x0 m=1", "key-up 0x0", 50, driver.ModShift},
+		{"ISO_Level3_Shift: no modifier", 0xfe03, 0xfe03, 0, 0x80, "key-down 0x0", "key-up 0x0", 92, 0},
+		{"Caps_Lock: no modifier", 0xffe5, 0xffe5, 0, 2, "key-down 0x0", "key-up 0x0", 66, 0},
+		{"a letter: state only", 'a', 'a', kShift, kShift, "key-down 0x41 m=1", "key-up 0x41 m=1", kcA, 0},
 	} {
 		fw.base[c.keycode] = c.base
 		fw.keyPress(c.kv, c.keycode, c.down, 10_000)
 		fw.keyRelease(c.kv, c.keycode, c.up, 10_010)
 		got := keyLines(h.take())
+		if len(h.keys) != 2 {
+			t.Errorf("%s: %d key events", c.name, len(h.keys))
+		}
+		for _, k := range h.keys {
+			if k.Modifier != c.mod {
+				t.Errorf("%s: Modifier %v (down %v), want %v", c.name, k.Modifier, k.Down, c.mod)
+			}
+		}
+		h.keys = nil
 		wantLog(t, c.name, got, c.wantDown, c.wantUp)
 	}
 	fw.takeIMs()
@@ -415,14 +430,14 @@ func TestKeyRepeat(t *testing.T) {
 	wantLog(t, "repeat text", fw.takeIMs(), "key-down 0x41 repeat", "filter 0x61 true", "text \"a\"")
 }
 
-// TestKeyFocus: the key window's changes focus the input method in and
-// out (out: reset first), before KeyChanged; focus loss forgets the held
-// keys.
+// TestKeyFocus: with the text input off, the key window's changes do not
+// focus the input method (TestTextInputFocus), but its loss resets it
+// before KeyChanged and forgets the held keys.
 func TestKeyFocus(t *testing.T) {
 	_, fw, h, _ := openKey(t)
 	fw.isActive = true
 	fw.notify(kindActive)
-	wantLog(t, "focus in", fw.takeIMs(), "focus true", "key true")
+	wantLog(t, "focus in", fw.takeIMs(), "key true")
 	fw.notify(kindActive) // no change
 	wantLog(t, "no change", fw.takeIMs())
 
@@ -434,7 +449,7 @@ func TestKeyFocus(t *testing.T) {
 	fw.keyPress(0xffe1, kcShiftL, 0, 4030)
 	wantLog(t, "focus out", fw.takeIMs(),
 		"key-down 0x41", "filter 0x61 true", "text \"a\"", "key-down 0x0 m=1", "filter 0xffe1 false",
-		"reset", "focus false", "key false",
+		"reset", "key false",
 		"key-down 0x41", "filter 0x61 true", "text \"a\"", "key-down 0x0 m=1", "filter 0xffe1 false")
 	h.take()
 
@@ -678,4 +693,51 @@ func keyLines(l []string) []string {
 		}
 	}
 	return keys
+}
+
+// TestShiftedFor: KeyEvent.Shifted (S5.6h) is the character of the Shift
+// level for character keys only.
+func TestShiftedFor(t *testing.T) {
+	for _, c := range []struct {
+		name              string
+		kv, base, shifted uint32
+		want              driver.Key
+	}{
+		{"a", 'a', 'a', 'A', 'A'},
+		{"Ctrl+= (US)", '=', '=', '+', '+'},
+		{"1 (US)", '1', '1', '!', '!'},
+		{"+ (German)", '+', '+', '*', '*'},
+		{"Cyrillic", 0x6c1, 0x6c1, 0x6e1, driver.KeyNone}, // legacy keyval, not in the fake's table
+		{"Unicode", 0x01000430, 0x01000430, 0x01000410, 'А'},
+		{"dead key at the Shift level", 0xfe51, 0xfe51, 0xfe50, '`'},
+		{"dead key's shifted char", 0xfe52, 0xfe52, '°', '°'},
+		{"no Shift level", 'q', 'q', 0, driver.KeyNone},
+		{"Shift level is a function key", 'q', 'q', 0xff0d, driver.KeyNone},
+		{"space", 0x20, 0x20, 0x20, driver.KeyNone},
+		{"Return", 0xff0d, 0xff0d, 0xff0d, driver.KeyNone},
+		{"KP_Add", 0xffab, 0xffab, 0xffab, driver.KeyNone},
+		{"KP_1 with Num Lock", 0xffb1, 0xffb1, 0xff9c, driver.KeyNone},
+		{"Shift_L", 0xffe1, 0xffe1, 0xffe1, driver.KeyNone},
+		{"F5", 0xffc2, 0xffc2, 0xffc2, driver.KeyNone},
+		{"unknown base", 'a', 0, 'A', driver.KeyNone},
+	} {
+		if got := shiftedFor(c.kv, c.base, c.shifted, testKeyvalToUnicode); got != c.want {
+			t.Errorf("%s: shiftedFor(%#x, %#x, %#x) = %q, want %q", c.name, c.kv, c.base, c.shifted,
+				rune(got), rune(c.want))
+		}
+	}
+}
+
+// TestKeyShifted: a key-down carries the Shift level's character from
+// keyShifted, a key-up none.
+func TestKeyShifted(t *testing.T) {
+	_, fw, h, _ := openKey(t)
+	fw.shifted = map[uint32]uint32{kcA: 'A', kc1: '!', kcReturn: 0xff0d}
+	h.onKey = func(shell.KeyEvent) bool { return true }
+	fw.keyPress('1', kc1, kCtrl, 1000)
+	fw.keyRelease('1', kc1, kCtrl, 1010)
+	fw.keyPress('a', kcA, 0, 1020)
+	fw.keyPress(0xff0d, kcReturn, 0, 1030)
+	wantLog(t, "shifted", fw.takeIMs(), "key-down 0x31 s=0x21 m=2", "reset", "key-up 0x31 m=2", "filter-up 0x31",
+		"key-down 0x41 s=0x41", "reset", "key-down 0xd", "reset")
 }

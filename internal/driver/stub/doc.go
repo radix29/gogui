@@ -9,7 +9,8 @@
 //
 // The stubs serve three purposes:
 //
-//   - The headless driver (S0.5) is built from them.
+//   - The headless driver (S0.5) is built from them: it embeds Driver and
+//     adds the run loop and the UI-thread queue.
 //   - The appkit and aqua drivers embed them as fallbacks, so a driver
 //     compiles before all of its controls exist.
 //   - Tests of the public gogui layer drive them through the User… methods.
@@ -18,6 +19,5 @@
 // layout results in tests do not depend on fonts. A non-zero Base.Fixed
 // overrides them.
 //
-// Stubs are not safe for concurrent use, except Driver.Post, which may be
-// called from any goroutine.
+// Stubs are not safe for concurrent use.
 package stub

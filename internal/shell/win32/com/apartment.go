@@ -2,11 +2,7 @@
 
 package com
 
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
+import "golang.org/x/sys/windows"
 
 // COINIT flags of CoInitializeEx.
 const (
@@ -51,17 +47,3 @@ var (
 	ole32                = windows.NewLazySystemDLL("ole32.dll")
 	procCoCreateInstance = ole32.NewProc("CoCreateInstance")
 )
-
-// CreateInstance creates an object of the in-process class clsid
-// (CoCreateInstance with CLSCTX_INPROC_SERVER) and returns its interface
-// iid with one reference. The thread must be a COM apartment
-// (InitUIThread); otherwise it fails with CO_E_NOTINITIALIZED.
-func CreateInstance(clsid, iid *GUID) (Ptr, error) {
-	var out Ptr
-	r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(clsid)), 0, CLSCTX_INPROC_SERVER,
-		uintptr(unsafe.Pointer(iid)), uintptr(unsafe.Pointer(&out)))
-	if err := HRESULT(int32(r)).Err("CoCreateInstance(" + clsid.String() + ")"); err != nil {
-		return 0, err
-	}
-	return out, nil
-}

@@ -35,18 +35,8 @@ func HitTest(e Element, p driver.Point) (Element, driver.Point) {
 
 // ToRoot converts p from e's own coordinates into the coordinates of its
 // root's parent (the ones PaintTree and HitTest use).
-func ToRoot(e Element, p driver.Point) driver.Point {
-	for b := e.base(); b != nil; b = b.parent {
-		p = p.Add(b.frame.Origin())
-	}
-	return p
-}
+func ToRoot(e Element, p driver.Point) driver.Point { return e.base().tree().origin.Add(p) }
 
 // FromRoot converts p from the coordinates of e's root's parent into e's
 // own; it is the inverse of ToRoot.
-func FromRoot(e Element, p driver.Point) driver.Point {
-	for b := e.base(); b != nil; b = b.parent {
-		p = p.Sub(b.frame.Origin())
-	}
-	return p
-}
+func FromRoot(e Element, p driver.Point) driver.Point { return p.Sub(e.base().tree().origin) }

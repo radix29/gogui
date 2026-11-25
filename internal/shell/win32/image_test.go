@@ -298,11 +298,11 @@ func TestSurfaceImage(t *testing.T) {
 			t.Errorf("the image bitmap has %d references between frames, want 1", n)
 		}
 
-		s.fault = fault{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}
+		s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}}
 		w32.SendMessage(sf.hwnd, w32.WM_PAINT, 0, 0)
 		rethrow()
-		if s.losses != 1 || len(s.leaks) != 0 {
-			t.Fatalf("device loss: %d losses, leaks %v", s.losses, s.leaks)
+		if s.stats.losses != 1 || len(s.leaks) != 0 {
+			t.Fatalf("device loss: %d losses, leaks %v", s.stats.losses, s.leaks)
 		}
 		if !im.bmp.IsNil() || len(s.images.live) != 0 {
 			t.Error("the image bitmap survived the device loss")

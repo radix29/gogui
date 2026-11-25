@@ -11,7 +11,7 @@ import (
 // Keyboard input (S4.1k). A GtkEventControllerKey on the GtkWindow, in the
 // CAPTURE phase so it sees every key before GTK's own handling (the
 // window's key bindings, focus moves), added by window_linux.go at
-// creation, and a GtkIMContextSimple for the text:
+// creation, and an input method for the text:
 //
 //   - "key-pressed" (keyval, keycode, state) is a KeyEvent{Down: true}; its
 //     gboolean result is the handler's, so a consumed key stops GTK. A
@@ -23,6 +23,10 @@ import (
 //     keyval of the active layout (level 0 of the event's keycode and
 //     layout group, gdk_display_translate_key) mapped to Unicode,
 //     KeyNone for the rest (modifier keys alone, F13 and up, Insert).
+//   - A key-down of a character key also carries Shifted (S5.6h): the
+//     keyval of the same keycode at the Shift level of the event's layout
+//     group (gdk_display_translate_key with GDK_SHIFT_MASK alone, so Caps
+//     Lock and Ctrl do not change it) mapped to Unicode (shiftedFor).
 //   - Text. A key-down the handler did not consume goes to the input method
 //     (gtk_im_context_filter_keypress of the current event), which commits
 //     the text it produces ("commit"), dead keys and compose sequences
@@ -30,7 +34,15 @@ import (
 //     DEL, C1) dropped, so it follows its KeyEvent. A consumed key-down
 //     resets the input method instead, so it produces no text. Key-ups go
 //     to the input method too (some sequences end on a release). The
-//     input method is GTK's simple one until the full IME (S5.3).
+//     input method is a GtkIMMulticontext since S5.3i (the user's IBus or
+//     Fcitx, GTK's simple context as its fallback), whose preedit is the
+//     IME's (ime.go). While the text input is on (S5.3j) the order turns:
+//     GTK gives every key to the input method first, and only the keys it
+//     declines reach "key-pressed" and "key-released" (ime.go).
+//
+// A modifier key alone carries its Modifier (keyModifier, S5.6i) on the
+// press and the release, so the aqua menu strip tells a lone Alt from
+// Insert or F13.
 //
 // Mods are the modifiers held after the key, as on Win32: GTK's state is
 // the one before it, so a modifier key's own modifier is added on its
@@ -126,6 +138,16 @@ func modifierKey(kv uint32) driver.Modifiers {
 	return 0
 }
 
+// keyModifier returns KeyEvent.Modifier (S5.6i) of a key event with keyval
+// kv and level-0 keyval base: the modifier of the key's base keyval (Alt_L
+// for the Meta_L that Shift+Alt gives), else of kv, so at most one.
+func keyModifier(kv, base uint32) driver.Modifiers {
+	if m := modifierKey(base); m != 0 {
+		return m
+	}
+	return modifierKey(kv)
+}
+
 // isControl reports whether r is a control character (C0, DEL, C1).
 func isControl(r rune) bool { return r < 0x20 || r == 0x7F || (r >= 0x80 && r < 0xA0) }
 
@@ -160,6 +182,35 @@ func keyFor(kv, base uint32, toUnicode func(uint32) rune) driver.Key {
 	return driver.NormalizeKey(driver.Key(r))
 }
 
+// shiftedFor returns KeyEvent.Shifted (S5.6h) of a key-down with keyval
+// kv and base keyval base (as keyFor): for a character key, the
+// character of shifted, the keyval of the same key at the Shift level of
+// the active layout (0 if unknown), a dead keyval as its character;
+// KeyNone for the named keys, the keypad, modifiers and function keys, and
+// when shifted is no character.
+func shiftedFor(kv, base, shifted uint32, toUnicode func(uint32) rune) driver.Key {
+	if _, named := namedKey(kv); named || base == 0 || base == 0x20 {
+		return driver.KeyNone
+	}
+	if _, named := namedKey(base); named {
+		return driver.KeyNone
+	}
+	if _, dead := deadKeys[base]; !dead && base >= keyvalSpecials && base <= 0xffff {
+		return driver.KeyNone
+	}
+	if r, ok := deadKeys[shifted]; ok {
+		return driver.Key(r)
+	}
+	if shifted == 0 || shifted == 0x20 || (shifted >= keyvalSpecials && shifted <= 0xffff) {
+		return driver.KeyNone
+	}
+	r := toUnicode(shifted)
+	if r == 0 || isControl(r) || !utf8.ValidRune(r) {
+		return driver.KeyNone
+	}
+	return driver.NormalizeKey(driver.Key(r))
+}
+
 // commitText returns the text of an input-method commit with the control
 // characters dropped and invalid UTF-8 replaced, or "".
 func commitText(s string) string {
@@ -176,32 +227,78 @@ func commitText(s string) string {
 type keyState struct {
 	down   map[uint32]bool // the keycodes held, for Repeat
 	evTime uint32          // the time of the key event being handled (for its text)
+	// last is the key event handled last and its result: during a popup's
+	// grab both the window's and the popover's key controller may see one
+	// (popover_linux.go), and the second gets the first's result.
+	last    keySeen
+	lastSet bool
 }
 
-// keyLive reports whether key input may reach the handler.
-func (sf *surface) keyLive() bool { return !sf.dead && !sf.creating && sf.w != nil }
+// keySeen identifies a key event: its time, keycode and direction (a
+// repeat has a time of its own).
+type keySeen struct {
+	t, keycode uint32
+	down       bool
+	result     bool
+}
+
+// seen reports whether the key event t, keycode, down was handled already
+// and its result; otherwise it records it. Events without a time are
+// never the same.
+func (k *keyState) seen(t, keycode uint32, down bool) (bool, bool) {
+	if t != 0 && k.lastSet && k.last.t == t && k.last.keycode == keycode && k.last.down == down {
+		return true, k.last.result
+	}
+	k.last, k.lastSet = keySeen{t: t, keycode: keycode, down: down}, true
+	return false, false
+}
+
+// keyLive reports whether key input may reach the handler (not while a
+// modal surface blocks it, modal.go).
+func (sf *surface) keyLive() bool {
+	return !sf.dead && !sf.creating && sf.w != nil && !sf.inputBlocked()
+}
 
 // keyPressed is the key controller's "key-pressed": the KeyEvent, then,
 // unless the handler consumed it, the input method. It returns whether
-// the key was consumed (by the handler or the input method).
+// the key was consumed (by the handler or the input method). While the
+// key controller has the input method (the text input on, ime.go), GTK
+// filtered the key through it already and it declined, so it is not
+// filtered or reset again; the same holds when the handler turned the
+// text input on (the key would reach the input method a second time if
+// IBus put it back).
 func (sf *surface) keyPressed(c uintptr, kv, keycode, state uint32) bool {
+	t := sf.w.eventTime(c)
+	if dup, r := sf.kbd.seen(t, keycode, true); dup {
+		return r
+	}
+	r := sf.keyPressedOnce(c, t, kv, keycode, state)
+	sf.kbd.last.result = r
+	return r
+}
+
+func (sf *surface) keyPressedOnce(c uintptr, t, kv, keycode, state uint32) bool {
 	if sf.kbd.down == nil {
 		sf.kbd.down = map[uint32]bool{}
 	}
 	repeat := sf.kbd.down[keycode]
 	sf.kbd.down[keycode] = true
-	t := sf.w.eventTime(c)
 	sf.kbd.evTime = t
 	defer func() { sf.kbd.evTime = 0 }() // a later commit is not this key's
+	viaIM := sf.ime.attached
 	base := sf.w.keyBase(c, keycode)
 	key := keyFor(kv, base, sf.w.keyvalToUnicode)
-	mods := modifiersOf(state) | modifierKey(kv) | modifierKey(base) // the state is before the key
-	handled := sf.h.Event(shell.KeyEvent{Down: true, Key: key, Repeat: repeat,
-		Mods: mods, Time: sf.s.eventTime(t)})
-	if sf.dead {
+	shifted := shiftedFor(kv, base, sf.w.keyShifted(c, keycode), sf.w.keyvalToUnicode)
+	modifier := keyModifier(kv, base)
+	mods := modifiersOf(state) | modifier // the state is before the key
+	handled := sf.keySink().Event(shell.KeyEvent{Down: true, Key: key, Shifted: shifted,
+		Modifier: modifier, Repeat: repeat, Mods: mods, Time: sf.s.eventTime(t)})
+	switch {
+	case sf.dead:
 		return true
-	}
-	if handled {
+	case viaIM || sf.ime.attached:
+		return handled
+	case handled:
 		sf.w.imReset() // a consumed key produces no text
 		return true
 	}
@@ -209,37 +306,48 @@ func (sf *surface) keyPressed(c uintptr, kv, keycode, state uint32) bool {
 }
 
 // keyReleased is the key controller's "key-released": the KeyEvent, then
-// the input method.
+// the input method (unless it had the key first, as in keyPressed).
 func (sf *surface) keyReleased(c uintptr, kv, keycode, state uint32) {
-	delete(sf.kbd.down, keycode)
 	t := sf.w.eventTime(c)
+	if dup, _ := sf.kbd.seen(t, keycode, false); dup {
+		return
+	}
+	delete(sf.kbd.down, keycode)
 	sf.kbd.evTime = t
 	defer func() { sf.kbd.evTime = 0 }() // a later commit is not this key's
+	viaIM := sf.ime.attached
 	base := sf.w.keyBase(c, keycode)
 	key := keyFor(kv, base, sf.w.keyvalToUnicode)
-	mods := modifiersOf(state) &^ (modifierKey(kv) | modifierKey(base))
-	sf.h.Event(shell.KeyEvent{Key: key, Mods: mods, Time: sf.s.eventTime(t)})
-	if !sf.dead {
+	modifier := keyModifier(kv, base)
+	mods := modifiersOf(state) &^ modifier
+	sf.keySink().Event(shell.KeyEvent{Key: key, Modifier: modifier, Mods: mods, Time: sf.s.eventTime(t)})
+	if !sf.dead && !viaIM && !sf.ime.attached {
 		sf.w.imFilter(c)
 	}
 }
 
 // commit is the input method's "commit" of the text s: a TextEvent, at
-// the time of the key event that produced it (now outside one).
+// the time of the key event that produced it (textTime). Commits are
+// dropped while muted (ime.go).
 func (sf *surface) commit(s string) {
-	if s = commitText(s); s == "" {
+	if s = commitText(s); s == "" || sf.ime.mute > 0 {
 		return
 	}
-	sf.h.Event(shell.TextEvent{Text: s, Time: sf.s.eventTime(sf.kbd.evTime)})
+	sf.ime.composing = false // a commit during a composition empties the preedit
+	sf.keySink().Event(shell.TextEvent{Text: s, Time: sf.textTime()})
 }
 
-// keyFocus follows the key window: the input method gets focus in or out,
-// and on the way out the keys held are forgotten and the input method is
-// reset.
+// keyFocus follows the key window: on the way out the keys held are
+// forgotten, the composition too, and the input method is reset; the
+// input method has the focus only in the key window with the text input
+// on (syncIMFocus). Muted: aqua commits its preedit on the key loss.
 func (sf *surface) keyFocus(in bool) {
-	if !in {
-		clear(sf.kbd.down)
-		sf.w.imReset()
-	}
-	sf.w.imFocus(in)
+	sf.muted(func() {
+		if !in {
+			clear(sf.kbd.down)
+			sf.ime.composing = false
+			sf.w.imReset()
+		}
+		sf.syncIMFocus()
+	})
 }

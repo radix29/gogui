@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/radix29/gogui/internal/ffi"
+	"github.com/radix29/gogui/internal/shell"
 	"github.com/radix29/gogui/internal/shell/gtk4/gtk"
 )
 
@@ -27,15 +28,24 @@ type fakeClockLoop struct {
 	nextID   uint32
 	timeouts []fakeTimeout // added and not yet fired or removed
 	ticks    []*fakeTick   // added and not yet dropped
+	idles    []fakeTimeout // idle sources added and not yet run or removed (ms 0)
 
 	info       [3]int64 // what frameInfo returns: frame time, interval, presentation
 	frameClock uintptr  // the frameInfo argument of the last call
+	// counter is GDK's frame counter, one more at every fireTick; timings
+	// are the frames' GdkFrameTimings by counter (none: out of the
+	// history).
+	counter int64
+	timings map[int64]fakeTimings
 
-	failTimeout, failTick bool // timeout / addTick add nothing
+	failTimeout, failTick, failIdle bool // timeout / addTick / idle add nothing
 
 	// newWin creates the windows of newWindow (surface_test.go); nil:
 	// newWindow is misuse.
 	newWin func(cfg windowConfig, p windowPeer) (window, error)
+	// newPop creates the popovers of newPopover (popup_test.go); nil:
+	// newPopover is misuse.
+	newPop func(parent window, keys windowPeer, grab bool, p windowPeer) (popover, error)
 
 	timeoutsAdded, removes, ticksAdded, tickRemoves, destroys int
 	errs                                                      []string
@@ -75,12 +85,47 @@ func (l *fakeClockLoop) newWindow(cfg windowConfig, p windowPeer) (window, error
 	return nil, errNoFakeWindow
 }
 
-func (l *fakeClockLoop) idle(sourcePeer, kind) (uint32, ffi.Handle) {
-	l.errorf("idle called")
-	return 0, 0
+// newPopover calls l.newPop; without one it is misuse.
+func (l *fakeClockLoop) newPopover(parent window, keys windowPeer, grab bool, p windowPeer) (popover, error) {
+	if l.newPop != nil {
+		return l.newPop(parent, keys, grab, p)
+	}
+	l.errorf("newPopover called")
+	return nil, errNoFakeWindow
+}
+
+func (l *fakeClockLoop) idle(p sourcePeer, k kind) (uint32, ffi.Handle) {
+	if l.failIdle {
+		return 0, 0
+	}
+	l.nextID++
+	h := dispatch.New(entry{peer: p, kind: k})
+	l.idles = append(l.idles, fakeTimeout{id: l.nextID, at: l.now, h: h})
+	return l.nextID, h
+}
+
+// runIdles runs the pending idle sources through sourceFunc, in order, as
+// GLib does once no event is pending, and returns how many ran.
+func (l *fakeClockLoop) runIdles(t *testing.T) int {
+	t.Helper()
+	n := 0
+	for len(l.idles) > 0 {
+		src := l.idles[0]
+		l.idles = l.idles[1:]
+		if sourceFunc(uintptr(src.h)) != gtk.SourceRemove {
+			t.Error("a one-shot idle source returned G_SOURCE_CONTINUE")
+		}
+		n++
+	}
+	return n
 }
 
 func (l *fakeClockLoop) remove(id uint32) {
+	if i := slices.IndexFunc(l.idles, func(s fakeTimeout) bool { return s.id == id }); i >= 0 {
+		l.idles = slices.Delete(l.idles, i, i+1)
+		l.removes++
+		return
+	}
 	i := slices.IndexFunc(l.timeouts, func(s fakeTimeout) bool { return s.id == id })
 	if i < 0 {
 		l.errorf("g_source_remove(%d): source not found", id)
@@ -157,6 +202,26 @@ func (l *fakeClockLoop) frameInfo(frameClock uintptr) (int64, int64, int64) {
 	return l.info[0], l.info[1], l.info[2]
 }
 
+// fakeTimings is a frame's GdkFrameTimings: its presentation time and
+// refresh interval (µs) and whether they are complete.
+type fakeTimings struct {
+	presented, interval int64
+	complete            bool
+}
+
+func (l *fakeClockLoop) frameCounter(uintptr) int64 { return l.counter }
+
+func (l *fakeClockLoop) presentation(_ uintptr, counter int64) (int64, int64, bool, bool) {
+	ti, ok := l.timings[counter]
+	if !ok {
+		return 0, 0, false, true
+	}
+	if !ti.complete {
+		return 0, 0, false, false
+	}
+	return ti.presented, ti.interval, true, false
+}
+
 // fireTimeout runs the one pending timeout through sourceFunc, first
 // advancing the time to when it is due (GLib never fires one early). It
 // returns the timeout fired.
@@ -188,6 +253,7 @@ func (l *fakeClockLoop) fireTick(t *testing.T, widget uintptr, ft, iv, pr int64)
 		t.Fatalf("no tick callback on %#x", widget)
 	}
 	tk := l.ticks[i]
+	l.counter++
 	l.info = [3]int64{ft, iv, pr}
 	tk.running = true
 	r := tickCallback(widget, testFrameClock, uintptr(tk.h))
@@ -240,8 +306,8 @@ func newClockTest(t *testing.T) (*Shell, *clock, *fakeClockLoop) {
 	s.ready = true
 	t.Cleanup(func() {
 		s.clock.close()
-		if len(l.timeouts) != 0 || len(l.ticks) != 0 {
-			t.Errorf("after close: %d timeouts and %d tick callbacks left", len(l.timeouts), len(l.ticks))
+		if len(l.timeouts) != 0 || len(l.ticks) != 0 || len(l.idles) != 0 {
+			t.Errorf("after close: %d timeouts, %d tick callbacks and %d idle sources left", len(l.timeouts), len(l.ticks), len(l.idles))
 		}
 		for _, e := range l.errs {
 			t.Errorf("fake loop: %s", e)
@@ -1372,4 +1438,159 @@ func TestShellRunClockQuitPending(t *testing.T) {
 		t.Errorf("%d frames, %d timeouts, %d removes; want 0, 1, 1", frames, l.timeouts, l.removes)
 	}
 	checkTornDown(t, s, l, base)
+}
+
+// TestClockHidden: with an open surface and none pacing (hidden or known
+// to be minimized) a running animation's fallback frames come
+// hiddenInterval apart, their target times still moving; the surface shown
+// again moves the pending request to its tick at once. With no surface at
+// all the fallback keeps the 60 Hz grid (TestClockFallback) (S6.2b).
+func TestClockHidden(t *testing.T) {
+	s, c, l := newClockTest(t)
+	ps := addPacers(s, 0) // open, not pacing
+	var targets []time.Duration
+	c.SetFrameFunc(func(ft time.Duration) {
+		targets = append(targets, ft)
+		c.RequestFrame()
+	})
+	c.begin(0)
+	c.RequestFrame()
+	l.fireTimeout(t) // the first frame: at once
+	for i := range 4 {
+		if len(l.timeouts) != 1 || c.stall {
+			t.Fatalf("frame %d: timeouts %+v (stall %v), want the fallback", i, l.timeouts, c.stall)
+		}
+		if got, want := l.timeouts[0].ms, uint32(hiddenInterval/ms); got != want {
+			t.Errorf("frame %d: fallback after %d ms, want %d", i, got, want)
+		}
+		l.fireTimeout(t)
+	}
+	if c.timeoutFrames != 5 || c.Now() != 4*hiddenInterval {
+		t.Errorf("%d fallback frames by %v, want 5 by %v", c.timeoutFrames, c.Now(), 4*hiddenInterval)
+	}
+	for i := 1; i < len(targets); i++ {
+		if d := targets[i] - targets[i-1]; d < hiddenInterval-defaultPeriod || d > hiddenInterval+defaultPeriod {
+			t.Errorf("target %d moved %v, want about %v", i, d, hiddenInterval)
+		}
+	}
+	// Shown 10 ms after a frame: the request moves to the tick, no wait.
+	l.now += 10_000
+	ps[0].w = 0x100
+	c.surfacesChanged()
+	if len(l.ticks) != 1 || len(l.timeouts) != 1 || !c.stall || l.timeouts[0].ms != uint32(stallTimeout/ms) {
+		t.Fatalf("after show: %d ticks, timeouts %+v (stall %v); want the tick and its watchdog", len(l.ticks), l.timeouts, c.stall)
+	}
+	l.now += 6_000
+	l.fireTick(t, 0x100, l.now, 0, 0)
+	if c.tickFrames != 1 {
+		t.Errorf("%d tick frames after show, want 1", c.tickFrames)
+	}
+	// Minimized again (no pacer): the fallback waits for the low rate.
+	ps[0].w = 0
+	c.surfacesChanged()
+	if len(l.ticks) != 0 || len(l.timeouts) != 1 || c.stall || l.timeouts[0].ms != uint32(hiddenInterval/ms) {
+		t.Fatalf("after minimize: %d ticks, timeouts %+v (stall %v); want a fallback of %v", len(l.ticks), l.timeouts, c.stall, hiddenInterval)
+	}
+	c.SetFrameFunc(nil)
+	l.fireTimeout(t)
+}
+
+// TestClockStallHidden: a pacing surface whose ticks stop (a minimized
+// window on Wayland, which GTK does not report) gets the watchdog's frame
+// after stallTimeout, then frames hiddenInterval apart until a tick comes;
+// after the tick the watchdog waits stallTimeout again (S6.2b).
+func TestClockStallHidden(t *testing.T) {
+	s, c, l := newClockTest(t)
+	addPacers(s, 0x100)
+	c.SetFrameFunc(func(time.Duration) { c.RequestFrame() })
+	c.begin(0)
+	c.RequestFrame()
+	l.fireTimeout(t) // the watchdog's first frame, 100 ms
+	if c.stalls != 1 || c.Now() != stallTimeout {
+		t.Fatalf("stalls %d at %v, want 1 at %v", c.stalls, c.Now(), stallTimeout)
+	}
+	for i := range 3 {
+		if len(l.timeouts) != 1 || !c.stall || l.timeouts[0].ms != uint32(hiddenInterval/ms) {
+			t.Fatalf("stall %d: timeouts %+v (stall %v), want a watchdog of %v", i, l.timeouts, c.stall, hiddenInterval)
+		}
+		l.fireTimeout(t)
+	}
+	if c.stalls != 4 || c.Now() != stallTimeout+3*hiddenInterval {
+		t.Errorf("stalls %d by %v, want 4 by %v", c.stalls, c.Now(), stallTimeout+3*hiddenInterval)
+	}
+	// A tick (restored) 20 ms before the armed watchdog: it re-arms for
+	// stallTimeout after the tick.
+	l.now += int64((hiddenInterval - 20*ms) / time.Microsecond)
+	l.fireTick(t, 0x100, l.now, 0, 0)
+	tick := c.Now()
+	l.fireTimeout(t)
+	if c.stalls != 4 || len(l.timeouts) != 1 {
+		t.Fatalf("after a tick: stalls %d, timeouts %+v", c.stalls, l.timeouts)
+	}
+	l.fireTimeout(t)
+	if c.stalls != 5 || c.Now() != tick+stallTimeout {
+		t.Errorf("stalls %d at %v, want 5 at %v", c.stalls, c.Now(), tick+stallTimeout)
+	}
+	c.SetFrameFunc(nil)
+	l.now += 1000
+	l.fireTick(t, 0x100, l.now, 0, 0)
+	fireStale(t, c, l)
+}
+
+// TestClockPresentFeedback: with a present observer, each tick frame is
+// reported once GDK's timings of its frame are complete with a
+// presentation time (S6.2d): an incomplete one waits for the next tick,
+// one without a presentation time or out of the history is dropped, a new
+// frame clock starts afresh; without the observer nothing is read.
+func TestClockPresentFeedback(t *testing.T) {
+	s, c, l := newClockTest(t)
+	addPacers(s, 0x100)
+	c.begin(0)
+	var targets []time.Duration
+	c.SetFrameFunc(func(ft time.Duration) {
+		targets = append(targets, ft)
+		c.RequestFrame()
+	})
+	defer c.SetFrameFunc(nil)
+	var got []shell.PresentTiming
+	c.SetPresentObserver(func(pt shell.PresentTiming) { got = append(got, pt) })
+	l.timings = map[int64]fakeTimings{}
+	tick := func() {
+		t.Helper()
+		l.now += 16667
+		l.fireTick(t, 0x100, l.now, 16667, l.now+16667)
+	}
+	want := func(step string, pts ...shell.PresentTiming) {
+		t.Helper()
+		if !slices.Equal(got, pts) {
+			t.Errorf("%s: reported %+v, want %+v", step, got, pts)
+		}
+		got = nil
+	}
+	shown := func(counter int, us int64) shell.PresentTiming {
+		return shell.PresentTiming{Target: targets[counter-1], Shown: c.at(us), Period: 16667 * time.Microsecond}
+	}
+	c.RequestFrame()
+	tick() // counter 1: a new frame clock, logged
+	want("the first tick")
+	l.timings[1] = fakeTimings{presented: l.now + 20000, interval: 16667, complete: true}
+	tick() // 2
+	want("frame 1 presented", shown(1, l.now-16667+20000))
+	l.timings[2] = fakeTimings{}
+	tick() // 3
+	want("frame 2 not complete")
+	l.timings[2] = fakeTimings{complete: true} // nothing presented
+	l.timings[3] = fakeTimings{presented: l.now + 5000, interval: 8333, complete: true}
+	tick() // 4
+	want("frame 2 without a presentation, frame 3 presented",
+		shell.PresentTiming{Target: targets[2], Shown: c.at(l.now - 16667 + 5000), Period: 8333 * time.Microsecond})
+	tick() // 5: frame 4 is out of the history
+	want("frame 4 gone")
+	c.SetPresentObserver(nil)
+	l.timings[5] = fakeTimings{presented: l.now, interval: 16667, complete: true}
+	tick() // 6
+	want("without the observer")
+	if len(targets) != 6 {
+		t.Errorf("%d frames, want 6", len(targets))
+	}
 }

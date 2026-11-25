@@ -241,7 +241,11 @@ func newCanvas(sn snapshotter, size render.Size, scale float64, debug bool) *can
 		c.rec = recorder.New(size)
 	}
 	sn.begin()
-	c.clip(render.Rect{W: size.W, H: size.H}, render.Radii{})
+	// An infinite surface (tests) is not clipped; any other invalid size
+	// clips everything away (clip).
+	if !(math.IsInf(size.W, 1) || math.IsInf(size.H, 1)) || !(size.W >= 0 && size.H >= 0) {
+		c.clip(render.Rect{W: size.W, H: size.H}, render.Radii{})
+	}
 	return c
 }
 
@@ -273,6 +277,29 @@ func (c *canvas) finish() error {
 	return nil
 }
 
+// textBoxes returns the device-space boxes (surface points) of the text
+// the recorder saw drawn, each the layout's box clipped to the clip at
+// the call; boxes clipped away are left out. Without a recorder it
+// returns nil. The Linux golden test masks them (S4.3i).
+func (c *canvas) textBoxes() []render.Rect {
+	if c.rec == nil {
+		return nil
+	}
+	var boxes []render.Rect
+	for _, o := range c.rec.Ops() {
+		if o.Kind != recorder.DrawText {
+			continue
+		}
+		b := o.Bounds()
+		x0, y0 := max(b.X, o.Clip.X), max(b.Y, o.Clip.Y)
+		x1, y1 := min(b.X+b.W, o.Clip.X+o.Clip.W), min(b.Y+b.H, o.Clip.Y+o.Clip.H)
+		if x1 > x0 && y1 > y0 {
+			boxes = append(boxes, render.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0})
+		}
+	}
+	return boxes
+}
+
 // --- Values --------------------------------------------------------------------
 
 // f32 narrows v; ok is false when the result is not finite.
@@ -281,23 +308,28 @@ func f32(v float64) (float32, bool) {
 	return f, !math.IsNaN(float64(f)) && !math.IsInf(float64(f), 0)
 }
 
-// rectF narrows a finite rect with a non-negative size.
+// rectF narrows a valid rect (render.ValidRect: finite, a non-negative
+// size); ok is false for an invalid one and for one that does not narrow.
 func rectF(r render.Rect) (gtk.GrapheneRect, bool) {
+	if !render.ValidRect(r) {
+		return gtk.GrapheneRect{}, false
+	}
 	x, ok1 := f32(r.X)
 	y, ok2 := f32(r.Y)
 	w, ok3 := f32(r.W)
 	h, ok4 := f32(r.H)
-	if !ok1 || !ok2 || !ok3 || !ok4 || w < 0 || h < 0 {
+	if !ok1 || !ok2 || !ok3 || !ok4 {
 		return gtk.GrapheneRect{}, false
 	}
 	return gtk.Rect(x, y, w, h), true
 }
 
-// pointF narrows a finite point.
+// pointF narrows a finite point (render.ValidPoint); ok is false for a
+// non-finite one and for one that does not narrow.
 func pointF(p render.Point) (gtk.GraphenePoint, bool) {
 	x, ok1 := f32(p.X)
 	y, ok2 := f32(p.Y)
-	return gtk.GraphenePoint{X: x, Y: y}, ok1 && ok2
+	return gtk.GraphenePoint{X: x, Y: y}, render.ValidPoint(p) && ok1 && ok2
 }
 
 // roundedF returns the GskRoundedRect of rf with radii (already clamped).
@@ -753,15 +785,13 @@ func (c *canvas) ClipRoundedRect(r render.Rect, radii render.Radii) {
 	}
 }
 
-// clip pushes a rounded clip in the newest frame. A negative or NaN size
-// clips everything away, as the recorder's empty intersection does; other
-// non-finite rects are ignored.
+// clip pushes a rounded clip in the newest frame. An invalid rect
+// (render.ValidRect) clips everything away, as in the recorder; so does
+// one that does not narrow to float32.
 func (c *canvas) clip(r render.Rect, radii render.Radii) {
 	rf, ok := rectF(r)
 	if !ok {
-		if !(r.W >= 0) || !(r.H >= 0) {
-			c.do(stateOp{kind: opClip})
-		}
+		c.do(stateOp{kind: opClip})
 		return
 	}
 	c.do(stateOp{kind: opClip, clip: roundedF(rf, radii.Clamped(r))})

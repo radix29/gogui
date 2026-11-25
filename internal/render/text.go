@@ -8,7 +8,7 @@ import "github.com/radix29/gogui/internal/driver"
 type Font = driver.Font
 
 // TextSystem makes text layouts. The shell provides one
-// (Shell.TextSystem(), S2.1c): DirectWrite on Windows, Pango on Linux, and
+// (shell.Services.Text, S2.1c): DirectWrite on Windows, Pango on Linux, and
 // fixed-width fake metrics in shell/fake. It is used on the UI thread.
 type TextSystem interface {
 	// NewLayout lays out text (UTF-8) in font. Lines break at '\n' and, when
@@ -39,6 +39,9 @@ type TextLayout interface {
 	// LineCount returns the number of lines after breaking and wrapping
 	// (at least 1).
 	LineCount() int
+	// Line returns the metrics of line i (0 ≤ i < LineCount(); i is clamped
+	// to that range).
+	Line(i int) LineMetrics
 
 	// HitTest returns the cluster nearest to p: index is its start, and
 	// trailing reports whether p lies in its trailing half, so the caret
@@ -49,10 +52,31 @@ type TextLayout interface {
 	// it is 0.
 	HitTest(p Point) (index int, trailing bool)
 	// CaretRect returns the caret at index as a zero-width rect spanning the
-	// line height; backends give it their own width.
+	// line height; backends give it their own width. At a soft break (the
+	// index where a wrapped line ends and the next one starts) it is at the
+	// next line's start.
 	CaretRect(index int) Rect
+	// CaretRectUpstream returns the caret at index with the upstream
+	// affinity: at a soft break it is at the end of the earlier line (after
+	// its trailing white space, which may hang past the wrap width); at
+	// every other index it is CaretRect(index).
+	CaretRectUpstream(index int) Rect
 	// SelectionRects returns the highlight of the text between start and end
 	// (in either order), one rect per line touched, top to bottom. It is
 	// empty when start and end are equal.
 	SelectionRects(start, end int) []Rect
+}
+
+// LineMetrics is one line of a TextLayout (TextLayout.Line).
+type LineMetrics struct {
+	// Start and End are the line's text as byte offsets [Start, End). On a
+	// paragraph's last line End is before its '\n' (or other break); on a
+	// wrapped line it is the next line's Start, the trailing white space
+	// included.
+	Start, End int
+	// Top and Height are the line's vertical extent from the layout's top;
+	// the lines tile the layout top to bottom.
+	Top, Height float64
+	// Baseline is the line's baseline from the layout's top (not from Top).
+	Baseline float64
 }

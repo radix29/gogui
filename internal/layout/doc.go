@@ -22,8 +22,8 @@
 // with the main axis unbounded gives the natural size, and measuring with the
 // main axis at 0 gives the minimum, so nodes have no separate MinSize method.
 // Nodes measure their children only through Pass.Measure, which is where the
-// per-pass measure cache lives (pass.go). Root.MinSize gives the smallest
-// content size a tree fits in. Stacks and forms share space along
+// per-pass measure cache lives (pass.go). Root.LayoutMin also gives the
+// smallest content size a tree fits in. Stacks and forms share space along
 // their main axis with distribute (S0.4b).
 //
 // # Size policies
@@ -43,11 +43,6 @@
 // The engine works in fractional logical points; sizes are never rounded to
 // whole points. Drivers snap edges (X and MaxX rounded separately), never
 // sizes, so no gaps appear between neighbours.
-//
-// # Direction
-//
-// Stacks and forms carry a LayoutDirection. RightToLeft is accepted but laid
-// out as LeftToRight for now (PLAN.md §7.4).
 //
 // The package uses only the standard library and internal/driver (for the
 // geometry types). Nodes are used on the UI thread only.

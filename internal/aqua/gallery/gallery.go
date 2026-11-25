@@ -10,9 +10,11 @@
 //
 // Hover and pressed states cannot be set through the driver API; they are
 // pinned by the per-control state dumps in internal/aqua/testdata instead.
-// TextField, TextView and PopUpButton are still placeholders in the aqua
-// driver and are left out until phase 5, which adds them and regenerates
-// the goldens.
+// The TextField (real since S5.2f), the TextView (since S5.4f) and the
+// PopUpButton (since S5.5j; its states are pinned in
+// internal/aqua/testdata/popup.states until then) join in S4.3j's
+// follow-up (not before: new PNGs would invalidate the Linux log S4.3j
+// calibrates from).
 package gallery
 
 import (

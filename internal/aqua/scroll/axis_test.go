@@ -25,7 +25,13 @@ type axisRig struct {
 
 func newAxis(t *testing.T) *axisRig {
 	t.Helper()
-	r := &axisRig{t: t, clk: fake.NewClock(), p: scroll.ThemeParams(&theme.Sequoia)}
+	return newAxisParams(t, scroll.ThemeParams(&theme.Sequoia))
+}
+
+// newAxisParams is newAxis with the Params p.
+func newAxisParams(t *testing.T, p scroll.Params) *axisRig {
+	t.Helper()
+	r := &axisRig{t: t, clk: fake.NewClock(), p: p}
 	r.tl = anim.NewTimeline(r.clk)
 	r.clk.SetFrameFunc(r.tl.Tick)
 	r.a = scroll.NewAxis(r.tl, r.p, func(x float64) { r.seen = append(r.seen, x) })
@@ -138,8 +144,9 @@ func TestAxisFlingDecaysToRest(t *testing.T) {
 		t.Errorf("target %g, want %g", r.a.Target(), rest)
 	}
 	r.clk.Advance(100 * time.Millisecond)
-	d := scroll.NewDecay(2000, r.p.DecayRate, r.p.StopVelocity)
-	if x, _ := d.At(r.clk.Now() - r.clk.Now()%fake.FrameInterval - (r.clk.Now() - 100*time.Millisecond)); math.Abs(r.a.Offset()-(at+x)) > 1e-6 {
+	// The decay's closed form (anim.Value.Decay) at the last frame time.
+	e := (r.clk.Now() - r.clk.Now()%fake.FrameInterval - (r.clk.Now() - 100*time.Millisecond)).Seconds()
+	if x := 2000 / r.p.DecayRate * -math.Expm1(-r.p.DecayRate*e); math.Abs(r.a.Offset()-(at+x)) > 1e-6 {
 		t.Errorf("decay at 100 ms: %g, want %g", r.a.Offset(), at+x)
 	}
 	lo, hi := r.settle()
@@ -371,6 +378,52 @@ func TestAxisReduceMotion(t *testing.T) {
 	r.tl.SetReduceMotion(true)
 	if r.a.Offset() != 0 || r.a.Moving() {
 		t.Errorf("spring-back under Reduce Motion: %g", r.a.Offset())
+	}
+
+	// Turned on during a drag held past the edge (S6.1f): FollowReduceMotion
+	// puts it at the edge, the drag goes on without a rubber band.
+	r = newAxis(t)
+	r.phase(shell.PhaseBegan, -50)
+	r.tl.SetReduceMotion(true)
+	if r.a.Overscroll() == 0 {
+		t.Fatal("the timeline ended the held drag")
+	}
+	r.a.FollowReduceMotion()
+	if r.a.Offset() != 0 || !r.a.Dragging() {
+		t.Errorf("held drag after FollowReduceMotion: %g, dragging %v", r.a.Offset(), r.a.Dragging())
+	}
+	r.phase(shell.PhaseChanged, -10)
+	if r.a.Offset() != 0 {
+		t.Errorf("the drag on: %g", r.a.Offset())
+	}
+
+	// OS momentum with Reduce Motion moves nothing and ends what moves;
+	// turned on during it, FollowReduceMotion stops it.
+	r = newAxis(t)
+	r.tl.SetReduceMotion(true)
+	r.phase(shell.PhaseBegan, 10)
+	r.phase(shell.PhaseEnded, 0)
+	at := r.a.Offset()
+	if !r.momentum(shell.PhaseBegan, 10) || r.a.Offset() != at || r.a.Moving() {
+		t.Errorf("OS momentum under Reduce Motion: %g (from %g), moving %v", r.a.Offset(), at, r.a.Moving())
+	}
+	r = newAxis(t)
+	r.phase(shell.PhaseBegan, 10)
+	r.phase(shell.PhaseEnded, 0)
+	r.momentum(shell.PhaseBegan, 10)
+	if !r.a.Moving() {
+		t.Fatal("no OS momentum")
+	}
+	r.tl.SetReduceMotion(true)
+	r.a.FollowReduceMotion()
+	if r.a.Moving() || r.a.Offset() != r.a.Clamped() {
+		t.Errorf("OS momentum after FollowReduceMotion: %g, moving %v", r.a.Offset(), r.a.Moving())
+	}
+	r.a.FollowReduceMotion() // at rest: nothing
+	r.tl.SetReduceMotion(false)
+	r.a.FollowReduceMotion() // off: nothing
+	if r.a.Moving() {
+		t.Error("FollowReduceMotion started something")
 	}
 }
 

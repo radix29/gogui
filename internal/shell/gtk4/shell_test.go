@@ -182,9 +182,21 @@ func (l *fakeLoop) removeTick(uintptr, uint32) {
 }
 
 func (l *fakeLoop) frameInfo(uintptr) (int64, int64, int64) { return 0, 0, 0 }
+func (l *fakeLoop) frameCounter(uintptr) int64              { return 0 }
+func (l *fakeLoop) presentation(uintptr, int64) (int64, int64, bool, bool) {
+	return 0, 0, false, true
+}
 
 // errNoFakeWindow is newWindow's error when the test set no newWin.
 var errNoFakeWindow = errors.New("fake loop: no window factory")
+
+// newPopover fails with errNoFakeWindow: the shell tests open no popups.
+func (l *fakeLoop) newPopover(window, windowPeer, bool, windowPeer) (popover, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.uiOnly("newPopover")
+	return nil, errNoFakeWindow
+}
 
 // newWindow calls l.newWin, or fails with errNoFakeWindow without one.
 func (l *fakeLoop) newWindow(cfg windowConfig, p windowPeer) (window, error) {
@@ -210,10 +222,12 @@ func (l *fakeLoop) idleCount() int {
 // handler is a shell.Handler made of funcs; nil funcs do nothing.
 type handler struct {
 	ready      func()
+	services   shell.Services // what Ready got
 	appearance func(a driver.Appearance)
 }
 
-func (h *handler) Ready() {
+func (h *handler) Ready(sv shell.Services) {
+	h.services = sv
 	if h.ready != nil {
 		h.ready()
 	}
@@ -843,7 +857,8 @@ func TestShellServices(t *testing.T) {
 	src.portal[keyColorScheme] = uint32(1)
 	src.gtk[gtkEnableAnimations] = false
 	s.openSettings = src.open
-	err := run(t, s, &handler{ready: func() {
+	h := &handler{}
+	h.ready = func() {
 		want := driver.DefaultAppearance()
 		want.Dark, want.ReduceMotion = true, true
 		if a := s.Appearance(); a != want {
@@ -855,6 +870,12 @@ func TestShellServices(t *testing.T) {
 		if c := s.Clock(); c == nil || c != s.Clock() {
 			t.Error("Clock nil or not the same value on every call")
 		}
+		if h.services.Text != s.TextSystem() || h.services.Clock != s.Clock() {
+			t.Errorf("Ready got %+v, want the text system and the clock", h.services)
+		}
+		if s.Caps().PopupShadow {
+			t.Error("Caps with PopupShadow: gtk4 draws none")
+		}
 		mustPanic(t, "NewSurface with a nil handler", func() { _, _ = s.NewSurface(shell.SurfaceConfig{}, nil) })
 		if sf, err := s.NewSurface(shell.SurfaceConfig{}, nopSurfaceHandler{}); sf != nil || !errors.Is(err, errNoFakeWindow) {
 			t.Errorf("NewSurface = %v, %v; want nil, errNoFakeWindow", sf, err)
@@ -864,8 +885,8 @@ func TestShellServices(t *testing.T) {
 			t.Errorf("NewSurface after Quit = %v, %v; want nil, ErrQuit", sf, err)
 		}
 		mustPanic(t, "NewSurface with a nil handler after Quit", func() { _, _ = s.NewSurface(shell.SurfaceConfig{}, nil) })
-	}})
-	if err != nil {
+	}
+	if err := run(t, s, h); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -877,6 +898,7 @@ type fakeAppSource struct {
 	mu      sync.Mutex
 	portal  map[string]any
 	gtk     map[string]bool
+	ints    map[string]int32
 	changed func()
 	opens   int
 	closes  int
@@ -884,7 +906,7 @@ type fakeAppSource struct {
 }
 
 func newFakeAppSource() *fakeAppSource {
-	return &fakeAppSource{portal: map[string]any{}, gtk: map[string]bool{}}
+	return &fakeAppSource{portal: map[string]any{}, gtk: map[string]bool{}, ints: map[string]int32{}}
 }
 
 func (f *fakeAppSource) open(changed func()) appearanceSource {
@@ -915,6 +937,13 @@ func (f *fakeAppSource) gtkBool(name string) (bool, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	v, ok := f.gtk[name]
+	return v, ok
+}
+
+func (f *fakeAppSource) gtkInt(name string) (int32, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v, ok := f.ints[name]
 	return v, ok
 }
 

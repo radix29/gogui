@@ -52,7 +52,7 @@ func (b *PopUpButton) setItems(items []string) {
 }
 
 // Items returns a copy of the items.
-func (b *PopUpButton) Items() []string { b.check("Items"); return slices.Clone(b.items) }
+func (b *PopUpButton) Items() []string { b.get("Items"); return slices.Clone(b.items) }
 
 // Item returns the item at index i, or "" if i is out of range (such as
 // -1 for no selection).
@@ -79,7 +79,7 @@ func (b *PopUpButton) SetSelected(i int) *PopUpButton {
 }
 
 // Selected returns the index of the selected item, or -1 if none is.
-func (b *PopUpButton) Selected() int { b.check("Selected"); return b.selected }
+func (b *PopUpButton) Selected() int { b.get("Selected"); return b.selected }
 
 // OnChange calls fn with the index of the item the user picked, when the
 // selection changes. Picking the selected item again (which AppKit
@@ -94,12 +94,12 @@ type popUpEvents struct{ b *PopUpButton }
 
 func (e popUpEvents) SelectionChanged(i int) {
 	b := e.b
-	if b.disabled || b.dead || i < 0 || i >= len(b.items) {
+	if b.dead || i < 0 || i >= len(b.items) {
 		return
 	}
 	changed := b.selected != i
-	b.selected = i
-	if changed {
-		b.onChange.each(func(fn func(int)) { fn(i) })
+	b.selected = i // the cache follows the native selection even when disabled (B14)
+	if changed && !b.disabled {
+		b.onChange.eachLive(&b.widget, func(fn func(int)) { fn(i) })
 	}
 }

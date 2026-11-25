@@ -10,5 +10,5 @@ import (
 )
 
 // newPlatformDriver creates the macOS driver. Until the appkit driver exists
-// (S1.1) it is the headless one.
-func newPlatformDriver() driver.Driver { return headless.New(os.Stderr) }
+// (S1.1) it is the headless one, which always starts.
+func newPlatformDriver() (driver.Driver, error) { return headless.New(os.Stderr), nil }

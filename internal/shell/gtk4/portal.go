@@ -1,6 +1,11 @@
 package gtk4
 
-import "github.com/radix29/gogui/internal/driver"
+import (
+	"math"
+	"time"
+
+	"github.com/radix29/gogui/internal/driver"
+)
 
 // The appearance on Linux (PLAN.md S4.3): the settings portal, with the
 // GtkSettings filling what it lacks. Since S4.3a the mapping, since S4.3b
@@ -22,6 +27,10 @@ const (
 	gtkEnableAnimations = "gtk-enable-animations"
 	gtkOverlayScrolling = "gtk-overlay-scrolling"
 	gtkPreferDark       = "gtk-application-prefer-dark-theme"
+
+	gtkCursorBlink        = "gtk-cursor-blink"         // gboolean
+	gtkCursorBlinkTime    = "gtk-cursor-blink-time"    // gint, ms, one full cycle
+	gtkCursorBlinkTimeout = "gtk-cursor-blink-timeout" // gint, s, G_MAXINT: never stops
 )
 
 // settingsSource provides the values behind Shell.Appearance. The portal
@@ -36,6 +45,9 @@ type settingsSource interface {
 	// gtkBool returns the boolean property name of the default
 	// GtkSettings; ok is false when it cannot be read.
 	gtkBool(name string) (v, ok bool)
+	// gtkInt returns the int property name of the default GtkSettings; ok
+	// is false when it cannot be read.
+	gtkInt(name string) (v int32, ok bool)
 }
 
 // readAppearance maps the settings onto a driver.Appearance, starting from
@@ -52,6 +64,8 @@ type settingsSource interface {
 //     gtk-enable-animations false.
 //   - ReduceTransparency: no Linux source, always false.
 //   - LegacyScrollers: gtk-overlay-scrolling false.
+//   - CaretBlink: readCaretBlink (GtkSettings only; the portal has no
+//     caret keys).
 func readAppearance(src settingsSource) driver.Appearance {
 	a := driver.DefaultAppearance()
 	if v, ok := portalEnum(src, keyColorScheme, 2); ok {
@@ -73,7 +87,35 @@ func readAppearance(src settingsSource) driver.Appearance {
 	if on, ok := src.gtkBool(gtkOverlayScrolling); ok {
 		a.LegacyScrollers = !on
 	}
+	a.CaretBlink = readCaretBlink(src)
 	return a
+}
+
+// readCaretBlink maps the GtkSettings' caret properties onto a
+// driver.CaretBlink, starting from driver.DefaultCaretBlink:
+//
+//   - Period: gtk-cursor-blink-time ms (GTK's full cycle) when above 0,
+//     and 0 (no blink) when gtk-cursor-blink is false.
+//   - Timeout: gtk-cursor-blink-timeout s when above 0; G_MAXINT never
+//     stops blinking (Timeout 0).
+//
+// An unreadable property, or one at 0 or below, keeps its default.
+func readCaretBlink(src settingsSource) driver.CaretBlink {
+	b := driver.DefaultCaretBlink
+	if ms, ok := src.gtkInt(gtkCursorBlinkTime); ok && ms > 0 {
+		b.Period = time.Duration(ms) * time.Millisecond
+	}
+	if on, ok := src.gtkBool(gtkCursorBlink); ok && !on {
+		b.Period = 0
+	}
+	if s, ok := src.gtkInt(gtkCursorBlinkTimeout); ok && s > 0 {
+		if s == math.MaxInt32 {
+			b.Timeout = 0
+		} else {
+			b.Timeout = time.Duration(s) * time.Second
+		}
+	}
+	return b
 }
 
 // portalEnum returns the u value of key when it is set and at most last.
@@ -133,6 +175,7 @@ func openNoSettings(func()) appearanceSource { return noSettings{} }
 
 func (noSettings) portalValue(string) (any, bool) { return nil, false }
 func (noSettings) gtkBool(string) (bool, bool)    { return false, false }
+func (noSettings) gtkInt(string) (int32, bool)    { return 0, false }
 func (noSettings) close()                         {}
 
 // systemSettings is New's source: the settings portal, and the GtkSettings
@@ -144,6 +187,7 @@ type systemSettings struct {
 
 func (s systemSettings) portalValue(key string) (any, bool) { return s.p.portalValue(key) }
 func (s systemSettings) gtkBool(name string) (bool, bool)   { return s.gs.gtkBool(name) }
+func (s systemSettings) gtkInt(name string) (int32, bool)   { return s.gs.gtkInt(name) }
 
 // close closes the portal (its goroutine is gone after it), then
 // disconnects the GtkSettings handlers.

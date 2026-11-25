@@ -37,10 +37,6 @@ const (
 	// ID3D11Device.
 	slotDeviceCreateTexture2D        = 5
 	slotDeviceCreateRenderTargetView = 9
-	slotDeviceGetFeatureLevel        = 37
-	slotDeviceGetCreationFlags       = 38
-	slotDeviceGetDeviceRemovedReason = 39
-	slotDeviceGetImmediateContext    = 40
 
 	// ID3D11DeviceContext (after ID3D11DeviceChild 3–6).
 	slotContextMap                   = 14
@@ -158,43 +154,17 @@ type Device struct{ com.Ptr }
 
 // CreateTexture2D creates a texture without initial data.
 func (d Device) CreateTexture2D(desc *Texture2DDesc) (Texture2D, error) {
-	var out com.Ptr
-	err := d.CallHR("ID3D11Device::CreateTexture2D", slotDeviceCreateTexture2D,
-		uintptr(unsafe.Pointer(desc)), 0, uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("ID3D11Device::CreateTexture2D", slotDeviceCreateTexture2D,
+		uintptr(unsafe.Pointer(desc)), 0)
 	return Texture2D{out}, err
 }
 
 // CreateRenderTargetView creates a view of the whole resource in its own
 // format.
 func (d Device) CreateRenderTargetView(res com.Ptr) (RenderTargetView, error) {
-	var out com.Ptr
-	err := d.CallHR("ID3D11Device::CreateRenderTargetView", slotDeviceCreateRenderTargetView,
-		uintptr(res), 0, uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("ID3D11Device::CreateRenderTargetView", slotDeviceCreateRenderTargetView,
+		uintptr(res), 0)
 	return RenderTargetView{out}, err
-}
-
-// FeatureLevel returns the device's feature level.
-func (d Device) FeatureLevel() FeatureLevel {
-	return FeatureLevel(uint32(d.Call(slotDeviceGetFeatureLevel)))
-}
-
-// CreationFlags returns the flags the device was created with.
-func (d Device) CreationFlags() uint32 {
-	return uint32(d.Call(slotDeviceGetCreationFlags))
-}
-
-// RemovedReason returns nil while the device works, else the reason it
-// was removed (DXGI_ERROR_DEVICE_REMOVED, _HUNG, _RESET, …).
-func (d Device) RemovedReason() error {
-	return d.CallHR("ID3D11Device::GetDeviceRemovedReason", slotDeviceGetDeviceRemovedReason)
-}
-
-// ImmediateContext returns the device's immediate context with a
-// reference of its own.
-func (d Device) ImmediateContext() DeviceContext {
-	var out com.Ptr
-	d.Call(slotDeviceGetImmediateContext, uintptr(unsafe.Pointer(&out)))
-	return DeviceContext{out}
 }
 
 // DeviceContext is ID3D11DeviceContext.

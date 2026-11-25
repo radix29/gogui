@@ -1,6 +1,8 @@
 package gogui
 
 import (
+	"slices"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/layout"
 )
@@ -18,13 +20,19 @@ type parentWidget interface {
 // adopt makes p the parent of ws. A widget has one parent, so each is
 // first removed from its old one (which may be p: re-adding moves it to
 // the end), or from the window it is the content of. It panics on a nil
-// widget, on one that appears twice in ws, and on one that would contain
-// itself.
+// widget, on one that appears twice in ws, on one that would contain
+// itself, and on a destroyed widget or parent (D13).
 func adopt(what string, p Widget, ws []Widget) {
+	if p.base().dead {
+		panic("gogui: " + what + " on a destroyed widget")
+	}
 	seen := make(map[Widget]bool, len(ws))
 	for _, w := range ws {
 		if w == nil {
 			panic("gogui: " + what + " with a nil widget")
+		}
+		if w.base().dead {
+			panic("gogui: " + what + " with a destroyed widget")
 		}
 		if seen[w] {
 			panic("gogui: " + what + " with the same widget twice")
@@ -36,10 +44,51 @@ func adopt(what string, p Widget, ws []Widget) {
 			}
 		}
 	}
+	detachAll(ws)
 	for _, w := range ws {
-		detach(w)
+		w.base().parent = nil
+		if win, ok := w.base().host.(*Window); ok {
+			win.SetContent(nil)
+		}
 		w.base().parent = p
 	}
+}
+
+// detachAll removes each of ws from its parent, as detach does, but takes
+// all the children of one stack or form out at once (P19), so each old
+// parent syncs once and not once per widget. A widget without a parent is
+// skipped. The parent links are left for the caller.
+func detachAll(ws []Widget) {
+	var olds []parentWidget
+	var moved map[parentWidget][]Widget
+	for _, w := range ws {
+		old, ok := w.base().parent.(parentWidget)
+		if !ok {
+			continue
+		}
+		if _, batch := old.(batchRemover); !batch {
+			old.removeChild(w)
+			continue
+		}
+		if moved == nil {
+			moved = make(map[parentWidget][]Widget)
+		}
+		if _, seen := moved[old]; !seen {
+			olds = append(olds, old)
+		}
+		moved[old] = append(moved[old], w)
+	}
+	for _, old := range olds {
+		old.(batchRemover).removeChildren(moved[old])
+	}
+}
+
+// batchRemover is a parentWidget that removes several children at once
+// (stacks and forms).
+type batchRemover interface {
+	// removeChildren removes ws, direct children, without destroying them,
+	// and syncs once.
+	removeChildren(ws []Widget)
 }
 
 // peersOf returns the peers of ws in order, skipping widgets without one.
@@ -92,39 +141,113 @@ func (s *Stack) Add(children ...Widget) *Stack {
 	return s
 }
 
-// Padding sets the same padding, in points, on all four sides.
-func (s *Stack) Padding(v float64) *Stack {
-	s.check("Padding")
+// SetPadding sets the same padding, in points, on all four sides.
+func (s *Stack) SetPadding(v float64) *Stack {
+	s.check("SetPadding")
 	s.s.SetPadding(UniformInsets(v))
 	s.invalidate()
 	return s
 }
 
-// PaddingInsets sets the padding of each side, in points.
-func (s *Stack) PaddingInsets(in Insets) *Stack {
-	s.check("PaddingInsets")
+// SetPaddingInsets sets the padding of each side, in points.
+func (s *Stack) SetPaddingInsets(in Insets) *Stack {
+	s.check("SetPaddingInsets")
 	s.s.SetPadding(in)
 	s.invalidate()
 	return s
 }
 
-func (s *Stack) add(what string, ws []Widget) {
-	adopt(what, s, ws)
-	s.children = append(s.children, ws...)
+// Remove takes children out of the stack without destroying them, so they
+// can be placed again; Destroy frees a widget for good (D13). A widget
+// that is not a child of the stack is skipped.
+func (s *Stack) Remove(children ...Widget) *Stack {
+	s.check("Remove")
+	var ws []Widget
+	for _, w := range children {
+		if w != nil && w.base().parent == Widget(s) && !slices.Contains(ws, w) {
+			ws = append(ws, w)
+		}
+	}
+	if len(ws) > 0 {
+		s.removeChildren(ws) // one sync (P19)
+		for _, w := range ws {
+			w.base().parent = nil
+		}
+	}
+	return s
+}
+
+// Clear takes every child out of the stack without destroying it.
+func (s *Stack) Clear() *Stack {
+	s.check("Clear")
+	for _, w := range s.children {
+		w.base().parent = nil
+	}
+	s.children = nil
 	s.sync()
+	return s
+}
+
+// Children returns the children, in order.
+func (s *Stack) Children() []Widget { s.get("Children"); return slices.Clone(s.children) }
+
+func (s *Stack) add(what string, ws []Widget) {
+	adopt(what, s, ws) // may take children out of s: it is synced then
+	s.children = append(s.children, ws...)
+	s.appendSync(ws)
 }
 
 func (s *Stack) childWidgets() []Widget { return s.children }
 
-func (s *Stack) removeChild(w Widget) {
-	out := make([]Widget, 0, len(s.children))
-	for _, x := range s.children {
-		if x != w {
-			out = append(out, x)
+func (s *Stack) removeChild(w Widget) { s.removeChildren([]Widget{w}) }
+
+// removeChildren implements batchRemover.
+func (s *Stack) removeChildren(ws []Widget) {
+	gone := widgetSet(ws)
+	s.children = slices.DeleteFunc(slices.Clone(s.children), func(x Widget) bool { return gone(x) })
+	s.sync()
+}
+
+// widgetSet returns a membership test for ws: a scan for a few, a map for
+// more (a batch of every child must not be quadratic).
+func widgetSet(ws []Widget) func(Widget) bool {
+	if len(ws) <= 8 {
+		return func(w Widget) bool { return slices.Contains(ws, w) }
+	}
+	m := make(map[Widget]bool, len(ws))
+	for _, w := range ws {
+		m[w] = true
+	}
+	return func(w Widget) bool { return m[w] }
+}
+
+// appendSync pushes ws, just appended to the children of a synced stack,
+// to the layout node and the container peer without resending the others
+// (P19: building a stack by Add in a loop stays linear).
+func (s *Stack) appendSync(ws []Widget) {
+	if len(ws) == 0 {
+		s.invalidate()
+		return
+	}
+	nodes := make([]layout.Node, len(ws))
+	for i, w := range ws {
+		nodes[i] = w.node()
+	}
+	s.s.AppendChildren(nodes...)
+	if s.live() {
+		if a, ok := s.c.(childAppender); ok {
+			a.AppendChildren(peersOf(ws))
+		} else {
+			s.c.SetChildren(peersOf(s.children))
 		}
 	}
-	s.children = out
-	s.sync()
+	s.invalidate()
+}
+
+// childAppender is a container peer that can append children without the
+// whole list (the aqua and stub containers).
+type childAppender interface {
+	AppendChildren(children []driver.Widget)
 }
 
 // sync pushes the children to the layout node and the container peer.
@@ -148,13 +271,16 @@ type spacer struct{ widget }
 // zero size.
 func Spacer() Widget {
 	s := &spacer{}
-	s.kind, s.n = kindSpacer, layout.NewSpacer()
+	s.kind, s.n, s.self = kindSpacer, layout.NewSpacer(), s
 	return s
 }
 
-// FormRow is one row of a form, made by Row.
+// FormRow is one row of a form, made by Row: plain data, a label text and
+// a control. Form creates the row's label, so an unused row holds no
+// native object and the same row can go to several forms (A4); its
+// control, like any widget, has one parent and moves to the last form.
 type FormRow struct {
-	label   *Label // nil for an empty label
+	label   string
 	control Widget
 }
 
@@ -165,12 +291,14 @@ func Row(label string, control Widget) FormRow {
 	if control == nil {
 		panic("gogui: Row with a nil control")
 	}
-	r := FormRow{control: control}
-	if label != "" {
-		driverFor("Row")
-		r.label = NewLabel(label)
-	}
-	return r
+	return FormRow{label: label, control: control}
+}
+
+// formRow is a row placed in a form: its own label (nil for an empty
+// label) and the control.
+type formRow struct {
+	label   *Label
+	control Widget
 }
 
 // FormView is the widget Form returns: the row labels right-aligned in one
@@ -181,27 +309,34 @@ type FormView struct {
 	common[*FormView]
 	c    driver.Container
 	f    *layout.Form
-	rows []FormRow
+	rows []formRow
 }
 
-// Form returns a form with rows, top to bottom.
+// Form returns a form with rows, top to bottom. It creates each row's
+// label.
 func Form(rows ...FormRow) *FormView {
 	c := driverFor("Form").NewContainer()
+	for _, r := range rows {
+		if r.control == nil {
+			panic("gogui: Form with a zero FormRow; use Row")
+		}
+	}
 	lf := layout.NewForm().SetPeer(c)
 	f := &FormView{c: c, f: lf}
 	f.init(f, kindForm, c, lf)
 	var ws []Widget
 	for _, r := range rows {
-		if r.control == nil {
-			panic("gogui: Form with a zero FormRow; use Row")
-		}
-		if r.label != nil {
-			ws = append(ws, r.label)
-		}
 		ws = append(ws, r.control)
 	}
 	adopt("Form", f, ws)
-	f.rows = append([]FormRow(nil), rows...)
+	for _, r := range rows {
+		fr := formRow{control: r.control}
+		if r.label != "" {
+			fr.label = NewLabel(r.label)
+			fr.label.parent = f
+		}
+		f.rows = append(f.rows, fr)
+	}
 	f.sync()
 	return f
 }
@@ -218,21 +353,23 @@ func (f *FormView) childWidgets() []Widget {
 	return out
 }
 
-// removeChild removes the row of a moved control and destroys the row's
-// label, which only this form refers to. A label moved away (the same
-// FormRow passed to another Form) leaves its row without a label.
-func (f *FormView) removeChild(w Widget) {
-	var out []FormRow
+// removeChild removes the row of a moved or destroyed control and
+// destroys the row's label, which only this form refers to.
+func (f *FormView) removeChild(w Widget) { f.removeChildren([]Widget{w}) }
+
+// removeChildren implements batchRemover: the rows of ws go, their labels
+// destroyed, and the form syncs once.
+func (f *FormView) removeChildren(ws []Widget) {
+	gone := widgetSet(ws)
+	var out []formRow
 	for _, r := range f.rows {
-		switch {
-		case r.control == w:
-			if r.label != nil && r.label.parent == Widget(f) {
+		if gone(r.control) {
+
+			if r.label != nil {
 				r.label.parent = nil
 				r.label.destroy() // Destroy also removes the peer from f.c
 			}
 			continue
-		case r.label != nil && Widget(r.label) == w:
-			r.label = nil
 		}
 		out = append(out, r)
 	}
@@ -245,7 +382,7 @@ func (f *FormView) removeChild(w Widget) {
 func (f *FormView) childHidden(b *widget, hidden bool) {
 	for _, r := range f.rows {
 		if r.control.base() == b && r.label != nil {
-			r.label.SetHidden(hidden)
+			r.label.setHidden(hidden)
 		}
 	}
 }
@@ -257,7 +394,7 @@ func (f *FormView) sync() {
 		rows[i].Control = r.control.node()
 		if r.label != nil {
 			rows[i].Label = r.label.peer
-			r.label.SetHidden(r.control.node().Props().Hidden())
+			r.label.setHidden(r.control.node().Props().Hidden())
 		}
 	}
 	f.f.SetRows(rows...)

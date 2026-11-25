@@ -9,6 +9,11 @@ import (
 
 // WindowStyle is a set of window features for WindowConfig.Style, such as
 // Titled|Closable|Resizable. The bit values match NSWindowStyleMask.
+//
+// Without Titled a window has no title bar, and on Windows and Linux no
+// window buttons and no menu strip (the menu shortcuts still work in it).
+// Closable, Miniaturizable and Resizable enable the close, minimize and
+// zoom buttons; without Resizable the user can't resize the window.
 type WindowStyle = driver.WindowStyle
 
 // Window styles.
@@ -25,16 +30,29 @@ const (
 // whether it is centered on the screen when first shown (Center). The
 // window never gets smaller than its content's minimum size, whatever
 // MinSize says.
+//
+// On Linux the window manager places every window, so Center does
+// nothing there, and GTK 4 has no maximum-size hint: MaxSize only limits
+// SetContentSize, not the user's resizing.
 type WindowConfig = driver.WindowConfig
 
 // Window is a top-level window (NSWindow). It is created hidden; Show
 // shows it. Its content is laid out to fill the content area, again
 // whenever the window is resized or a widget in it changes size.
 //
-// Closing the window destroys its widget tree. After that, setters only
-// record their values and the other methods do nothing.
+// Closing the window destroys its widget tree (whose widgets then panic
+// when used, D13) and drops its content and handlers. After that, the
+// window's setters only record their values, Content is nil, and the
+// other methods do nothing.
+//
+// On Windows and Linux the toolkit draws the whole window: the title bar
+// with its title, the window buttons (close, minimize and zoom, which
+// maximizes) and the menu strip, inside a native window without the OS
+// title bar (the OS still gives it its shadow). On the headless driver
+// (macOS until the AppKit driver exists) a window is never shown, but its
+// content is laid out at its content size.
 type Window struct {
-	drv     uiDriver
+	drv     driver.Driver
 	p       driver.Window
 	cfg     WindowConfig
 	title   string
@@ -50,11 +68,12 @@ type Window struct {
 	onShouldClose subscribers[func() bool]
 }
 
-// NewWindow creates a hidden window. Show shows it. It panics if the
-// platform can't create the window, which means the native layer is
-// broken.
+// NewWindow creates a hidden window. Show shows it. Like every
+// constructor it panics outside Run (before the ready callback or after
+// Run has returned); it also panics if the platform can't create the
+// window, which means the native layer is broken.
 func (a *App) NewWindow(cfg WindowConfig) *Window {
-	checkUI("App.NewWindow")
+	driverFor("App.NewWindow") // panics outside Run, like every constructor (A6)
 	d := a.drv
 	w := &Window{drv: d, cfg: cfg, title: cfg.Title, minSize: cfg.MinSize}
 	p, err := d.NewWindow(cfg, windowEvents{w})
@@ -65,7 +84,10 @@ func (a *App) NewWindow(cfg WindowConfig) *Window {
 	return w
 }
 
-// SetTitle sets the title shown in the title bar.
+// SetTitle sets the title shown in the title bar. On Windows and Linux the
+// title is centred in the title bar and truncated, or hidden, where the
+// menu strip needs the room; the OS's own title (taskbar, Alt-Tab) is
+// always the whole title.
 func (w *Window) SetTitle(title string) *Window {
 	checkUI("Window.SetTitle")
 	w.title = title
@@ -81,9 +103,13 @@ func (w *Window) Title() string { checkUI("Window.Title"); return w.title }
 // SetContent sets the widget that fills the window's content area; nil
 // removes it. A widget that is in a stack, a form or another window is
 // moved here. The old content is taken out of the window but not
-// destroyed, so it can be shown again. It does nothing on a closed window.
+// destroyed, so it can be shown again; Destroy frees it (D13). It does
+// nothing on a closed window, and panics with a destroyed widget.
 func (w *Window) SetContent(c Widget) *Window {
 	checkUI("Window.SetContent")
+	if c != nil && c.base().dead {
+		panic("gogui: Window.SetContent with a destroyed widget")
+	}
 	if w.closed || c == w.content {
 		return w
 	}
@@ -104,6 +130,10 @@ func (w *Window) SetContent(c Widget) *Window {
 	w.invalidate()
 	return w
 }
+
+// Content returns the content widget, or nil (always nil once the window
+// has closed).
+func (w *Window) Content() Widget { checkUI("Window.Content"); return w.content }
 
 // detach takes w out of its stack, form or window, without destroying it.
 func detach(w Widget) {
@@ -163,14 +193,22 @@ func (w *Window) Close() {
 // Close or by App.Quit. The widgets are still alive while fn runs.
 func (w *Window) OnClose(fn func()) Unsubscribe {
 	checkUI("Window.OnClose")
+	if w.closed {
+		return func() {} // it has closed: fn would never run (A9)
+	}
 	return w.onClose.add(fn)
 }
 
 // OnShouldClose calls fn when the user asks to close the window (the close
-// button, ⌘W / Ctrl+W). If fn returns false the window stays open, and the
+// button, ⌘W / Ctrl+W through the Window menu, and on Windows and Linux
+// also Alt+F4 and the taskbar's or the window manager's close command; on
+// Windows logging out too). If fn returns false the window stays open, and the
 // handlers subscribed after it are not called.
 func (w *Window) OnShouldClose(fn func() bool) Unsubscribe {
 	checkUI("Window.OnShouldClose")
+	if w.closed {
+		return func() {}
+	}
 	return w.onShouldClose.add(fn)
 }
 
@@ -181,7 +219,7 @@ func (w *Window) invalidate() {
 		return
 	}
 	w.pending = true
-	w.drv.Post(func() {
+	w.drv.Queue().Do(func() {
 		if w.pending {
 			w.layout()
 		}
@@ -197,11 +235,13 @@ func (w *Window) layout() {
 		return
 	}
 	w.passes++
+	if a := cur.Load(); a != nil && a.frames != nil {
+		defer a.frames.addLayout(a.frames.now())
+	}
 	w.size = w.p.ContentSize()
 	min := w.cfg.MinSize
 	if w.root != nil {
-		w.root.Layout(w.size)
-		min = min.Max(w.root.MinSize())
+		min = min.Max(w.root.LayoutMin(w.size))
 	}
 	if min == w.minSize {
 		return
@@ -222,6 +262,10 @@ func (w *Window) closedByPeer() {
 		c.base().host = nil
 		destroyTree(c)
 	}
+	// Drop what the closed window no longer needs (A9), so a window the
+	// app keeps holds no widgets or handlers alive.
+	w.content, w.root = nil, nil
+	w.onClose, w.onShouldClose = subscribers[func()]{}, subscribers[func() bool]{}
 }
 
 // destroyTree destroys w's subtree bottom-up, as driver.Widget.Destroy

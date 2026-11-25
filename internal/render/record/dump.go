@@ -133,16 +133,7 @@ func (p printer) path(segs []render.Segment) string {
 			b.WriteByte(' ')
 		}
 		b.WriteString(s.Op.String())
-		n := 0
-		switch s.Op {
-		case render.OpMoveTo, render.OpLineTo:
-			n = 1
-		case render.OpQuadTo:
-			n = 2
-		case render.OpCubicTo:
-			n = 3
-		}
-		for j := range n {
+		for j := range s.Op.Points() {
 			if j > 0 {
 				b.WriteByte(' ')
 			}

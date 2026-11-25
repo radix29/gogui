@@ -33,7 +33,12 @@ package render
 // BlurRadius). Colors must be concrete: a semantic color reaching a canvas is
 // a bug (the recorder reports it, backends draw nothing for that call).
 // Non-finite arguments to Translate, Scale and Concat are ignored (and
-// reported by the recorder).
+// reported by the recorder). Geometry must be valid: a rect that is not
+// finite or has a negative size (ValidRect) and a non-finite point (a
+// text origin, any point of a path: ValidPoint, ValidPath) are bugs, which
+// the recorder reports; backends draw nothing for that call, and an
+// invalid ClipRoundedRect or PushBackdropBlur rect clips everything away.
+// A zero size is valid and draws nothing.
 //
 // # Drawing
 //

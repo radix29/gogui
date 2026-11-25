@@ -10,7 +10,7 @@ import (
 // Default and cancel buttons (PLAN.md S3.2f).
 //
 // An element is marked as a default or a cancel button with
-// Base.SetDefaultButton and SetCancelButton (a Button placeholder's
+// Base.SetDefaultButton and SetCancelButton (a Button peer's
 // SetDefault and SetCancel do it). The mark stays on the element, so it
 // works whether the button joins the window before or after it is marked.
 // A window's default button is the marked element of its tree that was
@@ -94,10 +94,9 @@ func (w *Window) keyEquivalent(ev shell.KeyEvent) bool {
 	}
 	var target Element
 	switch {
-	case ev.Key == driver.KeyReturn && ev.Mods == 0:
+	case isDefaultKey(ev):
 		target = w.DefaultButton()
-	case ev.Key == driver.KeyEscape && ev.Mods == 0,
-		ev.Key == '.' && ev.Mods == driver.ModPrimary.Resolve(false):
+	case isCancelKey(ev):
 		target = w.CancelButton()
 	}
 	if target == nil || !w.router.usable(target) {
@@ -106,5 +105,17 @@ func (w *Window) keyEquivalent(ev shell.KeyEvent) bool {
 	if ev.Repeat {
 		return true
 	}
-	return target.Activate()
+	return activateByKey(target)
+}
+
+// isDefaultKey reports whether ev is the default button's key: Return
+// without modifiers (the shells report keypad Enter as Return too).
+func isDefaultKey(ev shell.KeyEvent) bool { return ev.Key == driver.KeyReturn && ev.Mods == 0 }
+
+// isCancelKey reports whether ev is the cancel button's key: Escape
+// without modifiers, or Primary+. (Ctrl+. on Windows and Linux, as ⌘. on
+// macOS).
+func isCancelKey(ev shell.KeyEvent) bool {
+	return ev.Key == driver.KeyEscape && ev.Mods == 0 ||
+		ev.Key == '.' && ev.Mods == driver.ModPrimary.Resolve(false)
 }

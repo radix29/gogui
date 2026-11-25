@@ -1,7 +1,8 @@
 // Package gen turns a theme spec (internal/aqua/theme/spec/*.json) into the
 // generated Go file of package theme and its Markdown listing (PLAN.md
-// S3.1a, S3.1c, S3.1d, S3.3b, S3.4a, S3.5a). It uses only the standard library; the
-// gentokens command wraps it for go generate.
+// S3.1a, S3.1c, S3.1d, S3.3b, S3.4a, S3.5a, S5.2e, S5.4f, S5.5h, S5.5j, S5.5l, S6.1d). It uses
+// only the standard library; the gentokens command wraps it for go
+// generate.
 //
 // The spec is a JSON object:
 //
@@ -44,7 +45,14 @@
 //	  "controls": {                       // theme.Controls
 //	    "colors": {…}, "numbers": {…}, "sizes": {…}, "weights": {…}, "durations": {…}
 //	  },
-//	  "scroll": {"colors": {…}, "numbers": {…}, "durations": {…}}  // theme.Scroll
+//	  "scroll": {"colors": {…}, "numbers": {…}, "durations": {…}},  // theme.Scroll
+//	  "textField": {"colors": {…}, "numbers": {…}, "sizes": {…}},    // theme.TextField
+//	  "textView": {"numbers": {…}},                                   // theme.TextView
+//	  "menu": {"colors": {…}, "numbers": {…}, "sizes": {…}},          // theme.Menu
+//	  "popUp": {"numbers": {…}, "sizes": {…}},                        // theme.PopUp
+//	  "menuBar": {"colors": {…}, "numbers": {…}},                     // theme.MenuBar
+//	  "tooltip": {"colors": {…}, "numbers": {…}, "durations": {…}},   // theme.Tooltip
+//	  "alert": {"colors": {…}, "numbers": {…}}                        // theme.Alert
 //	}
 //
 // Every semantic color must be present exactly once, and each group must
@@ -169,8 +177,8 @@ var Groups = []Group{
 	},
 	{
 		Field: "Accent", Key: "accent", Title: "Accent rules",
-		Colors:  []string{"Base", "DefaultButtonText"},
-		Numbers: []string{"SelectionAlpha", "FocusRingAlpha", "PressedShade", "InactiveAlpha"},
+		Colors:  []string{"Base", "DefaultButtonText", "AccentDarkText"},
+		Numbers: []string{"SelectionAlpha", "FocusRingAlpha", "SelectionContrastAlpha", "PressedShade", "InactiveAlpha", "AccentTextMinContrast"},
 	},
 	{
 		Field: "Animation", Key: "animation", Title: "Animation",
@@ -184,8 +192,9 @@ var Groups = []Group{
 	{
 		Field: "Controls", Key: "controls", Title: "Controls",
 		Colors: []string{
-			"BezelFill", "BezelPressedFill", "BezelBorder", "BoxFill", "BoxBorder",
+			"BezelFill", "BezelPressedFill", "BezelBorder", "BezelOutline", "BoxFill", "BoxBorder",
 			"SliderTrack", "SliderKnobFill", "SliderKnobBorder", "SliderKnobShadow", "SliderTickMark",
+			"SliderTrackOutline",
 			"ProgressTrack", "SpinnerSpoke",
 		},
 		Numbers: []string{
@@ -217,6 +226,68 @@ var Groups = []Group{
 			"RubberBandFraction", "PageOverlap",
 		},
 		Durations: []string{"ScrollerHoverDuration", "WheelStepDuration", "VelocityWindow"},
+	},
+	{
+		Field: "TextField", Key: "textField", Title: "Text fields",
+		Colors:  []string{"FieldBorder", "FieldInsetShadow"},
+		Numbers: []string{"FieldBorderWidth", "FieldInsetShadowOffsetY", "FieldInsetShadowBlur", "CaretWidth"},
+		Sizes:   []string{"FieldCornerRadius", "FieldPaddingX"},
+	},
+	{
+		Field: "TextView", Key: "textView", Title: "Text views",
+		Numbers: []string{"ContainerInsetY", "LineFragmentPadding"},
+	},
+	{
+		Field: "Menu", Key: "menu", Title: "Menus",
+		Colors: []string{
+			"Background", "OpaqueBackground", "Border", "Shadow",
+			"Text", "DisabledText", "HighlightedText", "Separator",
+		},
+		Numbers: []string{
+			"BorderWidth", "CornerRadius", "ShadowOffsetY", "ShadowBlur", "PaddingY",
+			"HighlightInsetX", "HighlightRadius",
+			"CheckColumnWidth", "CheckmarkSize", "CheckmarkStroke", "TitlePaddingRight",
+			"SeparatorHeight", "SeparatorThickness", "SeparatorInsetX",
+			"ScrollArrowHeight", "ScrollArrowSize",
+			"ShortcutGap", "SubmenuChevronSize", "SubmenuChevronStroke",
+		},
+		Sizes: []string{"ItemHeight"},
+	},
+	{
+		Field: "PopUp", Key: "popUp", Title: "Pop-up buttons",
+		Numbers: []string{"IndicatorInset", "IndicatorGap", "ChevronStroke", "ChevronGap"},
+		Sizes:   []string{"PaddingX", "IndicatorWidth", "ChevronWidth"},
+	},
+	{
+		Field: "MenuBar", Key: "menuBar", Title: "Menu bar",
+		Colors: []string{"Text", "InactiveText", "Highlight"},
+		Numbers: []string{
+			"StartGap", "TitlePaddingX", "HighlightHeight", "HighlightRadius",
+			"MinDragWidth", "WindowTitleGap",
+		},
+	},
+	{
+		Field: "Tooltip", Key: "tooltip", Title: "Tooltips",
+		Colors: []string{"Background", "Border", "Text", "Shadow"},
+		Numbers: []string{
+			"BorderWidth", "CornerRadius", "ShadowOffsetY", "ShadowBlur",
+			"PaddingX", "PaddingY", "FontSize", "MaxWidth", "OffsetX", "OffsetY",
+		},
+		Durations: []string{"Delay", "Grace"},
+	},
+	{
+		Field: "Alert", Key: "alert", Title: "Alerts",
+		Colors: []string{
+			"Background", "Border", "Shadow",
+			"IconTop", "IconBottom", "IconBorder", "IconGlyph", "CautionFill", "CautionMark",
+		},
+		Numbers: []string{
+			"Width", "CornerRadius", "BorderWidth", "ShadowOffsetY", "ShadowBlur",
+			"PaddingX", "PaddingTop", "PaddingBottom",
+			"IconSize", "IconCornerRadius", "BadgeSize", "IconGap",
+			"MessageFontSize", "DetailFontSize", "DetailGap",
+			"ButtonsGap", "ButtonGap",
+		},
 	},
 }
 
@@ -388,6 +459,13 @@ type rawSpec struct {
 	Animation  *rawGroup                  `json:"animation"`
 	Controls   *rawGroup                  `json:"controls"`
 	Scroll     *rawGroup                  `json:"scroll"`
+	TextField  *rawGroup                  `json:"textField"`
+	TextView   *rawGroup                  `json:"textView"`
+	Menu       *rawGroup                  `json:"menu"`
+	PopUp      *rawGroup                  `json:"popUp"`
+	MenuBar    *rawGroup                  `json:"menuBar"`
+	Tooltip    *rawGroup                  `json:"tooltip"`
+	Alert      *rawGroup                  `json:"alert"`
 }
 
 func (r *rawSpec) group(key string) *rawGroup {
@@ -406,6 +484,20 @@ func (r *rawSpec) group(key string) *rawGroup {
 		return r.Animation
 	case "scroll":
 		return r.Scroll
+	case "textField":
+		return r.TextField
+	case "textView":
+		return r.TextView
+	case "menu":
+		return r.Menu
+	case "popUp":
+		return r.PopUp
+	case "menuBar":
+		return r.MenuBar
+	case "tooltip":
+		return r.Tooltip
+	case "alert":
+		return r.Alert
 	}
 	panic("gen: no group " + key)
 }

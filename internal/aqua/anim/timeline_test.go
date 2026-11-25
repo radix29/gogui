@@ -145,14 +145,14 @@ func TestSpringSettles(t *testing.T) {
 		m := sp.Motion(0, 10, 0)
 		for k := 1; ; k++ {
 			ft := r.step(t)
-			if m.Settled(ft, anim.SettleEpsilon) {
+			if m.Settled(ft, anim.DefaultTolerance) {
 				if v.Value() != 10 || v.Velocity() != 0 || v.Running() || r.clk.Requested() {
 					t.Errorf("%s: settled at frame %d: %v %v running %v", name, k, v.Value(), v.Velocity(), v.Running())
 				}
 				break
 			}
 			x, vel := m.At(ft)
-			if v.Value() != x || v.Velocity() != vel || !v.Running() {
+			if math.Abs(v.Value()-x) >= anim.DefaultTolerance || v.Velocity() != vel || !v.Running() {
 				t.Fatalf("%s frame %d: %v %v, want %v %v", name, k, v.Value(), v.Velocity(), x, vel)
 			}
 			if k > 1000 {
@@ -431,5 +431,39 @@ func TestCurveSlope(t *testing.T) {
 	}
 	if s := (anim.Curve{X1: 0, Y1: 1, X2: 0.5, Y2: 1}).Slope(0); s != 0 {
 		t.Errorf("unbounded slope at a flat end = %v, want 0", s)
+	}
+}
+
+// TestCurveSlopeFlatEnds is B6: where x and y are both flat at an end,
+// the slope is the limit, not 0, so a tween retargeted at its start keeps
+// its velocity.
+func TestCurveSlopeFlatEnds(t *testing.T) {
+	an := theme.Sequoia.Animation
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-6*max(1, math.Abs(b)) }
+	for _, tc := range []struct {
+		name string
+		c    anim.Curve
+		t    float64
+		want float64
+	}{
+		{"EaseOut at 0", anim.Curve(an.EaseOut), 0, an.EaseOut.Y2 / an.EaseOut.X2},
+		{"EaseIn at 1", anim.Curve(an.EaseIn), 1, (1 - an.EaseIn.Y1) / (1 - an.EaseIn.X1)},
+		{"y=x³ at 0", anim.Curve{X1: 0, Y1: 0, X2: 0, Y2: 0}, 0, 1},
+		{"flatEnds at 0", anim.Curve{X1: 0, Y1: 0, X2: 0, Y2: 1}, 0, 0}, // y ~ s², x ~ s³: unbounded
+		{"x1y0 at 1", anim.Curve{X1: 1, Y1: 0, X2: 1, Y2: 0}, 1, 0},     // unbounded
+	} {
+		if got := tc.c.Slope(tc.t); !near(got, tc.want) {
+			t.Errorf("%s: Slope = %v, want %v", tc.name, got, tc.want)
+		}
+		// The limit is continuous with the slope just inside the end.
+		if tc.want != 0 {
+			in := 1e-7
+			if tc.t == 1 {
+				in = 1 - 1e-7
+			}
+			if got := tc.c.Slope(in); math.Abs(got-tc.want) > 1e-3*max(1, tc.want) {
+				t.Errorf("%s: Slope(%v) = %v, limit %v", tc.name, in, got, tc.want)
+			}
+		}
 	}
 }

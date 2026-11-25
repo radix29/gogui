@@ -40,8 +40,9 @@ func (rd Radii) IsUniform() bool {
 		rd.BottomRight == rd.BottomLeft
 }
 
-// Image is a bitmap a canvas can draw. Decoding and the backends' image
-// types come in later steps; for now only the natural size is known.
+// Image is a bitmap a canvas can draw. The shells make their own images
+// from premultiplied pixels (v0.1 has no public image API) and a canvas
+// draws only its own shell's images. Only the natural size is exposed.
 type Image interface {
 	// Size returns the natural size of the image in logical points.
 	Size() Size

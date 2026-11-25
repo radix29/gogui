@@ -37,7 +37,7 @@ func (t *TextView) SetText(text string) *TextView {
 }
 
 // Text returns the text, including the user's edits.
-func (t *TextView) Text() string { t.check("Text"); return t.text }
+func (t *TextView) Text() string { t.get("Text"); return t.text }
 
 // SetFont sets the font of the whole text. The zero Font is the system
 // font at the default size.
@@ -51,7 +51,7 @@ func (t *TextView) SetFont(f Font) *TextView {
 }
 
 // Font returns the font set with SetFont.
-func (t *TextView) Font() Font { t.check("Font"); return t.font }
+func (t *TextView) Font() Font { t.get("Font"); return t.font }
 
 // SetTextColor sets the color of the whole text. The zero Color means
 // ColorText.
@@ -76,7 +76,7 @@ func (t *TextView) SetEditable(editable bool) *TextView {
 // Selection returns the selected range as UTF-8 byte offsets into Text,
 // with start <= end. An empty selection is the caret position.
 func (t *TextView) Selection() (start, end int) {
-	t.check("Selection")
+	t.get("Selection")
 	if t.live() {
 		t.readSelection()
 	}
@@ -112,11 +112,14 @@ type textViewEvents struct{ t *TextView }
 
 func (e textViewEvents) TextChanged() {
 	t := e.t
-	if t.disabled || t.dead {
+	if t.dead {
 		return
 	}
-	t.text = t.p.Text()
+	t.text = t.p.Text() // the cache follows the native text even when disabled (B14)
 	t.readSelection()
+	if t.disabled {
+		return
+	}
 	text := t.text
-	t.onChange.each(func(fn func(string)) { fn(text) })
+	t.onChange.eachLive(&t.widget, func(fn func(string)) { fn(text) })
 }

@@ -36,14 +36,15 @@ const (
 	slotFactoryCreateSwapChainForComposition = 24 // IDXGIFactory2
 
 	// IDXGISwapChain (after IDXGIDeviceSubObject::GetDevice, 7).
-	slotSwapChainPresent       = 8
-	slotSwapChainGetBuffer     = 9
-	slotSwapChainResizeBuffers = 13
-	slotSwapChainGetDesc1      = 18 // IDXGISwapChain1
+	slotSwapChainPresent             = 8
+	slotSwapChainGetBuffer           = 9
+	slotSwapChainResizeBuffers       = 13
+	slotSwapChainGetFrameStatistics  = 16
+	slotSwapChainGetLastPresentCount = 17
+	slotSwapChainGetDesc1            = 18 // IDXGISwapChain1
 
 	// IDXGISwapChain2.
 	slotSwapChainSetMaximumFrameLatency        = 31
-	slotSwapChainGetMaximumFrameLatency        = 32
 	slotSwapChainGetFrameLatencyWaitableObject = 33
 )
 
@@ -59,8 +60,7 @@ func DeviceFrom(p com.Ptr) (Device, error) {
 
 // Adapter returns the adapter the device was created on.
 func (d Device) Adapter() (Adapter, error) {
-	var out com.Ptr
-	err := d.CallHR("IDXGIDevice::GetAdapter", slotDeviceGetAdapter, uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("IDXGIDevice::GetAdapter", slotDeviceGetAdapter)
 	return Adapter{out}, err
 }
 
@@ -77,9 +77,8 @@ func (a Adapter) Desc() (AdapterDesc, error) {
 // Factory returns the factory that created the adapter as IDXGIFactory2
 // (IDXGIObject::GetParent).
 func (a Adapter) Factory() (Factory2, error) {
-	var out com.Ptr
-	err := a.CallHR("IDXGIAdapter::GetParent(IDXGIFactory2)", slotGetParent,
-		uintptr(unsafe.Pointer(&IID_IDXGIFactory2)), uintptr(unsafe.Pointer(&out)))
+	out, err := a.CallOut("IDXGIAdapter::GetParent(IDXGIFactory2)", slotGetParent,
+		uintptr(unsafe.Pointer(&IID_IDXGIFactory2)))
 	return Factory2{out}, err
 }
 
@@ -91,9 +90,8 @@ type Factory2 struct{ com.Ptr }
 // must be SCALING_STRETCH and its SwapEffect a flip model; the chain is not
 // restricted to an output.
 func (f Factory2) CreateSwapChainForComposition(device com.Ptr, desc *SwapChainDesc1) (SwapChain1, error) {
-	var out com.Ptr
-	err := f.CallHR("IDXGIFactory2::CreateSwapChainForComposition", slotFactoryCreateSwapChainForComposition,
-		uintptr(device), uintptr(unsafe.Pointer(desc)), 0, uintptr(unsafe.Pointer(&out)))
+	out, err := f.CallOut("IDXGIFactory2::CreateSwapChainForComposition", slotFactoryCreateSwapChainForComposition,
+		uintptr(device), uintptr(unsafe.Pointer(desc)), 0)
 	return SwapChain1{out}, err
 }
 
@@ -111,10 +109,8 @@ func (s SwapChain1) Present(syncInterval, flags uint32) (com.HRESULT, error) {
 // Buffer returns back buffer i as the interface iid (ID3D11Texture2D or
 // IDXGISurface). With a flip-model chain only buffer 0 can be written.
 func (s SwapChain1) Buffer(i uint32, iid *com.GUID) (com.Ptr, error) {
-	var out com.Ptr
-	err := s.CallHR("IDXGISwapChain::GetBuffer", slotSwapChainGetBuffer,
-		uintptr(i), uintptr(unsafe.Pointer(iid)), uintptr(unsafe.Pointer(&out)))
-	return out, err
+	return s.CallOut("IDXGISwapChain::GetBuffer", slotSwapChainGetBuffer,
+		uintptr(i), uintptr(unsafe.Pointer(iid)))
 }
 
 // ResizeBuffers resizes the buffers to w×h pixels. count 0 and
@@ -125,6 +121,26 @@ func (s SwapChain1) Buffer(i uint32, iid *com.GUID) (com.Ptr, error) {
 func (s SwapChain1) ResizeBuffers(count, w, h uint32, format Format, flags uint32) error {
 	return s.CallHR("IDXGISwapChain::ResizeBuffers", slotSwapChainResizeBuffers,
 		uintptr(count), uintptr(w), uintptr(h), uintptr(format), uintptr(flags))
+}
+
+// FrameStatistics returns the statistics of the chain's most recent
+// present the display has shown (PLAN.md S6.2d). It fails with
+// DXGI_ERROR_FRAME_STATISTICS_DISJOINT while they are not available yet or
+// after a change of display mode.
+func (s SwapChain1) FrameStatistics() (FrameStatistics, error) {
+	var st FrameStatistics
+	err := s.CallHR("IDXGISwapChain::GetFrameStatistics", slotSwapChainGetFrameStatistics,
+		uintptr(unsafe.Pointer(&st)))
+	return st, err
+}
+
+// LastPresentCount returns the number of Present calls on the chain so far
+// (the PresentCount the next statistics will report for the last one).
+func (s SwapChain1) LastPresentCount() (uint32, error) {
+	var n uint32
+	err := s.CallHR("IDXGISwapChain::GetLastPresentCount", slotSwapChainGetLastPresentCount,
+		uintptr(unsafe.Pointer(&n)))
+	return n, err
 }
 
 // Desc1 returns the swap chain's description.
@@ -149,14 +165,6 @@ type SwapChain2 struct{ com.Ptr }
 // must have been created with SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.
 func (s SwapChain2) SetMaximumFrameLatency(n uint32) error {
 	return s.CallHR("IDXGISwapChain2::SetMaximumFrameLatency", slotSwapChainSetMaximumFrameLatency, uintptr(n))
-}
-
-// MaximumFrameLatency returns the frame latency.
-func (s SwapChain2) MaximumFrameLatency() (uint32, error) {
-	var n uint32
-	err := s.CallHR("IDXGISwapChain2::GetMaximumFrameLatency", slotSwapChainGetMaximumFrameLatency,
-		uintptr(unsafe.Pointer(&n)))
-	return n, err
 }
 
 // FrameLatencyWaitableObject returns the object that is signaled when the

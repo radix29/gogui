@@ -14,7 +14,7 @@ import (
 // Pango indexes the UTF-8 text it is given, and pangoText keeps the
 // offsets of Text().
 //
-// The rules are Win32's (win32/textgeom.go) and shell/fake's. A cluster is
+// The rules are Win32's (win32/textgeom.go) and shellkit.FixedText's. A cluster is
 // a grapheme, from one Pango cursor position to the next (and every line
 // starts one), so a combining mark or a ZWJ emoji sequence is never split;
 // every query normalizes an index to the start of its cluster. A line's
@@ -46,6 +46,7 @@ import (
 type pangoLine struct {
 	start, length int32 // its content: the paragraph delimiter is left out
 	top, bottom   int32 // pango_layout_iter_get_line_yrange
+	baseline      int32 // pango_layout_iter_get_baseline, from the layout's top
 	endX          int32 // the x of its content's end, in layout coordinates
 }
 
@@ -74,6 +75,7 @@ type geoLine struct {
 	endX                float64 // the caret x at the line's end
 	first, last         int     // its clusters cl[first:last]
 	top, height         float64
+	baseline            float64 // from the layout's top
 }
 
 type geoCluster struct {
@@ -120,7 +122,7 @@ func newGeometry(text string, lines []pangoLine, clusters []pangoCluster, nlWidt
 			}
 		}
 		ln := geoLine{start: start, content: content, end: end, first: len(g.cl),
-			top: points(pl.top), height: points(pl.bottom - pl.top)}
+			top: points(pl.top), height: points(pl.bottom - pl.top), baseline: points(pl.baseline)}
 		if ci < len(clusters) && int(clusters[ci].start) < start {
 			return geometry{}, errGeometry // out of order, or inside the last line's break
 		}
@@ -221,6 +223,21 @@ func (g *geometry) caret(u int) render.Rect {
 	return render.Rect{X: g.x(ln, u), Y: ln.top, H: ln.height}
 }
 
+// line returns line i, clamped to the lines.
+func (g *geometry) line(i int) *geoLine { return &g.lines[max(0, min(i, len(g.lines)-1))] }
+
+// caretUpstream returns the caret rect at the cluster start u with the
+// upstream affinity: at a soft break (u starts a line and the line before
+// ends without a break) at that earlier line's end, else caret(u).
+func (g *geometry) caretUpstream(u int) render.Rect {
+	li := g.lineAt(u)
+	if li == 0 || g.lines[li].start != u || g.lines[li-1].content != g.lines[li-1].end {
+		return g.caret(u)
+	}
+	prev := &g.lines[li-1]
+	return render.Rect{X: prev.endX, Y: prev.top, H: prev.height}
+}
+
 // hitTest returns the cluster start nearest to (x, y) and whether the point
 // is in its trailing half.
 func (g *geometry) hitTest(x, y float64) (int, bool) {
@@ -298,5 +315,5 @@ func (g *geometry) span(ln *geoLine, lo, hi int) (left, right float64) {
 
 // newlineWidth is the width a selected line break shows with, for a font of
 // size logical points: half an em, about one average glyph (as Win32;
-// shell/fake uses one rune).
+// shellkit.FixedText uses one rune).
 func newlineWidth(size float64) float64 { return size / 2 }

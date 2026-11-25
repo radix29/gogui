@@ -292,3 +292,83 @@ func TestTextDrawBindings(t *testing.T) {
 		t.Errorf("gtk_snapshot_append_layout is not a required binding of %s", GTKLib)
 	}
 }
+
+// TestClipboardBindings checks the S5.2b bindings: the shell clipboard
+// needs gdk_display_get_clipboard and the GdkClipboard text calls of GTK,
+// required (GTK 4.0 has them).
+func TestClipboardBindings(t *testing.T) {
+	required := map[string]bool{}
+	for _, l := range libraries() {
+		if l.soname != GTKLib {
+			continue
+		}
+		for _, b := range l.bindings {
+			required[b.name] = true
+		}
+	}
+	for _, name := range []string{"gdk_display_get_clipboard", "gdk_clipboard_set_text",
+		"gdk_clipboard_read_text_async", "gdk_clipboard_read_text_finish"} {
+		if !required[name] {
+			t.Errorf("%s is not a required binding of %s", name, GTKLib)
+		}
+	}
+}
+
+// TestIMBindings checks the S5.3h bindings: the IME needs the
+// multicontext, its preedit and cursor calls and the key controller's IM
+// context of GTK, the attribute list calls of Pango and g_slist_free, all
+// required (GTK 4.14 and Pango 1.52 have them).
+func TestIMBindings(t *testing.T) {
+	required := map[string]string{}
+	for _, l := range libraries() {
+		for _, b := range l.bindings {
+			required[b.name] = l.soname
+		}
+	}
+	for name, lib := range map[string]string{
+		"gtk_im_multicontext_new":                 GTKLib,
+		"gtk_im_context_set_use_preedit":          GTKLib,
+		"gtk_im_context_get_preedit_string":       GTKLib,
+		"gtk_im_context_set_cursor_location":      GTKLib,
+		"gtk_event_controller_key_set_im_context": GTKLib,
+		"pango_attr_list_get_attributes":          PangoLib,
+		"pango_attr_list_unref":                   PangoLib,
+		"pango_attribute_destroy":                 PangoLib,
+		"g_slist_free":                            GLibLib,
+	} {
+		if required[name] != lib {
+			t.Errorf("%s is not a required binding of %s", name, lib)
+		}
+	}
+}
+
+// TestPopoverBindings checks the S5.5e bindings: the gtk4 popups need the
+// GtkPopover calls, the widget parent, can-target and CSS class calls,
+// the CSS provider and the display-wide style provider call of GTK, and
+// since S5.5f the halign, direction and popup position calls, all required
+// (GTK 4.14 has them; gtk_css_provider_load_from_string is 4.12).
+func TestPopoverBindings(t *testing.T) {
+	required := map[string]bool{}
+	for _, l := range libraries() {
+		if l.soname != GTKLib {
+			continue
+		}
+		for _, b := range l.bindings {
+			required[b.name] = true
+		}
+	}
+	for _, name := range []string{
+		"gtk_popover_new", "gtk_popover_set_child", "gtk_popover_set_has_arrow",
+		"gtk_popover_set_autohide", "gtk_popover_set_pointing_to", "gtk_popover_set_position",
+		"gtk_popover_set_offset", "gtk_popover_popup", "gtk_popover_popdown", "gtk_popover_present",
+		"gtk_widget_set_parent", "gtk_widget_unparent", "gtk_widget_set_can_target",
+		"gtk_widget_add_css_class", "gtk_css_provider_new", "gtk_css_provider_load_from_string",
+		"gtk_style_context_add_provider_for_display",
+		"gtk_widget_set_halign", "gtk_widget_set_direction", "gdk_popup_get_position_x",
+		"gdk_popup_get_position_y",
+	} {
+		if !required[name] {
+			t.Errorf("%s is not a required binding of %s", name, GTKLib)
+		}
+	}
+}

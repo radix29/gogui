@@ -6,6 +6,19 @@ import "github.com/radix29/gogui/internal/driver"
 // default size for the widget's control size (13 pt for regular controls).
 // An empty Family means the system UI font: SF Pro on macOS, Inter on
 // Windows and Linux.
+//
+// Its fields: Family, a font family name; Size in points (zero means the
+// control size's default size); Weight (zero means FontWeightRegular);
+// Italic; and Monospaced, which picks the system monospaced font when
+// Family is empty (SF Mono on macOS, Consolas on Windows, the fontconfig
+// "monospace" on Linux) and is ignored otherwise. EffectiveSize(cs)
+// returns the size with zero replaced by the default for the control size
+// cs (13, 11, 9 and 13 pt for regular, small, mini and large, as in
+// AppKit), EffectiveWeight the weight with zero replaced by
+// FontWeightRegular, and IsSystem reports whether Family is empty.
+//
+// On Windows and Linux a Family that is not installed falls back to the
+// system UI font.
 type Font = driver.Font
 
 // FontWeight is a font weight on the CSS scale (100 … 900). Zero means

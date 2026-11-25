@@ -55,6 +55,12 @@ func (sf *surface) intDoubleDouble(k kind, instance uintptr, n int32, x, y float
 		return
 	}
 	pos := driver.Point{X: x, Y: y}
+	if g := sf.grabbed(); g != nil { // the grab popup has the pointer
+		if k == kindPointerPressed || k == kindPointerReleased {
+			g.fromParentButton(k, instance, pos)
+		}
+		return
+	}
 	switch k {
 	case kindPointerPressed:
 		sf.press(sf.w.currentButton(instance), pos, instance)
@@ -88,6 +94,15 @@ func (sf *surface) captionPress(instance uintptr, n int32, pos driver.Point) {
 // the caption drag gesture.
 func (sf *surface) doubleDouble(k kind, instance uintptr, x, y float64) {
 	if !sf.pointerLive() {
+		return
+	}
+	if g := sf.grabbed(); g != nil { // the grab popup has the pointer
+		switch k {
+		case kindPointerEnter, kindPointerMotion:
+			g.fromParentMotion(instance, driver.Point{X: x, Y: y})
+		case kindScrollDecelerate:
+			g.fromParentScroll(k, instance, x, y)
+		}
 		return
 	}
 	switch k {

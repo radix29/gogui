@@ -29,3 +29,43 @@ Stack 0,0 520x560
   Stack 20,427 480x20
     Label 0,2 35x16
     Button 379,0 101x20
+titlebar
+  titlebar "Controls" @0,0 520x28
+    menubar "" @72,0 154x28
+      menubaritem "Controls" @72,0 70x28
+      menubaritem "Edit" @142,0 42x28
+      menubaritem "View" @184,0 42x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "Cont…" 242.5,6 35x16
+  region caption 0,0 520x28
+  region client 72,0 70x28
+  region client 142,0 42x28
+  region client 184,0 42x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12
+sheet at 106,12
+  dialog "Delete this item?" @0,0 308x232
+    text "Delete this item?" @40,112 228x16
+    text "This action cannot be undone." @40,134 228x14
+    button "Delete" [focusable] {press focus} @158,164 110x20
+    button "Cancel" [focusable focused] {press focus} @40,164 110x20
+titlebar at 420x588
+  titlebar "Controls" @0,0 420x28
+    menubar "" @72,0 154x28
+      menubaritem "Controls" @72,0 70x28
+      menubaritem "Edit" @142,0 42x28
+      menubaritem "View" @184,0 42x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "" 0,0 0x0
+  region caption 0,0 420x28
+  region client 72,0 70x28
+  region client 142,0 42x28
+  region client 184,0 42x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12

@@ -126,3 +126,131 @@ strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #ffffff12
 strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #ffffff12
 strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #ffffff12
 strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #ffffff12
+## bar, dark false, key true, contrast
+fillRRect (10,38,120,6) r=3 solid #00000066
+fillRRect (10,38,60,6) r=3 solid #007aff
+## bar disabled, dark false, key true, contrast
+fillRRect (10,38,120,6) r=3 solid #00000033
+fillRRect (10,38,60,6) r=3 solid #007aff80
+## spinner, dark false, key true, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #000000d9
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #000000d9
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #000000d9
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #000000d9
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #000000d9
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #000000d9
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #00000036
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #00000036
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #00000036
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #00000036
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #00000036
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #00000036
+## spinner disabled, dark false, key true, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #0000006d
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #0000006d
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #0000006d
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #0000006d
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #0000006d
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #0000006d
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #0000001b
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #0000001b
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #0000001b
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #0000001b
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #0000001b
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #0000001b
+## bar, dark false, key false, contrast
+fillRRect (10,38,120,6) r=3 solid #00000066
+fillRRect (10,38,60,6) r=3 solid #cbcbcb
+## bar disabled, dark false, key false, contrast
+fillRRect (10,38,120,6) r=3 solid #00000033
+fillRRect (10,38,60,6) r=3 solid #cbcbcb80
+## spinner, dark false, key false, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #000000d9
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #000000d9
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #000000d9
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #000000d9
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #000000d9
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #000000d9
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #00000036
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #00000036
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #00000036
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #00000036
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #00000036
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #00000036
+## spinner disabled, dark false, key false, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #0000006d
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #0000006d
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #0000006d
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #0000006d
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #0000006d
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #0000006d
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #0000001b
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #0000001b
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #0000001b
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #0000001b
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #0000001b
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #0000001b
+## bar, dark true, key true, contrast
+fillRRect (10,38,120,6) r=3 solid #ffffff66
+fillRRect (10,38,60,6) r=3 solid #007aff
+## bar disabled, dark true, key true, contrast
+fillRRect (10,38,120,6) r=3 solid #ffffff33
+fillRRect (10,38,60,6) r=3 solid #007aff80
+## spinner, dark true, key true, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #ffffff36
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #ffffff36
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #ffffff36
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #ffffff36
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #ffffff36
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #ffffff36
+## spinner disabled, dark true, key true, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #ffffff1b
+## bar, dark true, key false, contrast
+fillRRect (10,38,120,6) r=3 solid #ffffff66
+fillRRect (10,38,60,6) r=3 solid #5f5f5f
+## bar disabled, dark true, key false, contrast
+fillRRect (10,38,120,6) r=3 solid #ffffff33
+fillRRect (10,38,60,6) r=3 solid #5f5f5f80
+## spinner, dark true, key false, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #ffffffd9
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #ffffff36
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #ffffff36
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #ffffff36
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #ffffff36
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #ffffff36
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #ffffff36
+## spinner disabled, dark true, key false, contrast
+strokePath [M(26,45.75) L(26,39.25)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(30.125,46.855) L(33.375,41.226)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(33.145,49.875) L(38.774,46.625)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(34.25,54) L(40.75,54)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(33.145,58.125) L(38.774,61.375)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(30.125,61.145) L(33.375,66.774)] w=2.5 cap=round solid #ffffff6d
+strokePath [M(26,62.25) L(26,68.75)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(21.875,61.145) L(18.625,66.774)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(18.855,58.125) L(13.226,61.375)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(17.75,54) L(11.25,54)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(18.855,49.875) L(13.226,46.625)] w=2.5 cap=round solid #ffffff1b
+strokePath [M(21.875,46.855) L(18.625,41.226)] w=2.5 cap=round solid #ffffff1b

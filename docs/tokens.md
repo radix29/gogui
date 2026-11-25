@@ -4,7 +4,7 @@
 
 Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) by `go generate ./internal/aqua/theme` (PLAN.md §5.2, S3.1). macOS 14/15 (Sonoma/Sequoia) look, PLAN.md §5.2.
 
-**160 of 160 tokens are provisional** (source `memory`: from memory, to be measured against the macOS references in S3.1t). Colors are sRGB with straight alpha, as `#rrggbb` or `#rrggbbaa`; lengths are in logical points. A row per control size, a curve, a spring and the tracking table count as one token each.
+**261 of 261 tokens are provisional** (source `memory`: from memory, to be measured against the macOS references in S3.1t). Colors are sRGB with straight alpha, as `#rrggbb` or `#rrggbbaa`; lengths are in logical points. A row per control size, a curve, a spring and the tracking table count as one token each.
 
 ## Colors
 
@@ -58,13 +58,13 @@ Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) b
 | `TitleBarInactive` | `#f3f3f3` | `#2b2b2b` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
 | `TitleBarSeparator` | `#0000001a` | `#000000` | `#00000066` | `#ffffff66` | **memory** (to be measured) | light: ColorSeparator; dark: a black hairline (chrome.go, S2.2c) |
 | `CloseFill` | `#ff5f57` | `#ff5f57` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
-| `CloseBorder` | `#e0443e` | `#e0443e` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
+| `CloseBorder` | `#e0443e` | `#e0443e` | `#a62622` | `#a62622` | **memory** (to be measured) | from provisional.go (S2.2c); contrast: darker (S6.1d) |
 | `CloseGlyph` | `#4d0000` | `#4d0000` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
 | `MinimizeFill` | `#febc2e` | `#febc2e` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
-| `MinimizeBorder` | `#dea123` | `#dea123` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
+| `MinimizeBorder` | `#dea123` | `#dea123` | `#a8700a` | `#a8700a` | **memory** (to be measured) | from provisional.go (S2.2c); contrast: darker (S6.1d) |
 | `MinimizeGlyph` | `#995700` | `#995700` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
 | `ZoomFill` | `#28c840` | `#28c840` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
-| `ZoomBorder` | `#1aab29` | `#1aab29` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
+| `ZoomBorder` | `#1aab29` | `#1aab29` | `#0c7a18` | `#0c7a18` | **memory** (to be measured) | from provisional.go (S2.2c); contrast: darker (S6.1d) |
 | `ZoomGlyph` | `#006500` | `#006500` |  |  | **memory** (to be measured) | from provisional.go (S2.2c) |
 | `LightInactiveFill` | `#dcdcdc` | `#545454` |  |  | **memory** (to be measured) | inactive window or disabled light; from provisional.go (S2.2c) |
 | `LightInactiveBorder` | `#c9c9c9` | `#4a4a4a` | `#808080` | `#8c8c8c` | **memory** (to be measured) | from provisional.go (S2.2c) |
@@ -155,13 +155,16 @@ Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) b
 |---|---|---|---|---|---|---|
 | `Base` | `#ffffff` | `#595959` |  |  | **memory** (to be measured) | backdrop of the selection and inactive colors; the default accent at SelectionAlpha over it gives the old selection colors |
 | `DefaultButtonText` | `#ffffff` | `#ffffff` |  |  | **memory** (to be measured) | label on an accent fill |
+| `AccentDarkText` | `#000000d9` | `#000000d9` |  |  | **memory** (to be measured) | label on a light accent fill, where DefaultButtonText falls below AccentTextMinContrast (S6.1g); labelColor's light value |
 
 | Number | Value | Source | Note |
 |---|---|---|---|
 | `SelectionAlpha` | 0.3 | **memory** (to be measured) | accent over Base in the selection colors |
 | `FocusRingAlpha` | 0.5 | **memory** (to be measured) | the half alpha of S2.2c |
+| `SelectionContrastAlpha` | 0.5 | **memory** (to be measured) | accent over Base in the selection colors with Increase Contrast (S6.1e) |
 | `PressedShade` | 0.85 | **memory** (to be measured) | channel factor of a pressed accent fill |
 | `InactiveAlpha` | 0.35 | **memory** (to be measured) | the accent's grey over Base in an inactive window |
+| `AccentTextMinContrast` | 3 | **memory** (to be measured) | the WCAG 2 contrast ratio DefaultButtonText needs on the accent, else AccentDarkText (S6.1g; WCAG's 3:1 for UI components) |
 
 ## Animation
 
@@ -193,6 +196,7 @@ Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) b
 | `BezelFill` | `#ffffff` | `#ffffff40` |  |  | **memory** (to be measured) | push button bezel, checkbox box and radio circle when off |
 | `BezelPressedFill` | `#dedede` | `#ffffff6b` |  |  | **memory** (to be measured) | the same while pressed |
 | `BezelBorder` | `#00000026` | `#ffffff1a` | `#0000008c` | `#ffffff8c` | **memory** (to be measured) | 1 pt, drawn inside the bezel |
+| `BezelOutline` | `#00000000` | `#ffffff00` | `#0000008c` | `#ffffff8c` | **memory** (to be measured) | Increase Contrast only (transparent otherwise): the outline of an accent-filled bezel (default button, on checkbox or radio, pop-up indicator), as dark as BezelBorder's contrast value |
 | `BoxFill` | `#0000000a` | `#ffffff0d` |  |  | **memory** (to be measured) | the rounded group of a Box |
 | `BoxBorder` | `#00000014` | `#ffffff1a` | `#00000073` | `#ffffff73` | **memory** (to be measured) |  |
 | `SliderTrack` | `#00000026` | `#ffffff26` | `#00000080` | `#ffffff80` | **memory** (to be measured) | the empty part of a slider's track; the filled part is ValueFill |
@@ -200,6 +204,7 @@ Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) b
 | `SliderKnobBorder` | `#00000026` | `#00000040` | `#0000008c` | `#000000bf` | **memory** (to be measured) | drawn inside the knob |
 | `SliderKnobShadow` | `#0000004d` | `#00000066` | `#00000080` | `#00000099` | **memory** (to be measured) |  |
 | `SliderTickMark` | `#00000040` | `#ffffff40` | `#00000099` | `#ffffff99` | **memory** (to be measured) |  |
+| `SliderTrackOutline` | `#00000000` | `#ffffff00` | `#0000008c` | `#ffffff8c` | **memory** (to be measured) | Increase Contrast only (transparent otherwise): the outline around the whole track, the filled part included |
 | `ProgressTrack` | `#0000001a` | `#ffffff1a` | `#00000066` | `#ffffff66` | **memory** (to be measured) | the empty track of a progress bar; the filled part and the indeterminate band are ValueFill |
 | `SpinnerSpoke` | `#0000008c` | `#ffffff8c` | `#000000d9` | `#ffffffd9` | **memory** (to be measured) | the leading spoke; the trailing ones fade towards SpinnerTailAlpha |
 
@@ -276,3 +281,161 @@ Generated from [`spec/sequoia.json`](../internal/aqua/theme/spec/sequoia.json) b
 | `ScrollerHoverDuration` | 150 | **memory** (to be measured) | an overlay knob widening on hover |
 | `WheelStepDuration` | 150 | **memory** (to be measured) | the smooth animation of one wheel notch or key step |
 | `VelocityWindow` | 80 | **memory** (to be measured) | the precise samples before release that set the momentum velocity |
+
+## Text fields
+
+| Color | Light | Dark | Contrast light | Contrast dark | Source | Note |
+|---|---|---|---|---|---|---|
+| `FieldBorder` | `#0000002e` | `#ffffff26` | `#00000099` | `#ffffff99` | **memory** (to be measured) | the bezel's border, drawn inside it; the bezel is filled with ColorTextBackground |
+| `FieldInsetShadow` | `#00000014` | `#00000033` |  |  | **memory** (to be measured) | the inset shadow under the bezel's top edge (the recessed look) |
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `FieldBorderWidth` | 1 | **memory** (to be measured) |  |
+| `FieldInsetShadowOffsetY` | 0.5 | **memory** (to be measured) |  |
+| `FieldInsetShadowBlur` | 1 | **memory** (to be measured) |  |
+| `CaretWidth` | 2 | **memory** (to be measured) | the insertion point of macOS 14 (NSTextInsertionIndicator), in the accent color (Theme.Caret) |
+
+| Per control size | Regular | Small | Mini | Large | Source | Note |
+|---|---|---|---|---|---|---|
+| `FieldCornerRadius` | 0 | 0 | 0 | 0 | **memory** (to be measured) | a square bezel (NSTextField.BezelStyle.squareBezel); the focus ring follows it |
+| `FieldPaddingX` | 4 | 3 | 2 | 5 | **memory** (to be measured) | bezel edge to text, border included; the text is centred vertically in ControlHeight |
+
+## Text views
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `ContainerInsetY` | 5 | **memory** (to be measured) | the space above the first line and below the last (NSTextView.textContainerInset.height) |
+| `LineFragmentPadding` | 5 | **memory** (to be measured) | the space left and right of every line (NSTextContainer.lineFragmentPadding); the text wraps at the viewport width minus twice this |
+
+## Menus
+
+| Color | Light | Dark | Contrast light | Contrast dark | Source | Note |
+|---|---|---|---|---|---|---|
+| `Background` | `#f6f6f6a6` | `#282828a6` |  |  | **memory** (to be measured) | the translucent tint over the OS blur (NSVisualEffectView's menu material) |
+| `OpaqueBackground` | `#f2f2f2` | `#2b2b2b` | `#ffffff` | `#000000` | **memory** (to be measured) | the fill without a blur (Windows 10, high contrast, transparency effects off, Linux) |
+| `Border` | `#00000026` | `#ffffff2e` | `#000000bf` | `#ffffffbf` | **memory** (to be measured) | the panel's hairline, inside it |
+| `Shadow` | `#00000040` | `#00000080` |  |  | **memory** (to be measured) | only where the OS draws no shadow behind the popup (Menu's own shadow) |
+| `Text` | `#000000d9` | `#ffffffd9` | `#000000` | `#ffffff` | **memory** (to be measured) | an enabled item's title and checkmark (labelColor) |
+| `DisabledText` | `#00000040` | `#ffffff40` | `#0000008c` | `#ffffff8c` | **memory** (to be measured) | a disabled item (disabledControlTextColor) |
+| `HighlightedText` | `#ffffff` | `#ffffff` |  |  | **memory** (to be measured) | the highlighted item, on the accent (selectedMenuItemTextColor) |
+| `Separator` | `#0000001a` | `#ffffff1a` | `#00000080` | `#ffffff80` | **memory** (to be measured) | a separator item's line |
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `BorderWidth` | 1 | **memory** (to be measured) | rounded to whole device pixels, at least one |
+| `CornerRadius` | 6 | **memory** (to be measured) | the menus of macOS 11+ |
+| `ShadowOffsetY` | 4 | **memory** (to be measured) |  |
+| `ShadowBlur` | 12 | **memory** (to be measured) |  |
+| `PaddingY` | 5 | **memory** (to be measured) | the panel's edge to the first item and from the last |
+| `HighlightInsetX` | 5 | **memory** (to be measured) | the inset rounded selection of macOS 11+ |
+| `HighlightRadius` | 4 | **memory** (to be measured) |  |
+| `CheckColumnWidth` | 16 | **memory** (to be measured) | the highlight's edge to the titles; the checkmark is centred in it |
+| `CheckmarkSize` | 10 | **memory** (to be measured) | the procedural check, drawn on the checkbox's 14-unit grid |
+| `CheckmarkStroke` | 1.75 | **memory** (to be measured) |  |
+| `TitlePaddingRight` | 21 | **memory** (to be measured) | the widest title to the panel's right side |
+| `SeparatorHeight` | 11 | **memory** (to be measured) | the height of NSMenuItem.separatorItem |
+| `SeparatorThickness` | 1 | **memory** (to be measured) | rounded to whole device pixels, at least one |
+| `SeparatorInsetX` | 10 | **memory** (to be measured) | the panel's sides to the line |
+| `ScrollArrowHeight` | 16 | **memory** (to be measured) | the strip of a scroll arrow at the top or bottom of a menu lower than its items |
+| `ScrollArrowSize` | 8 | **memory** (to be measured) | the arrow's width; a triangle half as high, centred in its strip |
+| `ShortcutGap` | 24 | **memory** (to be measured) | the least space between the widest title and the widest shortcut (the key-equivalent column, right-aligned) |
+| `SubmenuChevronSize` | 9 | **memory** (to be measured) | the submenu chevron's height; it points right, half as wide, right-aligned in the shortcut column |
+| `SubmenuChevronStroke` | 1.5 | **memory** (to be measured) |  |
+
+| Per control size | Regular | Small | Mini | Large | Source | Note |
+|---|---|---|---|---|---|---|
+| `ItemHeight` | 22 | 19 | 16 | 24 | **memory** (to be measured) | a title item; the title is centred in it |
+
+## Pop-up buttons
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `IndicatorInset` | 2 | **memory** (to be measured) | the bezel's top, right and bottom edges to the indicator (the accent square of macOS 11+) |
+| `IndicatorGap` | 4 | **memory** (to be measured) | the title's truncation edge to the indicator |
+| `ChevronStroke` | 1.5 | **memory** (to be measured) |  |
+| `ChevronGap` | 2 | **memory** (to be measured) | between the open sides of the up and the down chevron |
+
+| Per control size | Regular | Small | Mini | Large | Source | Note |
+|---|---|---|---|---|---|---|
+| `PaddingX` | 8 | 7 | 6 | 8 | **memory** (to be measured) | the bezel's left edge to the title (left-aligned) |
+| `IndicatorWidth` | 16 | 13 | 10 | 18 | **memory** (to be measured) | the indicator's width; it is as high as the bezel minus twice IndicatorInset |
+| `ChevronWidth` | 7 | 6 | 5 | 8 | **memory** (to be measured) | the width of each chevron, a right angle half as high |
+
+## Menu bar
+
+| Color | Light | Dark | Contrast light | Contrast dark | Source | Note |
+|---|---|---|---|---|---|---|
+| `Text` | `#000000d9` | `#ffffffd9` | `#000000` | `#ffffff` | **memory** (to be measured) | a menu title in a key window (labelColor) |
+| `InactiveText` | `#00000042` | `#ffffff40` | `#0000008c` | `#ffffff8c` | **memory** (to be measured) | a menu title in an inactive window, as the window title (tertiaryLabelColor) |
+| `Highlight` | `#0000001a` | `#ffffff26` | `#00000040` | `#ffffff4d` | **memory** (to be measured) | the rounded fill behind the open or keyboard-focused title; accent-free, as macOS's menu bar |
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `StartGap` | 12 | **memory** (to be measured) | the traffic lights' right edge to the first title's slot |
+| `TitlePaddingX` | 7 | **memory** (to be measured) | a title's text to either side of its slot; the highlight covers the slot |
+| `HighlightHeight` | 20 | **memory** (to be measured) | centred in the title bar |
+| `HighlightRadius` | 5 | **memory** (to be measured) |  |
+| `MinDragWidth` | 64 | **memory** (to be measured) | the least caption left right of the last shown title; the titles that do not fit are dropped from the right |
+| `WindowTitleGap` | 16 | **memory** (to be measured) | the least distance between the strip and the centred window title |
+
+## Tooltips
+
+| Color | Light | Dark | Contrast light | Contrast dark | Source | Note |
+|---|---|---|---|---|---|---|
+| `Background` | `#f6f6f6` | `#2c2c2e` | `#ffffff` | `#000000` | **memory** (to be measured) | the panel's fill, opaque |
+| `Border` | `#0000002e` | `#ffffff33` | `#000000bf` | `#ffffffbf` | **memory** (to be measured) | the panel's hairline, inside it |
+| `Text` | `#000000d9` | `#ffffffd9` | `#000000` | `#ffffff` | **memory** (to be measured) | the text (labelColor) |
+| `Shadow` | `#00000033` | `#00000066` |  |  | **memory** (to be measured) | only where the OS draws no shadow behind the popup (the tooltip's own shadow) |
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `BorderWidth` | 1 | **memory** (to be measured) | rounded to whole device pixels, at least one |
+| `CornerRadius` | 4 | **memory** (to be measured) |  |
+| `ShadowOffsetY` | 1 | **memory** (to be measured) |  |
+| `ShadowBlur` | 4 | **memory** (to be measured) |  |
+| `PaddingX` | 5 | **memory** (to be measured) | the panel's left and right edges to the text |
+| `PaddingY` | 2 | **memory** (to be measured) | the panel's top and bottom edges to the text |
+| `FontSize` | 11 | **memory** (to be measured) | NSFont.toolTipsFont's default size |
+| `MaxWidth` | 300 | **memory** (to be measured) | the widest panel; longer text wraps |
+| `OffsetX` | 0 | **memory** (to be measured) | the pointer's hot spot to the panel's left edge |
+| `OffsetY` | 20 | **memory** (to be measured) | the pointer's hot spot to the panel's top: below the arrow cursor |
+
+| Duration | ms | Source | Note |
+|---|---|---|---|
+| `Delay` | 1000 | **memory** (to be measured) | the pointer resting on a widget before its tooltip shows |
+| `Grace` | 500 | **memory** (to be measured) | after a tooltip hid by moving off its widget, the next one shows at once for this long |
+
+## Alerts
+
+| Color | Light | Dark | Contrast light | Contrast dark | Source | Note |
+|---|---|---|---|---|---|---|
+| `Background` | `#f2f2f2` | `#2c2c2e` | `#ffffff` | `#000000` | **memory** (to be measured) | the panel's fill, opaque (the alert's vibrant background without the blur) |
+| `Border` | `#00000026` | `#ffffff26` | `#000000bf` | `#ffffffbf` | **memory** (to be measured) | the panel's hairline, inside it |
+| `Shadow` | `#0000004d` | `#00000080` |  |  | **memory** (to be measured) | only where nothing draws a shadow behind the panel (a sheet) |
+| `IconTop` | `#fafafc` | `#6e6e73` |  |  | **memory** (to be measured) | the app placeholder's gradient, top |
+| `IconBottom` | `#d6d6dc` | `#48484c` |  |  | **memory** (to be measured) | the app placeholder's gradient, bottom |
+| `IconBorder` | `#00000026` | `#ffffff26` | `#000000bf` | `#ffffffbf` | **memory** (to be measured) | the app placeholder's hairline |
+| `IconGlyph` | `#00000073` | `#ffffff8c` | `#000000e6` | `#ffffffe6` | **memory** (to be measured) | the window glyph on the app placeholder |
+| `CautionFill` | `#ffcc00` | `#ffd60a` |  |  | **memory** (to be measured) | the caution triangle (systemYellow) |
+| `CautionMark` | `#000000d9` | `#000000d9` |  |  | **memory** (to be measured) | the exclamation mark on the triangle |
+
+| Number | Value | Source | Note |
+|---|---|---|---|
+| `Width` | 260 | **memory** (to be measured) | the panel's fixed width (macOS 11+) |
+| `CornerRadius` | 10 | **memory** (to be measured) |  |
+| `BorderWidth` | 1 | **memory** (to be measured) | rounded to whole device pixels, at least one |
+| `ShadowOffsetY` | 8 | **memory** (to be measured) |  |
+| `ShadowBlur` | 24 | **memory** (to be measured) |  |
+| `PaddingX` | 16 | **memory** (to be measured) | the panel's sides to the texts and the buttons |
+| `PaddingTop` | 20 | **memory** (to be measured) | the panel's top to the icon |
+| `PaddingBottom` | 16 | **memory** (to be measured) | the last button to the panel's bottom |
+| `IconSize` | 64 | **memory** (to be measured) |  |
+| `IconCornerRadius` | 14 | **memory** (to be measured) | the app placeholder's corners, about 22 % of its side |
+| `BadgeSize` | 32 | **memory** (to be measured) | the app placeholder badge at the caution triangle's bottom right |
+| `IconGap` | 12 | **memory** (to be measured) | the icon to the message |
+| `MessageFontSize` | 13 | **memory** (to be measured) | bold (EmphasizedWeight) |
+| `DetailFontSize` | 11 | **memory** (to be measured) | NSFont.smallSystemFontSize |
+| `DetailGap` | 6 | **memory** (to be measured) | the message to the detail |
+| `ButtonsGap` | 16 | **memory** (to be measured) | the texts to the buttons |
+| `ButtonGap` | 8 | **memory** (to be measured) | between two buttons, side by side or stacked |

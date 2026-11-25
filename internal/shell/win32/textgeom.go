@@ -18,7 +18,7 @@ import (
 // Every query normalizes an index to the start of its cluster (a combining
 // mark or a surrogate pair is never split), and a line's break ("\n",
 // "\r\n", U+2028 …) counts as one cluster. Rules beyond DirectWrite's own
-// answers, matching shell/fake:
+// answers, matching shellkit.FixedText (shell/fake's text):
 //
 //   - Right of a line's last cluster, HitTest gives the line's end with
 //     trailing false (DirectWrite says "last cluster, trailing"). The end is
@@ -50,6 +50,7 @@ type geoLine struct {
 	endX                float64 // the caret x at the line's end
 	first, last         int     // its clusters cl[first:last]
 	top, height         float64
+	baseline            float64 // from the layout's top
 }
 
 type geoCluster struct {
@@ -71,7 +72,8 @@ func newGeometry(n int, lines []dwrite.LineMetrics, clusters []dwrite.ClusterMet
 	for li, lm := range lines {
 		end := pos + int(lm.Length)
 		content := end - int(min(lm.NewlineLength, lm.Length))
-		ln := geoLine{start: pos, content: content, end: end, first: len(g.cl), top: top, height: float64(lm.Height)}
+		ln := geoLine{start: pos, content: content, end: end, first: len(g.cl), top: top, height: float64(lm.Height),
+			baseline: top + float64(lm.Baseline)}
 		x := 0.0
 		for ; ci < len(clusters) && pos < end; ci++ {
 			c := clusters[ci]
@@ -169,6 +171,21 @@ func (g *geometry) caret(u int) render.Rect {
 	return render.Rect{X: g.x(ln, u), Y: ln.top, H: ln.height}
 }
 
+// line returns line i, clamped to the lines.
+func (g *geometry) line(i int) *geoLine { return &g.lines[max(0, min(i, len(g.lines)-1))] }
+
+// caretUpstream returns the caret rect at the cluster start u with the
+// upstream affinity: at a soft break (u starts a line and the line before
+// ends without a break) at that earlier line's end, else caret(u).
+func (g *geometry) caretUpstream(u int) render.Rect {
+	li := g.lineAt(u)
+	if li == 0 || g.lines[li].start != u || g.lines[li-1].content != g.lines[li-1].end {
+		return g.caret(u)
+	}
+	prev := &g.lines[li-1]
+	return render.Rect{X: prev.endX, Y: prev.top, H: prev.height}
+}
+
 // hitTest returns the cluster start nearest to (x, y) and whether the point
 // is in its trailing half.
 func (g *geometry) hitTest(x, y float64) (int, bool) {
@@ -245,5 +262,5 @@ func (g *geometry) span(ln *geoLine, lo, hi int) (left, right float64) {
 }
 
 // newlineWidth is the width a selected line break shows with, for a font of
-// size DIPs: half an em, about one average glyph (shell/fake uses one rune).
+// size DIPs: half an em, about one average glyph (shellkit.FixedText uses one rune).
 func newlineWidth(size float32) float64 { return float64(size) / 2 }

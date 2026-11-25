@@ -55,6 +55,17 @@ func (t *Theme) ToggleFill(a driver.Appearance, on, pressed, key bool) driver.Co
 	return t.Controls.BezelFill.Value(a)
 }
 
+// ToggleMark returns the color of a checked checkbox's mark and a selected
+// radio's dot: AccentText on the accent fill of a key window, the
+// DefaultButtonText token on the grey fill of an inactive one, which does
+// not follow the accent (S6.1a, S6.1g).
+func (t *Theme) ToggleMark(a driver.Appearance, key bool) driver.Color {
+	if !key {
+		return t.Accent.DefaultButtonText.Value(a)
+	}
+	return t.AccentText(a)
+}
+
 // ValueFill returns the fill of the filled part of a slider's track (from
 // its minimum end to the knob) and of a determinate progress bar's track,
 // and of an indeterminate progress bar's band: the accent in a key window,
@@ -68,7 +79,7 @@ func (t *Theme) ValueFill(a driver.Appearance, key, disabled bool) driver.Color 
 		c = t.AccentInactive(a)
 	}
 	if disabled {
-		c.A *= float32(t.Controls.ValueDisabledAlpha)
+		c.A *= t.Controls.ValueDisabledAlpha
 	}
 	return c
 }

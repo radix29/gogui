@@ -132,16 +132,14 @@ func TestRootGetsFullSize(t *testing.T) {
 	// Neither expanding nor in a parent: the root still fills the content.
 	s.Props().SetMax(Horizontal, 50).SetMax(Vertical, 20)
 	r := NewRoot(s)
-	if r.Node() != s {
-		t.Fatal("Node")
-	}
 	r.Layout(driver.Size{W: 400, H: 300})
 	wantRect(t, "root", peer.Frame, driver.Rect{W: 400, H: 300})
 	wantFrame(t, "a", pa, driver.Rect{W: 30, H: 10})
 
 	// A leaf as root fills the content too, below its fitting size as well.
 	l, pl2 := pl(30, 10)
-	r.SetNode(l).Layout(driver.Size{W: 12, H: 5})
+	r = NewRoot(l)
+	r.Layout(driver.Size{W: 12, H: 5})
 	wantFrame(t, "leaf root", pl2, driver.Rect{W: 12, H: 5})
 	r.Layout(driver.Size{W: -3, H: inf}) // bad sizes count as 0
 	wantFrame(t, "bad size", pl2, driver.Rect{})

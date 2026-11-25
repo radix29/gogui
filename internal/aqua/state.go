@@ -1,6 +1,8 @@
 package aqua
 
 import (
+	"slices"
+
 	"github.com/radix29/gogui/internal/aqua/theme"
 	"github.com/radix29/gogui/internal/driver"
 )
@@ -49,16 +51,14 @@ func (s FocusState) String() string {
 
 // Window returns the window whose tree the element is in, or nil when the
 // element is not in a window's tree (detached, or under a root made with
-// NewRouter directly). Through it an element reads the window context:
-// IsKey, Appearance, Theme, Timeline and Router. A closed window keeps
-// answering with its last state.
+// NewRouter directly). An element in a popup of a window (popupRoot,
+// S5.5g) or in a sheet of it (alertRoot, S5.7c) is in that window's
+// tree. Through it an element reads the window context: IsKey,
+// Appearance, Theme, Timeline and Router. A closed window keeps answering
+// with its last state.
 func (b *Base) Window() *Window {
-	e := b
-	for e.parent != nil {
-		e = e.parent
-	}
-	if r, ok := e.self.(*windowRoot); ok {
-		return r.w
+	if rc := b.rootContext(); rc != nil {
+		return rc.rootWindow()
 	}
 	return nil
 }
@@ -80,16 +80,47 @@ func (b *Base) FocusState() FocusState {
 func (w *Window) Theme() *theme.Theme { return tokens }
 
 // stateChanged repaints the whole tree and sends WindowStateEvent to every
-// element of it, after a key or appearance change.
+// element of it, after a key or appearance change; then the same for the
+// tree of each open popup, in opening order.
 func (w *Window) stateChanged() {
-	invalidateAll(w.root)
-	for _, e := range preOrder(w.root, nil) {
+	broadcastState(w.root, w.router, w.state, w.isClosed)
+	for _, p := range slices.Clone(w.popups) {
 		if w.closed {
 			return
 		}
-		// A handler may have moved e out of the window.
-		if e.base().routedBy() == w.router {
-			e.HandleEvent(WindowStateEvent{Key: w.key, Appearance: w.appearance})
+		p.stateChanged()
+	}
+	for _, s := range slices.Clone(w.sheets) {
+		if w.closed {
+			return
+		}
+		s.stateChanged()
+	}
+}
+
+// state returns the WindowStateEvent of the window's trees now.
+func (w *Window) state() WindowStateEvent {
+	return WindowStateEvent{Key: w.key, Appearance: w.appearance}
+}
+
+func (w *Window) isClosed() bool { return w.closed }
+
+// broadcastState repaints root's tree and sends each of its elements, in
+// pre-order, the WindowStateEvent state returns at that moment (review
+// R3; current if a handler changed the state again). It skips an element
+// a handler moved out of the tree (no longer routed by router) and stops
+// once gone reports the tree closed.
+func broadcastState(root Element, router *Router, state func() WindowStateEvent, gone func() bool) {
+	if gone() {
+		return
+	}
+	invalidateAll(root)
+	for _, e := range preOrder(root, nil) {
+		if gone() {
+			return
+		}
+		if e.base().routedBy() == router {
+			e.HandleEvent(state())
 		}
 	}
 }

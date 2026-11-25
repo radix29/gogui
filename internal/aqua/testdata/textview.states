@@ -1,0 +1,252 @@
+## empty, normal unfocused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+## empty focused, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (14,43,2,16) solid #007aff clip=(10,38,180,80)
+## wrapped, normal unfocused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## wrapped focused, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+fillRRect (133,91,2,16) solid #007aff clip=(10,38,180,80)
+## caret at a soft break, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+fillRRect (14,59,2,16) solid #007aff clip=(10,38,180,80)
+## selection, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (127,59,56,16) solid #b2d7ff clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #b2d7ff clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #b2d7ff clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #b2d7ff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## selection inactive, normal focused-inactive inactive light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+fillRRect (127,59,56,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## selection unfocused, normal unfocused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+fillRRect (127,59,56,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## read-only focused, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (43,43,35,16) solid #b2d7ff clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## read-only caret, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## disabled, normal unfocused disabled key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+fillRRect (43,43,35,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #00000040 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #00000040 clip=(10,38,180,80)
+## text color, normal unfocused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+text (15,43,56,16) "Red text" 13pt #ff0000 clip=(10,38,180,80)
+## scrolled to the middle, normal focused key light, offset 261
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,38,49,16) "Line 16" 13pt #000000 clip=(10,38,180,80)
+text (15,54,49,16) "Line 17" 13pt #000000 clip=(10,38,180,80)
+text (15,70,49,16) "Line 18" 13pt #000000 clip=(10,38,180,80)
+text (15,86,49,16) "Line 19" 13pt #000000 clip=(10,38,180,80)
+text (15,102,49,16) "Line 20" 13pt #000000 clip=(10,38,180,80)
+fillRRect (14,102,2,16) solid #007aff clip=(10,38,180,80)
+## legacy scrollers, normal unfocused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+text (15,43,42,16) "Line 0" 13pt #000000 clip=(10,38,165,80)
+text (15,59,42,16) "Line 1" 13pt #000000 clip=(10,38,165,80)
+text (15,75,42,16) "Line 2" 13pt #000000 clip=(10,38,165,80)
+text (15,91,42,16) "Line 3" 13pt #000000 clip=(10,38,165,80)
+text (15,107,42,16) "Line 4" 13pt #000000 clip=(10,38,165,80)
+fillRRect (175,38,15,80) solid #fafafa
+fillRRect (175,38,1,80) solid #00000014
+fillRRect (178,40,9,18) r=4.5 solid #00000073
+## composing, normal focused key light, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,48) "The quick brown fox jumps over the l日本語ですazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (127,72,13,2) solid #000000 clip=(10,38,180,80)
+fillRRect (141,72,20,1) solid #000000 clip=(10,38,180,80)
+text (15,107,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+fillRRect (140,59,2,16) solid #007aff clip=(10,38,180,80)
+## increased contrast, focused, normal focused key light contrast, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+fillRRect (133,91,2,16) solid #007aff clip=(10,38,180,80)
+## increased contrast, selection, normal focused key light contrast, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff
+fillRRect (127,59,56,16) solid #80bcff clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #80bcff clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #80bcff clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #80bcff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## increased contrast, selection inactive, normal focused-inactive inactive light contrast, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+fillRRect (127,59,56,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #000000 clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #dcdcdc clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #dcdcdc clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #000000 clip=(10,38,180,80)
+## increased contrast, legacy scrollers, normal unfocused key light contrast, offset 0
+fillRRect (10,38,180,80) solid #ffffff
+text (15,43,42,16) "Line 0" 13pt #000000 clip=(10,38,165,80)
+text (15,59,42,16) "Line 1" 13pt #000000 clip=(10,38,165,80)
+text (15,75,42,16) "Line 2" 13pt #000000 clip=(10,38,165,80)
+text (15,91,42,16) "Line 3" 13pt #000000 clip=(10,38,165,80)
+text (15,107,42,16) "Line 4" 13pt #000000 clip=(10,38,165,80)
+fillRRect (175,38,15,80) solid #fafafa
+fillRRect (175,38,1,80) solid #00000066
+fillRRect (178,40,9,18) r=4.5 solid #000000bf
+## empty, normal unfocused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+## empty focused, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (14,43,2,16) solid #007aff clip=(10,38,180,80)
+## wrapped, normal unfocused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## wrapped focused, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (133,91,2,16) solid #007aff clip=(10,38,180,80)
+## caret at a soft break, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (14,59,2,16) solid #007aff clip=(10,38,180,80)
+## selection, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (127,59,56,16) solid #3e638b clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #3e638b clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #3e638b clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #3e638b clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## selection inactive, normal focused-inactive inactive dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+fillRRect (127,59,56,16) solid #464646 clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #464646 clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #464646 clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #464646 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## selection unfocused, normal unfocused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+fillRRect (127,59,56,16) solid #464646 clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #464646 clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #464646 clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #464646 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## read-only focused, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+fillRRect (43,43,35,16) solid #3e638b clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## read-only caret, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## disabled, normal unfocused disabled key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+fillRRect (43,43,35,16) solid #464646 clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff40 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff40 clip=(10,38,180,80)
+## text color, normal unfocused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+text (15,43,56,16) "Red text" 13pt #ff0000 clip=(10,38,180,80)
+## scrolled to the middle, normal focused key dark, offset 261
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,38,49,16) "Line 16" 13pt #ffffff clip=(10,38,180,80)
+text (15,54,49,16) "Line 17" 13pt #ffffff clip=(10,38,180,80)
+text (15,70,49,16) "Line 18" 13pt #ffffff clip=(10,38,180,80)
+text (15,86,49,16) "Line 19" 13pt #ffffff clip=(10,38,180,80)
+text (15,102,49,16) "Line 20" 13pt #ffffff clip=(10,38,180,80)
+fillRRect (14,102,2,16) solid #007aff clip=(10,38,180,80)
+## legacy scrollers, normal unfocused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+text (15,43,42,16) "Line 0" 13pt #ffffff clip=(10,38,165,80)
+text (15,59,42,16) "Line 1" 13pt #ffffff clip=(10,38,165,80)
+text (15,75,42,16) "Line 2" 13pt #ffffff clip=(10,38,165,80)
+text (15,91,42,16) "Line 3" 13pt #ffffff clip=(10,38,165,80)
+text (15,107,42,16) "Line 4" 13pt #ffffff clip=(10,38,165,80)
+fillRRect (175,38,15,80) solid #2b2b2b
+fillRRect (175,38,1,80) solid #ffffff14
+fillRRect (178,40,9,18) r=4.5 solid #ffffff73
+## composing, normal focused key dark, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff80
+text (15,43,168,48) "The quick brown fox jumps over the l日本語ですazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (127,72,13,2) solid #ffffff clip=(10,38,180,80)
+fillRRect (141,72,20,1) solid #ffffff clip=(10,38,180,80)
+text (15,107,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (140,59,2,16) solid #007aff clip=(10,38,180,80)
+## increased contrast, focused, normal focused key dark contrast, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (133,91,2,16) solid #007aff clip=(10,38,180,80)
+## increased contrast, selection, normal focused key dark contrast, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+strokeRRect (8.5,36.5,183,83) w=3 solid #007aff
+fillRRect (127,59,56,16) solid #2d6aac clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #2d6aac clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #2d6aac clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #2d6aac clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## increased contrast, selection inactive, normal focused-inactive inactive dark contrast, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+fillRRect (127,59,56,16) solid #464646 clip=(10,38,180,80)
+fillRRect (183,59,2,16) solid #464646 clip=(10,38,180,80)
+text (15,43,168,32) "The quick brown fox jumps over the lazy dog." 13pt #ffffff clip=(10,38,180,80)
+fillRRect (15,75,170,16) solid #464646 clip=(10,38,180,80)
+fillRRect (15,91,28,16) solid #464646 clip=(10,38,180,80)
+text (15,91,119,16) "Second paragraph." 13pt #ffffff clip=(10,38,180,80)
+## increased contrast, legacy scrollers, normal unfocused key dark contrast, offset 0
+fillRRect (10,38,180,80) solid #1e1e1e
+text (15,43,42,16) "Line 0" 13pt #ffffff clip=(10,38,165,80)
+text (15,59,42,16) "Line 1" 13pt #ffffff clip=(10,38,165,80)
+text (15,75,42,16) "Line 2" 13pt #ffffff clip=(10,38,165,80)
+text (15,91,42,16) "Line 3" 13pt #ffffff clip=(10,38,165,80)
+text (15,107,42,16) "Line 4" 13pt #ffffff clip=(10,38,165,80)
+fillRRect (175,38,15,80) solid #2b2b2b
+fillRRect (175,38,1,80) solid #ffffff66
+fillRRect (178,40,9,18) r=4.5 solid #ffffffbf

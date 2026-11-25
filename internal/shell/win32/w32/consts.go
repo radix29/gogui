@@ -58,12 +58,19 @@ const (
 
 // Get/SetWindowLongPtrW indices.
 const (
-	GWLP_WNDPROC   = -4
-	GWLP_HINSTANCE = -6
-	GWLP_ID        = -12
-	GWL_STYLE      = -16
-	GWL_EXSTYLE    = -20
-	GWLP_USERDATA  = -21
+	GWLP_WNDPROC    = -4
+	GWLP_HINSTANCE  = -6
+	GWLP_HWNDPARENT = -8 // the owner of a top-level window
+	GWLP_ID         = -12
+	GWL_STYLE       = -16
+	GWL_EXSTYLE     = -20
+	GWLP_USERDATA   = -21
+)
+
+// WM_MOUSEACTIVATE results.
+const (
+	MA_ACTIVATE   = 1
+	MA_NOACTIVATE = 3
 )
 
 // Window messages.
@@ -85,7 +92,9 @@ const (
 	WM_SHOWWINDOW                  = 0x0018
 	WM_SETTINGCHANGE               = 0x001A
 	WM_ACTIVATEAPP                 = 0x001C
+	WM_CANCELMODE                  = 0x001F
 	WM_SETCURSOR                   = 0x0020
+	WM_MOUSEACTIVATE               = 0x0021
 	WM_GETMINMAXINFO               = 0x0024
 	WM_WINDOWPOSCHANGING           = 0x0046
 	WM_WINDOWPOSCHANGED            = 0x0047
@@ -148,6 +157,16 @@ const (
 	SIZE_RESTORED  = 0
 	SIZE_MINIMIZED = 1
 	SIZE_MAXIMIZED = 2
+)
+
+// WM_SYSCOMMAND wParam values (the low four bits are the system's).
+const (
+	SC_SIZE     = 0xF000
+	SC_MOVE     = 0xF010
+	SC_MINIMIZE = 0xF020
+	SC_MAXIMIZE = 0xF030
+	SC_CLOSE    = 0xF060
+	SC_RESTORE  = 0xF120
 )
 
 // WM_ACTIVATE wParam low word.
@@ -302,6 +321,7 @@ const (
 	SPI_GETWHEELSCROLLLINES    = 0x0068
 	SPI_GETWHEELSCROLLCHARS    = 0x006C
 	SPI_GETCLIENTAREAANIMATION = 0x1042
+	SPI_GETCARETTIMEOUT        = 0x2022
 
 	HCF_HIGHCONTRASTON = 0x00000001
 )
@@ -328,6 +348,11 @@ const (
 	MAPVK_VK_TO_CHAR   = 2
 	MAPVK_VSC_TO_VK_EX = 3
 )
+
+// TOUNICODE_NOSTATE is the ToUnicodeEx flag (bit 2) that leaves the
+// keyboard state, a pending dead key included, alone; from Windows 10
+// 1607 on.
+const TOUNICODE_NOSTATE = 0x4
 
 // Virtual keys for the VK table of S2.3e and the modifier state. Letters
 // and digits are their ASCII codes ("A" to "Z", "0" to "9").
@@ -390,11 +415,18 @@ const (
 const (
 	DWMWA_USE_IMMERSIVE_DARK_MODE  = 20
 	DWMWA_WINDOW_CORNER_PREFERENCE = 33 // Windows 11 only
+	DWMWA_SYSTEMBACKDROP_TYPE      = 38 // Windows 11 22H2 (build 22621) on
 
 	DWMWCP_DEFAULT    = 0
 	DWMWCP_DONOTROUND = 1
 	DWMWCP_ROUND      = 2
 	DWMWCP_ROUNDSMALL = 3
+
+	DWMSBT_AUTO            = 0
+	DWMSBT_NONE            = 1
+	DWMSBT_MAINWINDOW      = 2 // Mica
+	DWMSBT_TRANSIENTWINDOW = 3 // Acrylic
+	DWMSBT_TABBEDWINDOW    = 4
 )
 
 // Window capture (S2.4d_3, the tests' PrintWindow cross-check): the
@@ -423,4 +455,111 @@ const (
 
 	CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002
 	TIMER_ALL_ACCESS                      = 0x001F0003
+)
+
+// The clipboard (S5.2a): the Unicode text format (WinUser.h) and the
+// movable global memory it travels in (WinBase.h).
+const (
+	CF_UNICODETEXT = 13
+	GMEM_MOVEABLE  = 0x0002
+)
+
+// The bounds of a USER timer's elapse in ms (WinUser.h, S5.2c): SetTimer
+// raises a shorter one to the minimum and a longer one to the maximum.
+const (
+	USER_TIMER_MINIMUM = 0x0000000A
+	USER_TIMER_MAXIMUM = 0x7FFFFFFF
+)
+
+// The IME messages (WinUser.h, S5.3e). WM_IME_STARTCOMPOSITION …
+// WM_IME_COMPOSITION share the WM_IME_KEYLAST range of the key messages.
+const (
+	WM_IME_STARTCOMPOSITION = 0x010D
+	WM_IME_ENDCOMPOSITION   = 0x010E
+	WM_IME_COMPOSITION      = 0x010F
+	WM_IME_SETCONTEXT       = 0x0281
+	WM_IME_NOTIFY           = 0x0282
+	WM_IME_CONTROL          = 0x0283
+	WM_IME_COMPOSITIONFULL  = 0x0284
+	WM_IME_SELECT           = 0x0285
+	WM_IME_CHAR             = 0x0286
+	WM_IME_REQUEST          = 0x0288
+	WM_IME_KEYDOWN          = 0x0290
+	WM_IME_KEYUP            = 0x0291
+)
+
+// The parts of a composition (imm.h): the GCS_* flags in the lParam of
+// WM_IME_COMPOSITION, and the index of ImmGetCompositionStringW.
+const (
+	GCS_COMPREADSTR      = 0x0001
+	GCS_COMPREADATTR     = 0x0002
+	GCS_COMPREADCLAUSE   = 0x0004
+	GCS_COMPSTR          = 0x0008
+	GCS_COMPATTR         = 0x0010
+	GCS_COMPCLAUSE       = 0x0020
+	GCS_CURSORPOS        = 0x0080
+	GCS_DELTASTART       = 0x0100
+	GCS_RESULTREADSTR    = 0x0200
+	GCS_RESULTREADCLAUSE = 0x0400
+	GCS_RESULTSTR        = 0x0800
+	GCS_RESULTCLAUSE     = 0x1000
+)
+
+// The attribute of each UTF-16 unit of a composition string (imm.h,
+// GCS_COMPATTR). The ATTR_TARGET_* units are the clause being converted.
+const (
+	ATTR_INPUT               = 0x00
+	ATTR_TARGET_CONVERTED    = 0x01
+	ATTR_CONVERTED           = 0x02
+	ATTR_TARGET_NOTCONVERTED = 0x03
+	ATTR_INPUT_ERROR         = 0x04
+	ATTR_FIXEDCONVERTED      = 0x05
+)
+
+// The negative results of ImmGetCompositionStringW (imm.h).
+const (
+	IMM_ERROR_NODATA  = -1
+	IMM_ERROR_GENERAL = -2
+)
+
+// The styles of COMPOSITIONFORM and CANDIDATEFORM (imm.h, dwStyle).
+const (
+	CFS_DEFAULT        = 0x0000
+	CFS_RECT           = 0x0001
+	CFS_POINT          = 0x0002
+	CFS_FORCE_POSITION = 0x0020
+	CFS_CANDIDATEPOS   = 0x0040
+	CFS_EXCLUDE        = 0x0080
+)
+
+// The flags of ImmAssociateContextEx (imm.h).
+const (
+	IACE_CHILDREN        = 0x0001
+	IACE_DEFAULT         = 0x0010
+	IACE_IGNORENOCONTEXT = 0x0020
+)
+
+// The actions of ImmNotifyIME and their values (imm.h).
+const (
+	NI_OPENCANDIDATE       = 0x0010
+	NI_CLOSECANDIDATE      = 0x0011
+	NI_SELECTCANDIDATESTR  = 0x0012
+	NI_CHANGECANDIDATELIST = 0x0013
+	NI_COMPOSITIONSTR      = 0x0015
+
+	CPS_COMPLETE = 0x0001
+	CPS_CONVERT  = 0x0002
+	CPS_REVERT   = 0x0003
+	CPS_CANCEL   = 0x0004
+)
+
+// The IME windows the lParam of WM_IME_SETCONTEXT asks the default IME
+// window to show (imm.h). The shell clears ISC_SHOWUICOMPOSITIONWINDOW,
+// since it draws the preedit itself.
+const (
+	ISC_SHOWUICANDIDATEWINDOW    = 0x00000001
+	ISC_SHOWUIALLCANDIDATEWINDOW = 0x0000000F
+	ISC_SHOWUIGUIDELINE          = 0x40000000
+	ISC_SHOWUICOMPOSITIONWINDOW  = 0x80000000
+	ISC_SHOWUIALL                = 0xC000000F
 )

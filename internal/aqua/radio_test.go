@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,9 +24,6 @@ func newRadio(t *testing.T, title string) *Radio {
 
 func TestRadioIsReal(t *testing.T) {
 	r := newRadio(t, "Admin")
-	if _, ok := Caption(r); ok {
-		t.Error("the radio is still a placeholder peer")
-	}
 	if e := ElementOf(r); e == nil || e != Element(r.view) || r.StubPeer() != r.Radio || r.Stub() != &r.Radio.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -165,6 +163,7 @@ func TestRadioPaint(t *testing.T) {
 	r.SetControlSize(driver.ControlSizeRegular)
 	parent := newBox("parent", 0, 0, 200, 100)
 	parent.disabled = true
+	treeChange() // set without SetEnabled
 	parent.AddChild(r.view)
 	if got := paintPeer(t, r, rect); !strings.Contains(got, "pushOpacity 0.5") || !strings.Contains(got, `"Wrap" 13pt #00000040`) {
 		t.Errorf("disabled ancestor:\n%s", got)
@@ -193,7 +192,7 @@ func TestRadioRedraws(t *testing.T) {
 func radioWindow(t *testing.T, title string, states *[]driver.CheckState) (*Radio, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	var h driver.ToggleHandler
 	if states != nil {
@@ -288,11 +287,11 @@ func TestRadioFocusRing(t *testing.T) {
 	if !strings.HasPrefix(lines[len(lines)-1], ring) {
 		t.Errorf("no ring around the circle, painted last:\n%s", got)
 	}
-	// Space turns the focused radio on; the arrow keys do nothing (not in
-	// v0.1).
+	// Space turns the focused radio on; the arrow keys are consumed, and a
+	// radio alone has nowhere to move (TestRadioGroupKeys).
 	for _, k := range []driver.Key{driver.KeyDown, driver.KeyRight} {
-		if sf.Key(k, 0) || r.IsOn {
-			t.Errorf("arrow key %v handled", k)
+		if !sf.Key(k, 0) || r.IsOn {
+			t.Errorf("arrow key %v: not consumed, or turned the radio on", k)
 		}
 	}
 	sf.Key(driver.KeySpace, 0)
@@ -331,38 +330,41 @@ func TestRadioInWindow(t *testing.T) {
 
 // TestRadioStates pins every state (off, on, each plain and pressed;
 // disabled off and on; focused on) in light and dark, in a key and an
-// inactive window, as record dumps in testdata/radio.states.
+// inactive window, with and without Increase Contrast (S6.1e), as record
+// dumps in testdata/radio.states.
 func TestRadioStates(t *testing.T) {
 	var out strings.Builder
-	for _, dark := range []bool{false, true} {
-		for _, key := range []bool{true, false} {
-			for _, st := range []struct {
-				name                       string
-				on, pressed, disabled, foc bool
-			}{
-				{"off", false, false, false, false},
-				{"off pressed", false, true, false, false},
-				{"on", true, false, false, false},
-				{"on pressed", true, true, false, false},
-				{"disabled off", false, false, true, false},
-				{"disabled on", true, false, true, false},
-				{"focused on", true, false, false, true},
-			} {
-				r, w, sf, s := radioWindow(t, "Wrap", nil)
-				w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent})
-				r.SetOn(st.on)
-				r.SetEnabled(!st.disabled)
-				if st.foc && !r.view.Focus() {
-					t.Fatal("focus")
+	for _, contrast := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, key := range []bool{true, false} {
+				for _, st := range []struct {
+					name                       string
+					on, pressed, disabled, foc bool
+				}{
+					{"off", false, false, false, false},
+					{"off pressed", false, true, false, false},
+					{"on", true, false, false, false},
+					{"on pressed", true, true, false, false},
+					{"disabled off", false, false, true, false},
+					{"disabled on", true, false, true, false},
+					{"focused on", true, false, false, true},
+				} {
+					r, w, sf, s := radioWindow(t, "Wrap", nil)
+					w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent, IncreaseContrast: contrast})
+					r.SetOn(st.on)
+					r.SetEnabled(!st.disabled)
+					if st.foc && !r.view.Focus() {
+						t.Fatal("focus")
+					}
+					if st.pressed {
+						sf.Press(pt(17, 46), shell.ButtonPrimary)
+					}
+					if !key {
+						s.Deactivate()
+					}
+					state := r.view.State()
+					fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 				}
-				if st.pressed {
-					sf.Press(pt(17, 46), shell.ButtonPrimary)
-				}
-				if !key {
-					s.Deactivate()
-				}
-				state := r.view.State()
-				fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 			}
 		}
 	}
@@ -380,5 +382,108 @@ func TestRadioStates(t *testing.T) {
 	}
 	if w := strings.ReplaceAll(string(want), "\r\n", "\n"); got != w {
 		t.Errorf("radio states differ from %s (rerun with -update if the change is intended):\n%s", path, got)
+	}
+}
+
+// groupHandler makes radio i of rs exclusive, as the public RadioGroup
+// does, and logs the selections.
+type groupHandler struct {
+	rs  *[]*Radio
+	i   int
+	log *[]int
+}
+
+func (h groupHandler) StateChanged(s driver.CheckState) {
+	if s != driver.StateOn {
+		return
+	}
+	for j, r := range *h.rs {
+		r.SetOn(j == h.i)
+	}
+	*h.log = append(*h.log, h.i)
+}
+
+// TestRadioGroupKeys (S5.7h): the radios of one container are one Tab
+// stop, the selected one (the first usable one without a selection); the
+// arrow keys move the focus and the selection to the next or previous
+// usable radio, skipping a disabled one, without wrapping.
+func TestRadioGroupKeys(t *testing.T) {
+	s := startShell(t)
+	d := newDriver(s)
+	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 300, H: 200}, Style: allStyles})
+	var rs []*Radio
+	var log []int
+	before := d.NewButton(nil).(*Button)
+	before.SetTitle("Before")
+	group := NewContainer()
+	var peers []driver.Widget
+	for i, title := range []string{"A", "B", "C", "D"} {
+		r := d.NewRadio(groupHandler{&rs, i, &log}).(*Radio)
+		r.SetTitle(title)
+		r.SetFrame(driver.Rect{Y: float64(22 * i), W: 80, H: 16})
+		rs = append(rs, r)
+		peers = append(peers, r)
+	}
+	group.SetChildren(peers)
+	group.SetFrame(driver.Rect{X: 10, Y: 40, W: 100, H: 100})
+	after := d.NewButton(nil).(*Button)
+	after.SetTitle("After")
+	top := NewContainer()
+	top.SetChildren([]driver.Widget{before, group, after})
+	before.SetFrame(driver.Rect{X: 10, Y: 10, W: 80, H: 20})
+	after.SetFrame(driver.Rect{X: 10, Y: 150, W: 80, H: 20})
+	w.SetContent(top)
+	w.Show()
+	focused := func() Element { return w.Router().Focused() }
+	order := func() []Element { return w.Router().FocusOrder() }
+
+	// No selection: the first usable radio is the stop.
+	if o := order(); len(o) != 3 || o[1] != ElementOf(rs[0]) {
+		t.Fatalf("Tab order without a selection: %v", o)
+	}
+	rs[2].SetOn(true)
+	if o := order(); len(o) != 3 || o[0] != ElementOf(before) || o[1] != ElementOf(rs[2]) || o[2] != ElementOf(after) {
+		t.Fatalf("Tab order with C selected: %v", o)
+	}
+	w.Router().SetFocus(nil)
+	sf.Key(driver.KeyTab, 0)
+	sf.Key(driver.KeyTab, 0)
+	if focused() != ElementOf(rs[2]) {
+		t.Fatalf("Tab: focus %T", focused())
+	}
+	// Up to B, Left to A; at the top nothing moves but the key is consumed.
+	for _, k := range []driver.Key{driver.KeyUp, driver.KeyLeft, driver.KeyUp} {
+		if !sf.Key(k, 0) {
+			t.Fatalf("arrow %v not consumed", k)
+		}
+	}
+	if focused() != ElementOf(rs[0]) || !rs[0].IsOn || rs[2].IsOn || !slices.Equal(log, []int{1, 0}) {
+		t.Fatalf("after Up, Left, Up: focus %T, log %v", focused(), log)
+	}
+	// Modifiers: not the group's.
+	if sf.Key(driver.KeyDown, driver.ModShift) || focused() != ElementOf(rs[0]) {
+		t.Fatal("Shift-Down moved")
+	}
+	// A disabled radio is skipped; at the bottom nothing moves.
+	rs[1].SetEnabled(false)
+	sf.Key(driver.KeyDown, 0)
+	sf.Key(driver.KeyRight, 0)
+	sf.Key(driver.KeyDown, 0)
+	if focused() != ElementOf(rs[3]) || !rs[3].IsOn || !slices.Equal(log, []int{1, 0, 2, 3}) {
+		t.Fatalf("after Down, Right, Down: focus %T, log %v", focused(), log)
+	}
+	// Tab leaves the group, Shift-Tab comes back to its selected radio.
+	sf.Key(driver.KeyTab, 0)
+	if focused() != ElementOf(after) {
+		t.Fatalf("Tab out: focus %T", focused())
+	}
+	sf.Key(driver.KeyTab, driver.ModShift)
+	if focused() != ElementOf(rs[3]) {
+		t.Fatalf("Shift-Tab back: focus %T", focused())
+	}
+	// A disabled selected radio: the first usable one is the stop.
+	rs[3].SetEnabled(false)
+	if o := order(); len(o) != 3 || o[1] != ElementOf(rs[0]) {
+		t.Fatalf("Tab order with the selected radio disabled: %v", o)
 	}
 }

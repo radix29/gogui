@@ -10,6 +10,7 @@ var (
 	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
 	shcore   = windows.NewLazySystemDLL("shcore.dll")
 	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
+	imm32    = windows.NewLazySystemDLL("imm32.dll")
 )
 
 // allProcs lists every proc declared with newProc, for TestProcsResolve.
@@ -60,6 +61,7 @@ var (
 	procClientToScreen           = newProc(user32, "ClientToScreen")
 	procMonitorFromWindow        = newProc(user32, "MonitorFromWindow")
 	procMonitorFromPoint         = newProc(user32, "MonitorFromPoint")
+	procMonitorFromRect          = newProc(user32, "MonitorFromRect")
 	procGetMonitorInfoW          = newProc(user32, "GetMonitorInfoW")
 )
 
@@ -72,6 +74,7 @@ var (
 	procGetSystemMetricsForDpi        = newProc(user32, "GetSystemMetricsForDpi")
 	procSystemParametersInfoW         = newProc(user32, "SystemParametersInfoW")
 	procGetDoubleClickTime            = newProc(user32, "GetDoubleClickTime")
+	procGetCaretBlinkTime             = newProc(user32, "GetCaretBlinkTime")
 
 	// S2.3b: checking the awareness Run set.
 	procGetThreadDpiAwarenessContext = newProc(user32, "GetThreadDpiAwarenessContext")
@@ -86,16 +89,18 @@ var (
 
 // user32: input, capture, cursor and keyboard layout.
 var (
-	procSetCapture          = newProc(user32, "SetCapture")
-	procReleaseCapture      = newProc(user32, "ReleaseCapture")
-	procGetCapture          = newProc(user32, "GetCapture")
-	procTrackMouseEvent     = newProc(user32, "TrackMouseEvent")
-	procLoadCursorW         = newProc(user32, "LoadCursorW")
-	procSetCursor           = newProc(user32, "SetCursor")
-	procGetKeyState         = newProc(user32, "GetKeyState")
-	procGetKeyboardLayout   = newProc(user32, "GetKeyboardLayout")
-	procMapVirtualKeyExW    = newProc(user32, "MapVirtualKeyExW")
-	procSetForegroundWindow = newProc(user32, "SetForegroundWindow")
+	procSetCapture            = newProc(user32, "SetCapture")
+	procReleaseCapture        = newProc(user32, "ReleaseCapture")
+	procGetCapture            = newProc(user32, "GetCapture")
+	procTrackMouseEvent       = newProc(user32, "TrackMouseEvent")
+	procLoadCursorW           = newProc(user32, "LoadCursorW")
+	procSetCursor             = newProc(user32, "SetCursor")
+	procGetKeyState           = newProc(user32, "GetKeyState")
+	procGetKeyboardLayout     = newProc(user32, "GetKeyboardLayout")
+	procMapVirtualKeyExW      = newProc(user32, "MapVirtualKeyExW")
+	procToUnicodeEx           = newProc(user32, "ToUnicodeEx")
+	procGetKeyboardLayoutList = newProc(user32, "GetKeyboardLayoutList")
+	procSetForegroundWindow   = newProc(user32, "SetForegroundWindow")
 )
 
 // user32: interim GDI painting (S2.3b, until D2D in S2.4).
@@ -116,6 +121,16 @@ var (
 var (
 	procGetCursorPos    = newProc(user32, "GetCursorPos")
 	procWindowFromPoint = newProc(user32, "WindowFromPoint")
+)
+
+// user32: modal surfaces (S5.7e): disabling the blocked windows, the
+// activation handed to the modal one.
+var (
+	procEnableWindow        = newProc(user32, "EnableWindow")
+	procIsWindowEnabled     = newProc(user32, "IsWindowEnabled")
+	procGetActiveWindow     = newProc(user32, "GetActiveWindow")
+	procSetActiveWindow     = newProc(user32, "SetActiveWindow")
+	procGetForegroundWindow = newProc(user32, "GetForegroundWindow")
 )
 
 // gdi32.
@@ -168,4 +183,31 @@ var (
 	procQueryPerformanceCounter     = newProc(kernel32, "QueryPerformanceCounter")
 	procQueryPerformanceFrequency   = newProc(kernel32, "QueryPerformanceFrequency")
 	procDwmGetCompositionTimingInfo = newProc(dwmapi, "DwmGetCompositionTimingInfo")
+)
+
+// The clipboard (S5.2a): user32's clipboard calls and the kernel32 global
+// memory that carries CF_UNICODETEXT.
+var (
+	procOpenClipboard    = newProc(user32, "OpenClipboard")
+	procCloseClipboard   = newProc(user32, "CloseClipboard")
+	procEmptyClipboard   = newProc(user32, "EmptyClipboard")
+	procSetClipboardData = newProc(user32, "SetClipboardData")
+	procGetClipboardData = newProc(user32, "GetClipboardData")
+	procGlobalAlloc      = newProc(kernel32, "GlobalAlloc")
+	procGlobalFree       = newProc(kernel32, "GlobalFree")
+	procGlobalLock       = newProc(kernel32, "GlobalLock")
+	procGlobalUnlock     = newProc(kernel32, "GlobalUnlock")
+	procGlobalSize       = newProc(kernel32, "GlobalSize")
+)
+
+// imm32 (S5.3e): the input context of a window, the composition strings,
+// the composition and candidate window positions, and the cancel.
+var (
+	procImmGetContext            = newProc(imm32, "ImmGetContext")
+	procImmReleaseContext        = newProc(imm32, "ImmReleaseContext")
+	procImmGetCompositionStringW = newProc(imm32, "ImmGetCompositionStringW")
+	procImmSetCompositionWindow  = newProc(imm32, "ImmSetCompositionWindow")
+	procImmSetCandidateWindow    = newProc(imm32, "ImmSetCandidateWindow")
+	procImmAssociateContextEx    = newProc(imm32, "ImmAssociateContextEx")
+	procImmNotifyIME             = newProc(imm32, "ImmNotifyIME")
 )

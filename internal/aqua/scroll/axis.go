@@ -99,13 +99,18 @@ const (
 //     clamped to the range (no overscroll). A precise event outside a
 //     gesture scrolls 1:1, clamped.
 //
-// The overshoot of a spring-back from an edge never reaches c: the speed
-// it starts with is capped so that the peak of a critically damped spring
-// stays below c.
+// The overshoot of a spring-back from an edge stays within 0.9·c: the
+// speed it starts with is capped from the peak of the actual spring
+// (anim.Motion.Peak, any damping regime). Content caught c or more past
+// an edge (the document shrank under it) is caught 0.9·c past it.
 //
 // With Reduce Motion (the Timeline's) there is no momentum and no rubber
-// band: a drag stops at the edges, a release stops, wheel steps and
-// animated ScrollTo jump.
+// band: a drag stops at the edges, a release stops, OS momentum is taken
+// but moves nothing (S6.1f), wheel steps and animated ScrollTo jump.
+// Turned on mid-flight, the timeline ends a wheel step, a decay and a
+// spring-back at their targets (the decay's rest clamped to the range);
+// FollowReduceMotion ends the rest: a drag held past an edge and OS
+// momentum.
 //
 // An Axis is used on the UI thread only.
 type Axis struct {
@@ -129,7 +134,7 @@ func NewAxis(tl *anim.Timeline, p Params, onChange func(offset float64)) *Axis {
 	}
 	a := &Axis{tl: tl, p: p, onChange: onChange}
 	a.tracker.Window, a.tracker.EndGap = p.Window, p.EndGap
-	a.pos = tl.NewValue(0, a.changed)
+	a.pos = tl.NewValue(0, a.changed).SetTolerance(anim.PointTolerance)
 	return a
 }
 
@@ -228,6 +233,26 @@ func (a *Axis) ScrollTo(x float64, animated bool) {
 // clamped to [0, Max] (an overscroll ends at its edge).
 func (a *Axis) Stop() { a.stopAt(a.Clamped()) }
 
+// FollowReduceMotion applies the Timeline's Reduce Motion turned on to
+// what the timeline does not end itself (the owner calls it after the
+// change; it does nothing with Reduce Motion off): a drag in progress
+// loses its rubber band at once, its fingers' offset clamped to the
+// range, and OS momentum (or the spring-back that ignores the rest of it)
+// stops.
+func (a *Axis) FollowReduceMotion() {
+	if !a.tl.ReduceMotion() {
+		return
+	}
+	switch a.mode {
+	case modeIdle:
+	case modeDrag:
+		a.raw = a.clamp(a.raw)
+		a.pos.Set(a.raw)
+	default:
+		a.Stop()
+	}
+}
+
 func (a *Axis) stopAt(x float64) {
 	a.mode = modeIdle
 	a.pos.Set(x)
@@ -324,6 +349,13 @@ func (a *Axis) release(t time.Duration) {
 
 // osMomentum handles an OS momentum event.
 func (a *Axis) osMomentum(ph shell.ScrollPhase, t time.Duration, d float64) {
+	if a.tl.ReduceMotion() {
+		// No momentum: the OS's moves nothing and ends what moves.
+		if a.mode != modeIdle {
+			a.Stop()
+		}
+		return
+	}
 	switch a.mode {
 	case modeBounce:
 		// The release past an edge is springing back: it ignores the
@@ -354,8 +386,6 @@ func (a *Axis) osMomentum(ph shell.ScrollPhase, t time.Duration, d float64) {
 	switch {
 	case x >= 0 && x <= a.max:
 		a.pos.Set(x)
-	case a.tl.ReduceMotion():
-		a.pos.Set(a.clamp(x))
 	default:
 		// Spring back from the edge with the momentum's speed.
 		a.pos.Set(a.clamp(x))
@@ -400,16 +430,42 @@ func (a *Axis) springTo(edge, v float64) {
 		a.stopAt(edge)
 		return
 	}
-	// A critically damped spring released at its target with the speed v
-	// peaks v/(ω₀·e) out; 0.9 of that limit keeps it inside c.
-	w0 := math.Sqrt(a.p.Spring.Stiffness / a.p.Spring.Mass)
-	lim := 0.9 * c * w0 * math.E
-	v = math.Max(-lim, math.Min(lim, v))
+	v = a.capBounce(edge, v)
 	a.mode = modeBounce
 	a.pos.SpringFrom(edge, v, a.p.Spring)
 	if !a.pos.Running() {
 		a.mode = modeIdle // already at rest at the edge
 	}
+}
+
+// bounceLimit is the fraction of c that a spring-back's overshoot stays
+// within (capBounce), and the farthest past an edge that a gesture catches
+// the content (unshown).
+const bounceLimit = 0.9
+
+// capBounce returns the start velocity v of a spring from the shown offset
+// to edge, reduced so that the motion's peak (in its actual regime, from
+// anim.Motion.Peak) stays within bounceLimit·c, or within where the
+// offset already is if that is farther. The peak is not monotonic in v
+// (an inward velocity can overshoot inwards), so the bisection keeps the
+// largest scale it has seen pass, never one that fails.
+func (a *Axis) capBounce(edge, v float64) float64 {
+	from := a.pos.Value()
+	lim := math.Max(bounceLimit*a.c(), math.Abs(from-edge))
+	peak := func(k float64) float64 { return a.p.Spring.Motion(from, edge, k*v).Peak() }
+	if v == 0 || peak(1) <= lim {
+		return v
+	}
+	lo, hi := 0.0, 1.0
+	for range 60 {
+		mid := (lo + hi) / 2
+		if peak(mid) <= lim {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return lo * v
 }
 
 // changed is the value's change func: it watches the decay for the edges
@@ -452,19 +508,23 @@ func (a *Axis) shown(raw float64) float64 {
 }
 
 // unshown is the inverse of shown, for catching overscrolled content.
+// Content shown c or more past an edge (the document shrank under a
+// spring-back by more than c) has no inverse; it is caught bounceLimit·c
+// past the edge, so the next drag event moves it there rather than to the
+// edge.
 func (a *Axis) unshown(x float64) float64 {
 	c := a.c()
+	inv := func(d float64) float64 {
+		if math.Abs(d) >= c {
+			d = math.Copysign(bounceLimit*c, d)
+		}
+		return RubberBandInverse(d, c)
+	}
 	switch {
 	case x < 0:
-		if r := RubberBandInverse(x, c); !math.IsInf(r, 0) {
-			return r
-		}
-		return 0
+		return inv(x)
 	case x > a.max:
-		if r := RubberBandInverse(x-a.max, c); !math.IsInf(r, 0) {
-			return a.max + r
-		}
-		return a.max
+		return a.max + inv(x-a.max)
 	}
 	return x
 }

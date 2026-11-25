@@ -2,16 +2,15 @@ package stub
 
 import (
 	"slices"
-	"sync"
 
 	"github.com/radix29/gogui/internal/driver"
 )
 
-// Driver implements driver.Driver with stub peers.
-//
-// Run calls AppHandler.Ready and then runs posted functions until Quit, so
-// a Driver can serve as a minimal event loop. Tests that do not call Run
-// use Drain to run posted functions.
+// Driver implements the UI-thread part of driver.Driver with stub peers:
+// the factories, the appearance, the menu bar and alerts, plus the User…
+// simulations of the app-level events. It has no run loop: Name, Run,
+// Quit, Queue and ObserveFrames come from the driver that embeds it (the
+// headless driver), which also sets Config, Handler and Running.
 type Driver struct {
 	// Config is the AppConfig passed to Run.
 	Config driver.AppConfig
@@ -22,6 +21,9 @@ type Driver struct {
 	Mode driver.AppearanceMode
 	// System is the simulated OS appearance, used for AppearanceSystem.
 	System driver.Appearance
+	// Accent is the color last passed to SetAccentColor; the zero Color
+	// means no override.
+	Accent driver.Color
 
 	// MenuBar is a copy of the spec last passed to SetMenuBar, with nil
 	// replaced by driver.DefaultMenuBar.
@@ -36,10 +38,6 @@ type Driver struct {
 	// Running is true while Run is executing.
 	Running bool
 
-	mu      sync.Mutex
-	posted  []func()
-	wake    chan struct{}
-	quit    bool
 	current driver.Appearance
 }
 
@@ -56,83 +54,6 @@ func NewDriver() *Driver {
 	return &Driver{
 		System:  driver.DefaultAppearance(),
 		current: driver.DefaultAppearance(),
-		wake:    make(chan struct{}, 1),
-	}
-}
-
-// Name implements driver.Driver.
-func (d *Driver) Name() string { return "stub" }
-
-// Run implements driver.Driver.
-func (d *Driver) Run(cfg driver.AppConfig, h driver.AppHandler) error {
-	d.Config, d.Handler = cfg, h
-	d.Running = true
-	defer func() { d.Running = false }()
-	if h != nil {
-		h.Ready()
-	}
-	for {
-		d.Drain()
-		d.mu.Lock()
-		quit := d.quit
-		d.mu.Unlock()
-		if quit {
-			return nil
-		}
-		<-d.wake
-	}
-}
-
-// Quit implements driver.Driver. It closes every open window.
-func (d *Driver) Quit() {
-	for len(d.Windows) > 0 {
-		d.Windows[len(d.Windows)-1].Close()
-	}
-	d.mu.Lock()
-	d.quit = true
-	d.mu.Unlock()
-	d.signal()
-}
-
-// Quitting reports whether Quit has been called.
-func (d *Driver) Quitting() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.quit
-}
-
-// Post implements driver.Driver. It is safe for concurrent use.
-func (d *Driver) Post(fn func()) {
-	d.mu.Lock()
-	d.posted = append(d.posted, fn)
-	d.mu.Unlock()
-	d.signal()
-}
-
-func (d *Driver) signal() {
-	select {
-	case d.wake <- struct{}{}:
-	default:
-	}
-}
-
-// Drain runs posted functions, in order, until the queue is empty. This
-// includes functions posted by the functions it runs. It returns the
-// number of functions run.
-func (d *Driver) Drain() int {
-	n := 0
-	for {
-		d.mu.Lock()
-		batch := d.posted
-		d.posted = nil
-		d.mu.Unlock()
-		if len(batch) == 0 {
-			return n
-		}
-		for _, fn := range batch {
-			fn()
-			n++
-		}
 	}
 }
 
@@ -152,6 +73,15 @@ func (d *Driver) SetSystemAppearance(a driver.Appearance) {
 	d.update()
 }
 
+// SetAccentColor implements driver.Driver. The stub has no palette: a
+// concrete c (made opaque) replaces the accent of the effective
+// appearance; a semantic one is only recorded in Accent and leaves the OS
+// accent in place.
+func (d *Driver) SetAccentColor(c driver.Color) {
+	d.Accent = c
+	d.update()
+}
+
 func (d *Driver) update() {
 	a := d.System
 	switch d.Mode {
@@ -159,6 +89,10 @@ func (d *Driver) update() {
 		a.Dark = false
 	case driver.AppearanceDark:
 		a.Dark = true
+	}
+	if d.Accent != (driver.Color{}) && !d.Accent.IsSemantic() {
+		a.Accent = d.Accent
+		a.Accent.A = 1
 	}
 	if a == d.current {
 		return
@@ -190,16 +124,6 @@ func (d *Driver) UserSelectMenuItem(id int) bool {
 		return false
 	}
 	d.Handler.MenuItemSelected(id)
-	return true
-}
-
-// UserQuit simulates the user choosing Quit: it asks QuitRequested and
-// quits if allowed. It reports whether the driver quit.
-func (d *Driver) UserQuit() bool {
-	if d.Handler != nil && !d.Handler.QuitRequested() {
-		return false
-	}
-	d.Quit()
 	return true
 }
 

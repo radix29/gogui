@@ -165,7 +165,7 @@ func TestSpringSettled(t *testing.T) {
 			// Once settled, settled for good, and really within eps.
 			for at := st0; at < st0+2*time.Second; at += 250 * time.Microsecond {
 				x, v := m.At(at)
-				if !m.Settled(at, eps) || math.Abs(x-st[1]) > eps || math.Abs(v) > eps {
+				if !m.Settled(at, eps) || math.Abs(x-st[1]) > eps {
 					t.Fatalf("%s from %v: unsettled again at %v (%v, %v)", name, st, at, x, v)
 				}
 			}

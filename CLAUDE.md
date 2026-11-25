@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Where things are
 
-- **`PLAN.md`** is the source of truth for design, scope and roadmap. Finished steps (Results, findings) and the Q&A log are archived in **`PLAN_done.md`**: when a step is done, move its Result there (§ matching its phase) and leave a one-line ✅ pointer in PLAN.md. Read the relevant section before implementing anything. Project status is in its header and in the ✅ markers of §11.1.
-- **`ARCHITECTURE.md`** describes the architecture as it is implemented today: packages, contracts, invariants and tests. Update it in the same step as any change to a package's API or behaviour. Its §0 holds the target architecture overview copied from PLAN.md §2/§2.1 (diagram and layer table). If an implementation step changes the overview (package renamed, layer added or dropped, responsibility moved), update §0 of ARCHITECTURE.md and PLAN.md §2 together so they stay identical.
+- **`PLAN.md`** is the source of truth for design, scope, decisions and the **open** work only. Read the relevant section before implementing anything. Project status is in its header table and in the phase table of §11. When a step is done, delete it from §11.1 (no ✅ archive; ARCHITECTURE.md and the commit record what was built) and move its open user checks into `docs/parity.md` §4 by ID.
+- **`ARCHITECTURE.md`** describes the architecture as it is implemented today: packages, contracts, invariants and tests. Update it in the same step as any change to a package's API or behaviour. Its §0 holds the target architecture overview copied from PLAN.md §2/§2.1 (diagram and layer table). If an implementation step changes the overview (package renamed, layer added or dropped, responsibility moved), update §0 of ARCHITECTURE.md and PLAN.md §2 together so they stay identical (`TestOverviewMatchesPlan` in `internal/repocheck` checks it).
 - **`examples/README.md`** holds the conventions for examples. The examples are API design targets. Since S0.5 they compile on every platform and run on the headless driver, and `examples_test.go` checks their layouts.
 
 ## Process
 
-- Work goes through the implementation steps in PLAN.md §11.1 (S0.1 … S6.3), one at a time. After each step the repo has to stay buildable and consistent, following the rules and checks at the top of §11.1. When a step is done, mark it ✅ in §11.1 with a short "Result" note, and update the PLAN.md status line and ARCHITECTURE.md.
-- Decisions D1–D10 (PLAN.md §12) are settled. If a change goes against one of them, update §12 and every section it references. Open questions O3 and O4 are also listed in §12.
+- Work goes through the open steps in PLAN.md §11.1, one at a time (next: phase R from `docs/review-plan.md`). After each step the repo has to stay buildable and consistent, following the rules and checks at the top of §11.1. When a step is done, remove it from §11.1, update the PLAN.md status table and ARCHITECTURE.md.
+- Decisions D1–D13 (PLAN.md §12) are settled. If a change goes against one of them, update §12 and every section it references. No question is open (a new dependency needs a row in `THIRD_PARTY.md`, D12).
 - If a step changes the public API, the same step updates PLAN.md §4, the examples and `examples/README.md` (§11.1 rule 6).
 
 ## Working environment (user instructions, updated 2026-10-07)
@@ -19,15 +19,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Claude can and should run the builds and tests itself.** Go (1.27) is installed locally. From now on, every step is verified by Claude: run the per-step checks from PLAN.md §11.1 (gofmt, vet, build for all six GOOS/GOARCH targets, tests, stress runs for concurrency code, no-cgo guard) before calling a step done. Run tests fresh (`-count=1`) when it matters, so cached results don't hide anything. Don't hand these checks to the user.
 - **Go modules download through the LGT module mirror** (`GOPROXY` is already set). Claude may run `go get` and `go mod tidy`, and commits the resulting `go.mod` and `go.sum` changes. Dependencies still arrive only in the step that first imports them (§11.1 rule 4), and must stay pure Go and minimal (PLAN.md §9). Don't write local stand-ins or fakes for external libraries.
 - **github.com itself does not resolve** (`git clone` / `git ls-remote` fail). Only the module proxy works, so fetch code through `go` commands, not git.
+- **No tagging (user rule 2026-11-19).** Never run `git tag` or push a tag; releases are tagged by the user by hand. A release step ends with the command written down for the user.
 - **No CI and no GitHub workflows (user rule 2026-10-13).** Don't add `.github/` or any CI config. Native runs on macOS, Linux and Windows/arm64 go through `bash scripts/native.sh` on the user's machines (PLAN.md §8.4); the user brings back `native-logs/<goos>-<goarch>.log`. Claude runs `native.sh` itself for windows/amd64.
 - **What Claude can't check:** running native GUI code on macOS or Linux (the host is Windows), and any manual "Done when" item that needs a specific OS or a human looking at a window. At the end of each task, say what was checked locally, and list exactly what the user still has to run or look at on the other OSes.
 
 ## Commands
 
-The per-step checks are in PLAN.md §11.1. Since S0.6a, `bash scripts/check.sh` runs all of them (gofmt, vet and build for the six targets, staticcheck per GOOS, `go test -count=1`, the no-cgo guard, the hidden-callback guard (since S0.10b), the stress run). `-quick` skips the stress run, which takes about 85 s. Run the full script before marking a step ✅. Since S0.5k the checks run on `./...` (all five examples included).
+The per-step checks are in PLAN.md §11.1. Since S0.6a, `bash scripts/check.sh` runs all of them (gofmt, vet and build for the six targets, staticcheck per GOOS, `go test -count=1`, the no-cgo guard, the hidden-callback guard (since S0.10b), the stress run). Independent jobs run in parallel; the full script takes about 3 min, the stress run about 110 s of it, `-quick` skips it. The stress run covers the cross-thread tests only in `aqua` and `shell/win32` (see the comments in `check.sh`). Run the full script before marking a step ✅. Since S0.5k the checks run on `./...` (all six examples included).
 
 ```sh
-bash scripts/check.sh                                           # every per-step check (about 2 min)
+bash scripts/check.sh                                           # every per-step check (about 3 min)
 bash scripts/check.sh -quick                                    # the same without the stress run
 CGO_ENABLED=0 go test -count=1 ./...                            # all unit tests (no display needed)
 CGO_ENABLED=0 go test ./internal/mainthread -run TestDoSyncPanic   # single package / single test

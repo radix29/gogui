@@ -1,13 +1,22 @@
 package gtk4
 
-// The GtkSettings half of the appearance source (PLAN.md S4.3d): the
-// boolean properties readAppearance reads, kept live through
-// notify::<name> on the default GtkSettings, connected once through the
-// sigPointer trampoline (no trampoline of its own).
+import "slices"
 
-// gtkWatched are the GtkSettings properties readAppearance reads; a
-// notify of any of them re-reads the appearance.
-var gtkWatched = [...]string{gtkEnableAnimations, gtkOverlayScrolling, gtkPreferDark}
+// The GtkSettings half of the appearance source (PLAN.md S4.3d, the caret
+// blink since S5.2d): the boolean and int properties readAppearance reads,
+// kept live through notify::<name> on the default GtkSettings, connected
+// once through the sigPointer trampoline (no trampoline of its own).
+
+// gtkBoolProps and gtkIntProps are the GtkSettings properties
+// readAppearance reads, by type.
+var (
+	gtkBoolProps = [...]string{gtkEnableAnimations, gtkOverlayScrolling, gtkPreferDark, gtkCursorBlink}
+	gtkIntProps  = [...]string{gtkCursorBlinkTime, gtkCursorBlinkTimeout}
+)
+
+// gtkWatched are gtkBoolProps and gtkIntProps; a notify of any of them
+// re-reads the appearance.
+var gtkWatched = slices.Concat(gtkBoolProps[:], gtkIntProps[:])
 
 // gtkProps is the native side of the GtkSettings: the default GtkSettings
 // over GTK (gtksettings_linux.go), a fake in the host tests. Every method
@@ -16,6 +25,9 @@ type gtkProps interface {
 	// boolProp reads the boolean property name; ok is false without a
 	// default GtkSettings or when it has no such property.
 	boolProp(name string) (v, ok bool)
+	// intProp reads the int property name; ok is false without a default
+	// GtkSettings or when it has no such property.
+	intProp(name string) (v int32, ok bool)
 	// watch connects notify::name to p's pointerSignal with kind k; it
 	// returns false when nothing was connected (no GtkSettings, no such
 	// property, no such signal).
@@ -57,6 +69,14 @@ func (g *gtkSettings) gtkBool(name string) (bool, bool) {
 		return false, false
 	}
 	return g.props.boolProp(name)
+}
+
+// gtkInt implements the GtkSettings half of settingsSource.
+func (g *gtkSettings) gtkInt(name string) (int32, bool) {
+	if g == nil || g.props == nil || g.closed {
+		return 0, false
+	}
+	return g.props.intProp(name)
 }
 
 // pointerSignal is notify::<name> of a watched property (arg is its

@@ -22,9 +22,6 @@ func newProg(t *testing.T) *Progress {
 
 func TestProgressIsReal(t *testing.T) {
 	p := newProg(t)
-	if _, ok := Caption(p); ok {
-		t.Error("the progress indicator is still a placeholder peer")
-	}
 	if e := ElementOf(p); e == nil || e != Element(p.view) || p.StubPeer() != p.Progress || p.Stub() != &p.Progress.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -137,7 +134,7 @@ func TestProgressBarPaint(t *testing.T) {
 func progWindow(t *testing.T, r driver.Rect) (*Progress, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	p := d.NewProgress().(*Progress)
 	p.SetValue(50)
@@ -292,35 +289,38 @@ func TestProgressRedraws(t *testing.T) {
 
 // TestProgressStates pins the determinate bar and spinner at value 50,
 // enabled and disabled, in light and dark, in a key and an inactive
-// window, as record dumps in testdata/progress.states.
+// window, with and without Increase Contrast (S6.1e), as record dumps in
+// testdata/progress.states.
 func TestProgressStates(t *testing.T) {
 	var out strings.Builder
-	for _, dark := range []bool{false, true} {
-		for _, key := range []bool{true, false} {
-			for _, st := range []struct {
-				name     string
-				spinner  bool
-				disabled bool
-			}{
-				{"bar", false, false},
-				{"bar disabled", false, true},
-				{"spinner", true, false},
-				{"spinner disabled", true, true},
-			} {
-				r := driver.Rect{X: 10, Y: 10, W: 120, H: 6}
-				if st.spinner {
-					r = driver.Rect{X: 10, Y: 10, W: 32, H: 32}
+	for _, contrast := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, key := range []bool{true, false} {
+				for _, st := range []struct {
+					name     string
+					spinner  bool
+					disabled bool
+				}{
+					{"bar", false, false},
+					{"bar disabled", false, true},
+					{"spinner", true, false},
+					{"spinner disabled", true, true},
+				} {
+					r := driver.Rect{X: 10, Y: 10, W: 120, H: 6}
+					if st.spinner {
+						r = driver.Rect{X: 10, Y: 10, W: 32, H: 32}
+					}
+					p, w, sf, s := progWindow(t, r)
+					w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent, IncreaseContrast: contrast})
+					if st.spinner {
+						p.SetStyle(driver.ProgressSpinner)
+					}
+					p.SetEnabled(!st.disabled)
+					if !key {
+						s.Deactivate()
+					}
+					fmt.Fprintf(&out, "## %s, dark %v, key %v%s\n%s\n", st.name, dark, key, contrastTag(contrast), controlLines(paint(t, s, sf)))
 				}
-				p, w, sf, s := progWindow(t, r)
-				w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent})
-				if st.spinner {
-					p.SetStyle(driver.ProgressSpinner)
-				}
-				p.SetEnabled(!st.disabled)
-				if !key {
-					s.Deactivate()
-				}
-				fmt.Fprintf(&out, "## %s, dark %v, key %v\n%s\n", st.name, dark, key, controlLines(paint(t, s, sf)))
 			}
 		}
 	}

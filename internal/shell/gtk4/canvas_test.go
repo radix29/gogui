@@ -682,7 +682,7 @@ func TestCanvasState(t *testing.T) {
 		{"backdrop blur negative size", func(c *canvas) { c.PushBackdropBlur(render.Rect{X: 1, W: -5, H: 5}, render.Radii{}, 8); c.Pop() },
 			cvOps("save", "clip (0,0,0,0)", "pop", "restore")},
 		{"backdrop blur Inf", func(c *canvas) { c.PushBackdropBlur(render.Rect{X: cvInf, W: 5, H: 5}, render.Radii{}, 8); c.Pop() },
-			cvOps("save", "restore")},
+			cvOps("save", "clip (0,0,0,0)", "pop", "restore")},
 		{"layers nest", func(c *canvas) {
 			c.PushOpacity(0.5)
 			c.Save()
@@ -698,14 +698,14 @@ func TestCanvasState(t *testing.T) {
 			c.ClipRoundedRect(render.Rect{X: 1, Y: 2, W: 3, H: cvNaN}, render.Radii{})
 			c.Restore()
 		}, cvOps("save", "clip (0,0,0,0)", "clip (0,0,0,0)", "pop", "pop", "restore")},
-		{"non-finite clip ignored", func(c *canvas) {
+		{"non-finite clip clips everything", func(c *canvas) {
 			c.Save()
 			c.ClipRoundedRect(render.Rect{X: cvInf, W: 3, H: 4}, render.Radii{})
 			c.ClipRoundedRect(render.Rect{Y: cvNaN, W: 3, H: 4}, render.Radii{})
 			c.ClipRoundedRect(render.Rect{W: cvInf, H: 4}, render.Radii{})
 			c.ClipRoundedRect(render.Rect{X: cvBigF32, W: 3, H: 4}, render.Radii{})
 			c.Restore()
-		}, cvOps("save", "restore")},
+		}, cvOps("save", "clip (0,0,0,0)", "clip (0,0,0,0)", "clip (0,0,0,0)", "clip (0,0,0,0)", "pop", "pop", "pop", "pop", "restore")},
 		{"zero-size clip", func(c *canvas) { c.ClipRoundedRect(render.Rect{X: 3, Y: 4}, render.UniformRadii(2)) },
 			[]string{cvBaseOp, "clip (3,4,0,0)", "pop", "pop"}},
 	})
@@ -793,7 +793,7 @@ func TestCanvasAfterFinish(t *testing.T) {
 		c.Restore()
 		c.Translate(1, 2)
 		c.Scale(2, 2)
-		c.Concat(render.Rotation(1))
+		c.Concat(rotation(1))
 		c.Concat(render.Transform{A: 2, D: 2, E: 1, F: 1})
 		c.ClipRoundedRect(cvRect, render.Radii{})
 		c.ClipRoundedRect(render.Rect{W: -1, H: 1}, render.Radii{})
@@ -1081,4 +1081,56 @@ func TestCanvasStrokePath(t *testing.T) {
 			c.StrokePath(line, 2, render.LinearGradient(render.Point{}, render.Point{X: 10}), render.StrokeStyle{})
 		}, cvOps()},
 	})
+}
+
+// TestCanvasTextBoxes: with a recorder, textBoxes lists the device-space
+// box of every drawn text (translated and scaled by the transform),
+// clipped to the clip at the call, and leaves out text clipped away and
+// the other ops; without a recorder it is nil.
+func TestCanvasTextBoxes(t *testing.T) {
+	l := fake.NewTextSystem().NewLayout("abc", render.Font{Size: 13}, 0)
+	sz := l.Size()
+	paint := func(c *canvas) {
+		c.FillRoundedRect(render.Rect{W: 10, H: 10}, render.Radii{}, render.Solid(cvBlue))
+		c.DrawText(l, render.Point{X: 5, Y: 6}, cvBlue)
+		c.Save()
+		c.Translate(10, 10)
+		c.Scale(2, 2)
+		c.DrawText(l, render.Point{}, cvBlue)
+		c.Restore()
+		c.Save()
+		c.ClipRoundedRect(render.Rect{X: 0, Y: 0, W: 7, H: 50}, render.Radii{})
+		c.DrawText(l, render.Point{X: 5, Y: 30}, cvBlue)
+		c.DrawText(l, render.Point{X: 8, Y: 30}, cvBlue) // clipped away
+		c.Restore()
+	}
+	want := []render.Rect{
+		{X: 5, Y: 6, W: sz.W, H: sz.H},
+		{X: 10, Y: 10, W: 2 * sz.W, H: 2 * sz.H},
+		{X: 5, Y: 30, W: 2, H: sz.H},
+	}
+	if sz.W <= 2 || sz.H <= 0 || 10+2*sz.H > 50 || 10+2*sz.W > 100 {
+		t.Fatalf("the fake layout's size %v does not fit the test", sz)
+	}
+	c := newCanvas(&fakeSnapshot{}, render.Size{W: 100, H: 50}, 1, true)
+	paint(c)
+	if err := c.finish(); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.textBoxes(); !slices.Equal(got, want) {
+		t.Errorf("textBoxes = %v, want %v", got, want)
+	}
+	c = newCanvas(&fakeSnapshot{}, render.Size{W: 100, H: 50}, 1, false)
+	paint(c)
+	c.finish()
+	if got := c.textBoxes(); got != nil {
+		t.Errorf("textBoxes without a recorder = %v, want nil", got)
+	}
+}
+
+// rotation turns by angle radians around the origin, clockwise on screen
+// (render has no Rotation; nothing but the tests rotates).
+func rotation(angle float64) render.Transform {
+	s, c := math.Sincos(angle)
+	return render.Transform{A: c, B: s, C: -s, D: c}
 }

@@ -26,8 +26,10 @@ type syncCall struct {
 // like Do and blocks until a Drain has run it. If the event loop has not
 // started yet, it blocks until it does.
 //
-// If fn panics, the panic is recovered on the UI goroutine (which keeps
-// running) and re-raised in the caller as a *PanicError.
+// If fn panics, the panic is re-raised in the caller as a *PanicError,
+// on the UI goroutine as on any other (from another goroutine it is
+// recovered on the UI goroutine, which keeps running). A *PanicError from
+// a nested DoSync is re-raised as it is, not wrapped again.
 //
 // DoSync reports whether fn ran. It returns false, without running fn, if
 // the queue is closed before fn starts.
@@ -36,6 +38,11 @@ func (q *Queue) DoSync(fn func()) bool {
 		panic("mainthread: DoSync called with a nil func")
 	}
 	if q.OnUIThread() {
+		defer func() {
+			if r := recover(); r != nil {
+				panic(asPanicError(r))
+			}
+		}()
 		fn()
 		return true
 	}
@@ -67,10 +74,19 @@ func (c *syncCall) run(fn func()) {
 	defer close(c.done)
 	defer func() {
 		if r := recover(); r != nil {
-			c.err = &PanicError{Value: r, Stack: debug.Stack()}
+			c.err = asPanicError(r)
 		}
 	}()
 	fn()
+}
+
+// asPanicError wraps the recovered value r, unless it is a *PanicError
+// already. It runs in the deferred recover, so the stack is the panic's.
+func asPanicError(r any) *PanicError {
+	if pe, ok := r.(*PanicError); ok {
+		return pe
+	}
+	return &PanicError{Value: r, Stack: debug.Stack()}
 }
 
 // PanicError is the panic value DoSync re-raises in its caller when the

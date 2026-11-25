@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/shell"
 	"github.com/radix29/gogui/internal/shell/shellkit"
@@ -572,12 +574,244 @@ func TestSurfaceKeyboard(t *testing.T) {
 		}
 		describe()
 
+		// A lone Alt as system keys carries its Modifier on the press and
+		// the release (S5.6i); handled, it does not enter the menu mode
+		// either (the key-up is not passed on).
+		handled = true
+		if _, ok := sf.keyMsg(w32.WM_SYSKEYDOWN, w32.VK_MENU, 1|1<<29); !ok {
+			t.Error("handled Alt passed on to DefWindowProcW")
+		}
+		if _, ok := sf.keyMsg(w32.WM_SYSKEYUP, w32.VK_MENU, 1|1<<30|1<<31); !ok {
+			t.Error("key-up of a handled Alt passed on to DefWindowProcW")
+		}
+		handled = false
+		sf.keyMsg(w32.WM_KEYDOWN, w32.VK_INSERT, 1)
+		sf.keyMsg(w32.WM_KEYUP, w32.VK_INSERT, 1|1<<30|1<<31)
+		var mods []driver.Modifiers
+		for _, ev := range r.events {
+			if k, ok := ev.(shell.KeyEvent); ok && k.Key == driver.KeyNone {
+				mods = append(mods, k.Modifier)
+			}
+		}
+		if want := []driver.Modifiers{driver.ModOption, driver.ModOption, 0, 0}; !slices.Equal(mods, want) {
+			t.Errorf("Modifier of Alt, Insert: %v, want %v", mods, want)
+		}
+		describe()
+
 		// WM_SYSCHAR is not text; a key that went to the IME is not a key.
 		w32.SendMessage(sf.hwnd, w32.WM_SYSCHAR, 'x', 1|1<<29)
 		w32.SendMessage(sf.hwnd, w32.WM_KEYDOWN, w32.VK_PROCESSKEY, 1)
 		rethrow()
 		if got := describe(); len(got) != 0 {
 			t.Errorf("WM_SYSCHAR and VK_PROCESSKEY: %q", got)
+		}
+	})
+}
+
+// TestModifierFor: KeyEvent.Modifier (S5.6i) for the modifier keys alone,
+// generic, left and right; 0 for every other key, Insert and F13
+// included (they are KeyNone too).
+func TestModifierFor(t *testing.T) {
+	for _, c := range []struct {
+		vk   uint32
+		want driver.Modifiers
+	}{
+		{w32.VK_SHIFT, driver.ModShift}, {w32.VK_LSHIFT, driver.ModShift}, {w32.VK_RSHIFT, driver.ModShift},
+		{w32.VK_CONTROL, driver.ModControl}, {w32.VK_LCONTROL, driver.ModControl}, {w32.VK_RCONTROL, driver.ModControl},
+		{w32.VK_MENU, driver.ModOption}, {w32.VK_LMENU, driver.ModOption}, {w32.VK_RMENU, driver.ModOption},
+		{w32.VK_LWIN, driver.ModCommand}, {w32.VK_RWIN, driver.ModCommand},
+		{w32.VK_CAPITAL, 0}, {w32.VK_INSERT, 0}, {w32.VK_F12 + 1, 0}, {w32.VK_APPS, 0}, {'A', 0},
+		{w32.VK_F10, 0}, {w32.VK_RETURN, 0},
+	} {
+		if got := modifierFor(c.vk); got != c.want {
+			t.Errorf("modifierFor(%#x) = %v, want %v", c.vk, got, c.want)
+		}
+	}
+}
+
+// TestShiftedFor: KeyEvent.Shifted (S5.6h) only for character keys, from
+// the layout's Shift character, normalized; KeyNone for named keys, the
+// keypad, modifiers and control characters.
+func TestShiftedFor(t *testing.T) {
+	// A US-like layout with Shift: '=' gives '+', '1' gives '!', 'a' 'A';
+	// VK_OEM_7 a dead key's spacing '"'; VK_OEM_8 a control character.
+	shifted := map[uint32]rune{'A': 'A', '1': '!', 0xBB: '+', 0xDE: '"', 0xDF: 0x1C, 0xBA: 'ü'}
+	sc := func(vk, scan uint32) rune {
+		if scan != 0x2A {
+			t.Errorf("shiftedChar(%#x) scan %#x, want 0x2a", vk, scan)
+		}
+		return shifted[vk]
+	}
+	for _, c := range []struct {
+		vk   uint32
+		want driver.Key
+	}{
+		{'A', 'A'}, {'1', '!'}, {0xBB, '+'}, {0xDE, '"'}, {0xBA, 'Ü'},
+		{0xDF, driver.KeyNone}, {0xE2, driver.KeyNone},
+		{w32.VK_RETURN, driver.KeyNone}, {w32.VK_SPACE, driver.KeyNone}, {w32.VK_ADD, driver.KeyNone},
+		{w32.VK_NUMPAD0 + 5, driver.KeyNone}, {w32.VK_F1 + 4, driver.KeyNone}, {w32.VK_F24, driver.KeyNone},
+		{w32.VK_SHIFT, driver.KeyNone}, {w32.VK_LEFT, driver.KeyNone},
+	} {
+		if got := shiftedFor(c.vk, 0x2A, sc); got != c.want {
+			t.Errorf("shiftedFor(%#x) = %q, want %q", c.vk, rune(got), rune(c.want))
+		}
+	}
+	if got := scanCode(0x002A0001); got != 0x2A {
+		t.Errorf("scanCode = %#x, want 0x2a", got)
+	}
+	if got := scanCode(0x014B0001); got != 0xE04B {
+		t.Errorf("extended scanCode = %#x, want 0xe04b", got)
+	}
+}
+
+// TestShiftedCharLive runs ToUnicodeEx on the real layouts: letters give
+// their upper case on the active layout, and on a loaded US layout '='
+// gives '+' and '1' '!' (skipped when
+// the session has none).
+func TestShiftedCharLive(t *testing.T) {
+	hkl := w32.GetKeyboardLayout(0)
+	for _, vk := range []uint32{'A', 'M'} {
+		scan := w32.MapVirtualKeyEx(vk, w32.MAPVK_VK_TO_VSC, hkl)
+		if got := shiftedFor(vk, scan, liveShiftedChar); got != driver.Key(vk) {
+			t.Errorf("live shifted %q = %q, want %q", rune(vk), rune(got), rune(vk))
+		}
+	}
+	var us windows.Handle
+	for _, h := range w32.GetKeyboardLayoutList() {
+		if uint32(h)&0xFFFF == 0x0409 && uint32(h)>>16 == 0x0409 {
+			us = h
+		}
+	}
+	if us == 0 {
+		t.Log("no US layout loaded: the US cases are skipped")
+		return
+	}
+	for vk, want := range map[uint32]rune{0xBB: '+', '1': '!', 'Q': 'Q', 0xDE: '"', 0xBF: '?'} {
+		scan := w32.MapVirtualKeyEx(vk, w32.MAPVK_VK_TO_VSC, us)
+		if got := shiftedCharIn(vk, scan, us); got != want {
+			t.Errorf("US shifted %#x = %q, want %q", vk, got, want)
+		}
+	}
+}
+
+// TestSurfaceFirstClick (S6.1c): on a real window, a WM_MOUSEACTIVATE over
+// the content or a traffic light while the surface is not key, then the
+// activation, marks the next button-down Activating, after KeyChanged(true);
+// its release and later presses are not marked. A WM_MOUSEACTIVATE while
+// key, over the caption, into a blocked surface, or one whose activation
+// does not come (or is undone) marks nothing. DefWindowProcW still answers
+// MA_ACTIVATE.
+func TestSurfaceFirstClick(t *testing.T) {
+	inShell(t, func(s *Shell) {
+		r := &recorder{}
+		sf := newSurface(t, s, resizable, r)
+		defer sf.Close()
+		mouseActivate := func(code uintptr, btn uint32) uintptr {
+			return sendTo(sf.hwnd, w32.WM_MOUSEACTIVATE, uintptr(sf.hwnd), code|uintptr(btn)<<16)
+		}
+		activate := func(wa uintptr) { sendTo(sf.hwnd, w32.WM_ACTIVATE, wa, 0) }
+		click := func(down, up uint32, wp uintptr, lp uintptr) {
+			sendTo(sf.hwnd, down, wp, lp)
+			sendTo(sf.hwnd, up, 0, lp)
+		}
+		// marks returns the Activating flag of each PointerDown and of each
+		// PointerUp (always false), in order, and forgets the events.
+		marks := func() (downs, ups []bool) {
+			for _, pe := range pointerEvents(t, r) {
+				switch pe.Kind {
+				case shell.PointerDown:
+					downs = append(downs, pe.Activating)
+				case shell.PointerUp:
+					ups = append(ups, pe.Activating)
+				}
+			}
+			return
+		}
+		check := func(name string, want ...bool) {
+			t.Helper()
+			downs, ups := marks()
+			if !slices.Equal(downs, want) || slices.Contains(ups, true) {
+				t.Errorf("%s: downs %v ups %v, want downs %v and no marked up", name, downs, ups, want)
+			}
+		}
+		at := pxAt(sf, 40, 60)
+
+		// The activating press, then a press into the key surface.
+		sf.key = false
+		r.keys = nil
+		if res := mouseActivate(w32.HTCLIENT, w32.WM_LBUTTONDOWN); res != w32.MA_ACTIVATE {
+			t.Errorf("WM_MOUSEACTIVATE = %d, want MA_ACTIVATE", res)
+		}
+		activate(w32.WA_CLICKACTIVE)
+		if !slices.Equal(r.keys, []bool{true}) {
+			t.Fatalf("KeyChanged %v before the press, want [true]", r.keys)
+		}
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("activating press, then a press while key", true, false)
+
+		// Key already: a WM_MOUSEACTIVATE (Windows sends none then) marks
+		// nothing.
+		mouseActivate(w32.HTCLIENT, w32.WM_LBUTTONDOWN)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("while key", false)
+
+		// Any button activates.
+		activate(w32.WA_INACTIVE)
+		mouseActivate(w32.HTCLIENT, w32.WM_RBUTTONDOWN)
+		activate(w32.WA_CLICKACTIVE)
+		click(w32.WM_RBUTTONDOWN, w32.WM_RBUTTONUP, w32.MK_RBUTTON, at)
+		check("secondary activating press", true)
+
+		// Over the caption: the OS's move; nothing marked for a later press.
+		activate(w32.WA_INACTIVE)
+		mouseActivate(w32.HTCAPTION, w32.WM_NCLBUTTONDOWN)
+		activate(w32.WA_CLICKACTIVE)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("caption activation", false)
+
+		// The activation does not come (the foreground lock): the press is
+		// not marked, and it clears the mark.
+		activate(w32.WA_INACTIVE)
+		mouseActivate(w32.HTCLIENT, w32.WM_LBUTTONDOWN)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		activate(w32.WA_ACTIVE)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("no activation", false, false)
+
+		// Activated, then deactivated before the press: the mark is gone.
+		activate(w32.WA_INACTIVE)
+		mouseActivate(w32.HTCLIENT, w32.WM_LBUTTONDOWN)
+		activate(w32.WA_CLICKACTIVE)
+		activate(w32.WA_INACTIVE)
+		activate(w32.WA_ACTIVE) // by keyboard
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("deactivated before the press", false)
+
+		// A blocked surface: nothing is marked (nor delivered).
+		activate(w32.WA_INACTIVE)
+		sf.blocked = true
+		mouseActivate(w32.HTCLIENT, w32.WM_LBUTTONDOWN)
+		sf.blocked = false
+		activate(w32.WA_CLICKACTIVE)
+		click(w32.WM_LBUTTONDOWN, w32.WM_LBUTTONUP, w32.MK_LBUTTON, at)
+		check("blocked", false)
+
+		// A traffic light: its press (WM_NCLBUTTONDOWN) is marked.
+		size := sf.Size()
+		sf.SetChromeRegions([]shell.ChromeRegion{
+			{Rect: driver.Rect{W: size.W, H: 28}, Kind: shell.RegionCaption},
+			{Rect: driver.Rect{X: 28, Y: 8, W: 12, H: 12}, Kind: shell.RegionMinimize},
+		})
+		light := lparamXY(screenOf(t, sf, 34, 14))
+		activate(w32.WA_INACTIVE)
+		mouseActivate(w32.HTMINBUTTON, w32.WM_NCLBUTTONDOWN)
+		activate(w32.WA_CLICKACTIVE)
+		sendTo(sf.hwnd, w32.WM_NCLBUTTONDOWN, w32.HTMINBUTTON, light)
+		sendTo(sf.hwnd, w32.WM_LBUTTONUP, 0, pxAt(sf, 34, 14))
+		check("light", true)
+		if w32.IsIconic(sf.hwnd) {
+			t.Error("the shell minimized on its own") // the aqua driver decides
 		}
 	})
 }

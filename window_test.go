@@ -28,7 +28,7 @@ func newTestWindow(app *App, cfg WindowConfig) (*Window, *minCounter) {
 func helloTree() (root *Stack, name, greet *fake) {
 	name, greet = fakeField(), fakeButton("Greet")
 	root = VStack(12, NewLabel("Hello!").SetFont(BoldSystemFont(15)), name,
-		HStack(8, Spacer(), greet)).Padding(20)
+		HStack(8, Spacer(), greet)).SetPadding(20)
 	return root, name, greet
 }
 
@@ -61,7 +61,7 @@ func TestWindowLayout(t *testing.T) {
 		// Many size setters, one pass.
 		for range 10 {
 			greet.SetHidden(false)
-			root.Padding(20)
+			root.SetPadding(20)
 		}
 		drain(app)
 		if w.passes != 2 {
@@ -77,7 +77,7 @@ func TestWindowLayout(t *testing.T) {
 		wantFrame(t, "greet after SetContentSize", greet, Rect{X: 297, W: 63, H: 22})
 
 		// Show lays out a dirty window before showing it.
-		root.Padding(10)
+		root.SetPadding(10)
 		w.Show()
 		if !m.Visible || w.passes != 5 {
 			t.Errorf("Show: visible %v, %d passes, want 5", m.Visible, w.passes)
@@ -214,7 +214,7 @@ func TestWindowReplaceContent(t *testing.T) {
 		if m.Content != repl.peerWidget() || stubBase(old).HasParent() || stubBase(old).Destroyed {
 			t.Error("old content still attached, or destroyed")
 		}
-		old.Padding(1) // no longer in the window: no pass
+		old.SetPadding(1) // no longer in the window: no pass
 		drain(app)
 		if w.passes != 2 {
 			t.Errorf("%d passes, want 2", w.passes)

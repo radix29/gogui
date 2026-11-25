@@ -8,6 +8,12 @@ import (
 // Widget is a control, stack or form that can be placed in a window. Only
 // this package implements it.
 type Widget interface {
+	// Destroy takes the widget out of its stack, form, box, scroll view or
+	// window and destroys it with everything in it, children first.
+	// Destroying a destroyed widget does nothing. See the package
+	// documentation, Lifetime.
+	Destroy()
+
 	// base returns the state every widget shares.
 	base() *widget
 	// node returns the widget's layout node.
@@ -66,9 +72,12 @@ type widget struct {
 	kind   kind
 	peer   driver.Widget // nil for widgets without a peer
 	n      layout.Node
+	self   Widget     // the public widget this is the state of
 	parent Widget     // the widget this one is placed in, or nil
 	host   layoutHost // set on the root widget of a window
-	dead   bool       // destroyed: setters only record, getters return the last value
+	dead   bool       // destroyed: methods panic, getters return the last value
+
+	tooltip string // the last SetTooltip text
 
 	disabled bool // disabled controls fire no events (S0.5g)
 
@@ -85,9 +94,20 @@ func (w *widget) peerWidget() driver.Widget { return w.peer }
 // live reports whether the peer may be called.
 func (w *widget) live() bool { return w.peer != nil && !w.dead }
 
-// check runs the UI-thread check for the public method kind.method. The
-// name is built only when the check fails.
+// check runs the UI-thread check for the public method kind.method, and
+// panics on a destroyed widget (D13). Setters, event subscriptions and
+// actions use it; getters use get. The name is built only when a check
+// fails.
 func (w *widget) check(method string) {
+	if w.dead {
+		panic("gogui: " + w.kind.String() + "." + method + " on a destroyed widget")
+	}
+	w.get(method)
+}
+
+// get runs the UI-thread check for the getter kind.method. Getters work on
+// a destroyed widget and return the last value.
+func (w *widget) get(method string) {
 	if q := queue(); q != nil && q.Checks() && !q.OnUIThread() {
 		q.Check(w.kind.String() + "." + method)
 	}
@@ -116,6 +136,17 @@ func (w *widget) invalidate() {
 	if h := w.window(); h != nil {
 		h.invalidate()
 	}
+}
+
+// Destroy implements Widget. On a destroyed widget every method except the
+// getters panics; the getters return the last value.
+func (w *widget) Destroy() {
+	w.get("Destroy")
+	if w.dead {
+		return
+	}
+	detach(w.self)
+	destroyTree(w.self)
 }
 
 // destroy destroys the widget's own peer. It does not touch children; the
@@ -186,6 +217,7 @@ func (c *common[T]) init(self T, k kind, peer driver.Widget, n layout.Node) {
 		n = layout.NewLeaf(peer)
 	}
 	c.self, c.kind, c.peer, c.n = self, k, peer, n
+	c.widget.self = any(self).(Widget)
 	c.applyExpand()
 	if a := cur.Load(); a != nil && a.live != nil {
 		a.live[&c.widget] = any(self).(Widget)
@@ -207,10 +239,7 @@ func (c *common[T]) SetEnabled(enabled bool) T {
 // its stack or form.
 func (c *common[T]) SetHidden(hidden bool) T {
 	c.check("SetHidden")
-	c.n.Props().SetHidden(hidden)
-	if c.live() {
-		c.peer.SetHidden(hidden)
-	}
+	c.setHidden(hidden)
 	if f, ok := c.parent.(*FormView); ok {
 		f.childHidden(&c.widget, hidden)
 	}
@@ -218,15 +247,27 @@ func (c *common[T]) SetHidden(hidden bool) T {
 	return c.self
 }
 
+// setHidden hides or shows the widget's node and peer.
+func (w *widget) setHidden(hidden bool) {
+	w.n.Props().SetHidden(hidden)
+	if w.live() {
+		w.peer.SetHidden(hidden)
+	}
+}
+
 // SetTooltip sets the text shown when the pointer rests on the widget. An
 // empty string removes it.
 func (c *common[T]) SetTooltip(text string) T {
 	c.check("SetTooltip")
+	c.tooltip = text
 	if c.live() {
 		c.peer.SetTooltip(text)
 	}
 	return c.self
 }
+
+// Tooltip returns the text set with SetTooltip.
+func (c *common[T]) Tooltip() string { c.get("Tooltip"); return c.tooltip }
 
 // SetControlSize sets the size class of the control and its default font
 // (NSControl.ControlSize). The default is ControlSizeRegular.
@@ -289,6 +330,20 @@ func (s *subscribers[F]) add(fn F) Unsubscribe {
 // during the dispatch is not called anymore.
 func (s *subscribers[F]) each(call func(F)) {
 	for _, sub := range s.list {
+		if !sub.gone {
+			call(sub.fn)
+		}
+	}
+}
+
+// eachLive is each for an event of the widget w: it stops once a handler
+// has destroyed w (D13), so the later handlers never get a destroyed
+// widget.
+func (s *subscribers[F]) eachLive(w *widget, call func(F)) {
+	for _, sub := range s.list {
+		if w.dead {
+			return
+		}
 		if !sub.gone {
 			call(sub.fn)
 		}

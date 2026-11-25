@@ -302,3 +302,60 @@ func TestCompareWeightedRounding(t *testing.T) {
 		t.Errorf("%v", r)
 	}
 }
+
+// TestCompareMask: the moved square of TestCompareMovedEdge inside the
+// mask passes and counts as masked; a mask covering half of it leaves the
+// other half to fail; differing masked pixels are blue in the diff and
+// unchanged ones inside the mask stay faded.
+func TestCompareMask(t *testing.T) {
+	want := scene()
+	got := clone(want)
+	fill(got, image.Rect(8, 12, 24, 28), white)
+	fill(got, image.Rect(11, 12, 27, 28), color.NRGBA{0, 122, 255, 255})
+	opt := DefaultOptions
+	opt.Mask = []image.Rectangle{image.Rect(0, 10, 4, 12), image.Rect(6, 10, 30, 30)}
+	r, diff := Compare(want, got, opt)
+	if !r.Pass || r.Diff != 0 || r.AA != 0 || r.Masked != 96 || r.MaxDelta != 0 || !r.Bounds.Empty() {
+		t.Fatalf("masked moved edge: %+v", r)
+	}
+	if c := diff.NRGBAAt(9, 20); c != maskColor {
+		t.Errorf("diff at a masked moved pixel = %v, want blue", c)
+	}
+	if c := diff.NRGBAAt(15, 20); c == maskColor || c == diffColor {
+		t.Errorf("diff at a masked unchanged pixel = %v", c)
+	}
+	if !strings.HasSuffix(r.String(), ", 96 masked") {
+		t.Errorf("report %q", r)
+	}
+	opt.Mask = []image.Rectangle{image.Rect(0, 12, 64, 20)} // rows 12..19 of 12..27
+	r, _ = Compare(want, got, opt)
+	if r.Pass || r.Diff != 48 || r.Masked != 48 || r.Bounds != image.Rect(8, 20, 27, 28) {
+		t.Errorf("half masked: %+v", r)
+	}
+	// Without a mask the result is TestCompareMovedEdge's.
+	if r, _ := Compare(want, got, DefaultOptions); r.Masked != 0 || r.Diff != 96 || strings.Contains(r.String(), "masked") {
+		t.Errorf("no mask: %v", r)
+	}
+}
+
+// TestCompareThresholdClamped is B15: a NaN threshold counts as 0 (exact)
+// instead of failing identical images, and one above 1 counts as 1.
+func TestCompareThresholdClamped(t *testing.T) {
+	want := scene()
+	if r, _ := Compare(want, clone(want), Options{Threshold: math.NaN()}); !r.Pass || r.Diff != 0 {
+		t.Errorf("NaN threshold, identical images: %+v", r)
+	}
+	got := clone(want)
+	fill(got, image.Rect(8, 12, 24, 28), black) // a different square
+	exact, _ := Compare(want, got, Options{Threshold: math.NaN()})
+	zero, _ := Compare(want, got, Options{Threshold: 0})
+	if exact.Diff != zero.Diff || exact.Diff == 0 {
+		t.Errorf("NaN threshold: %d differing, threshold 0: %d", exact.Diff, zero.Diff)
+	}
+	if r, _ := Compare(want, got, Options{Threshold: 7}); !r.Pass {
+		t.Errorf("threshold 7 (clamped to 1): %+v", r)
+	}
+	if r, _ := Compare(want, got, Options{Threshold: -1}); r.Diff != zero.Diff {
+		t.Errorf("threshold -1: %d differing, want %d", r.Diff, zero.Diff)
+	}
+}

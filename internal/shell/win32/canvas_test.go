@@ -205,7 +205,7 @@ func TestCanvasFills(t *testing.T) {
 			c.FillRoundedRect(rect(4, 4, 16, 16), render.Radii{}, red)
 			c.FillRoundedRect(rect(24, 4, 16, 16), render.Radii{}, red) // the same brush
 			c.FillRoundedRect(rect(44, 4, 16, 16), render.Radii{}, render.Solid(driver.RGBA(0, 0, 1, 0.5)))
-			if n := len(c.solids); n != 2 {
+			if n := usedNow(c.res, c.res.solids); n != 2 {
 				t.Errorf("%d solid brushes for two colors", n)
 			}
 			c.FillRoundedRect(rect(4, 24, 16, 16), render.Radii{}, render.Solid(driver.RGBA(0, 1, 0, 0))) // transparent
@@ -247,8 +247,8 @@ func TestCanvasGradient(t *testing.T) {
 			c.FillRoundedRect(rect(0, 32, 32, 16), render.Radii{},
 				render.LinearGradient(render.Point{}, render.Point{X: 1}, render.GradientStop{Offset: 0.3, Color: driver.RGB8(0, 255, 0)}))
 			c.FillRoundedRect(rect(32, 32, 32, 16), render.Radii{}, render.LinearGradient(render.Point{}, render.Point{X: 1}))
-			if len(c.grads) != 1 || len(c.stops) != 1 {
-				t.Errorf("%d gradient brushes and %d stop collections, want 1 and 1", len(c.grads), len(c.stops))
+			if usedNow(c.res, c.res.grads) != 1 || usedNow(c.res, c.res.stops) != 1 {
+				t.Errorf("%d gradient brushes and %d stop collections, want 1 and 1", usedNow(c.res, c.res.grads), usedNow(c.res, c.res.stops))
 			}
 		})
 		s.is("padding before the start", cRed, 1, 2, 8, 15, 8, 8, 24)
@@ -297,8 +297,8 @@ func TestCanvasPathStrokes(t *testing.T) {
 			var shifted render.Path
 			shifted.MoveTo(render.Point{Y: 60}).LineTo(render.Point{X: 64, Y: 60})
 			c.StrokePath(&shifted, 4, black, render.StrokeStyle{Dash: []float64{8, 8}, DashOffset: 4})
-			if len(c.strokes) != 5 {
-				t.Errorf("%d stroke styles, want 5 (three caps, two dash offsets)", len(c.strokes))
+			if usedNow(c.res, c.res.strokes) != 5 {
+				t.Errorf("%d stroke styles, want 5 (three caps, two dash offsets)", usedNow(c.res, c.res.strokes))
 			}
 		})
 		s.is("butt cap", cBlack, 1, 16.5, 8)
@@ -411,7 +411,7 @@ func TestCanvasClips(t *testing.T) {
 			// around (32, 48), half-diagonal 8·√2 ≈ 11.3.
 			c.Save()
 			c.Translate(32, 48)
-			c.Concat(render.Rotation(math.Pi / 4))
+			c.Concat(rotation(math.Pi / 4))
 			c.ClipRoundedRect(rect(-8, -8, 16, 16), render.Radii{})
 			if len(c.pushes) != 1 || c.pushes[0].kind != pushLayer {
 				t.Errorf("rotated clip pushed %v, want a layer", c.pushes)
@@ -516,7 +516,10 @@ func TestCanvasMisuse(t *testing.T) {
 		c.StrokePath(&ok, 4, semantic, render.StrokeStyle{})
 		c.DrawText(nil, render.Point{}, driver.RGB8(255, 0, 0))
 		c.DrawShadow(rect(0, 0, 8, 8), render.Radii{}, render.Shadow{Color: driver.Semantic(driver.ColorLabel)})
-		c.ClipRoundedRect(rect(inf, 0, 8, 8), render.Radii{}) // ignored
+		c.Save() // an invalid clip clips everything away, as in the recorder
+		c.ClipRoundedRect(rect(inf, 0, 8, 8), render.Radii{})
+		c.FillRoundedRect(rect(0, 0, 64, 64), render.Radii{}, red)
+		c.Restore()
 		// A valid fill after all that: the transform is still the identity.
 		c.FillRoundedRect(rect(8, 8, 16, 16), render.Radii{}, green)
 		// A clip with a negative size clips everything away.
@@ -539,7 +542,7 @@ func TestCanvasMisuse(t *testing.T) {
 				t.Error("the recorder reported nothing")
 			case debug:
 				msg := err.Error()
-				for _, want := range []string{"nothing open", "innermost open call", "non-finite", "semantic color", "nil layout", "not closed"} {
+				for _, want := range []string{"nothing open", "innermost open call", "non-finite", "invalid rect", "path with a non-finite point", "semantic color", "nil layout", "not closed"} {
 					if !strings.Contains(msg, want) {
 						t.Errorf("recorder errors lack %q:\n%s", want, msg)
 					}
@@ -563,4 +566,11 @@ func TestCanvasDebugClean(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+// rotation turns by angle radians around the origin, clockwise on screen
+// (render has no Rotation; nothing but the tests rotates).
+func rotation(angle float64) render.Transform {
+	s, c := math.Sincos(angle)
+	return render.Transform{A: c, B: s, C: -s, D: c}
 }

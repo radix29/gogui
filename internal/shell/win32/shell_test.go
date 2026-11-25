@@ -19,11 +19,13 @@ import (
 
 // handler is a shell.Handler made of funcs; nil funcs do nothing.
 type handler struct {
+	services   shell.Services // what Ready got
 	ready      func()
 	appearance func(a driver.Appearance)
 }
 
-func (h *handler) Ready() {
+func (h *handler) Ready(sv shell.Services) {
+	h.services = sv
 	if h.ready != nil {
 		h.ready()
 	}
@@ -68,7 +70,8 @@ func TestRunReadyQuit(t *testing.T) {
 	mustPanic(t, "Appearance before Run", func() { s.Appearance() })
 
 	readies := 0
-	err := run(t, s, &handler{ready: func() {
+	h := &handler{}
+	h.ready = func() {
 		readies++
 		if !s.q.OnUIThread() {
 			t.Error("Ready off the UI thread")
@@ -85,6 +88,12 @@ func TestRunReadyQuit(t *testing.T) {
 		mustPanic(t, "NewSurface with a nil handler", func() { _, _ = s.NewSurface(shell.SurfaceConfig{}, nil) })
 		if s.Clock() != s.Clock() {
 			t.Error("Clock not the same value on every call")
+		}
+		if h.services.Text != s.TextSystem() || h.services.Clock != s.Clock() || h.services.Clock == nil {
+			t.Errorf("Ready got %+v, want the text system and the clock", h.services)
+		}
+		if !s.Caps().PopupShadow {
+			t.Error("Caps without PopupShadow")
 		}
 		if a := s.Appearance(); a.Accent.A != 1 || a.Accent.Semantic != 0 {
 			t.Errorf("Appearance().Accent = %+v, want an opaque concrete color", a.Accent)
@@ -105,8 +114,8 @@ func TestRunReadyQuit(t *testing.T) {
 			s.Quit()
 			s.Quit() // a second Quit does nothing
 		})
-	}})
-	if err != nil {
+	}
+	if err := run(t, s, h); err != nil {
 		t.Fatalf("Run = %v", err)
 	}
 	if readies != 1 {
@@ -207,7 +216,7 @@ func TestPostFIFO(t *testing.T) {
 	if total != goroutines*per {
 		t.Errorf("%d functions ran, want %d", total, goroutines*per)
 	}
-	wakes, drains := s.wakes.Load(), s.drains.Load()
+	wakes, drains := s.stats.wakes.Load(), s.stats.drains.Load()
 	if wakes == 0 || wakes > drains+1 || wakes >= goroutines*per {
 		t.Errorf("%d wakes posted for %d drains and %d functions; want coalesced wakes",
 			wakes, drains, goroutines*per)
@@ -223,11 +232,11 @@ func TestWakeCoalescedOnUIThread(t *testing.T) {
 	var before, after int64
 	err := run(t, s, &handler{ready: func() {
 		s.Post(func() {
-			before = s.wakes.Load()
+			before = s.stats.wakes.Load()
 			for range 1000 {
 				s.Post(func() { ran++ })
 			}
-			after = s.wakes.Load()
+			after = s.stats.wakes.Load()
 			s.Post(s.Quit)
 		})
 	}})
@@ -436,6 +445,10 @@ type fakeSys struct {
 	hc        bool
 	anim      bool
 	animOK    bool
+	blink     uint32 // GetCaretBlinkTime
+	blinkOK   bool
+	timeout   uint32 // SPI_GETCARETTIMEOUT
+	timeoutOK bool
 	readCount int
 }
 
@@ -447,34 +460,37 @@ func (f *fakeSys) regDWORD(path, name string) (uint32, bool) {
 func (f *fakeSys) colorization() (uint32, bool)      { return f.color, f.colorOK }
 func (f *fakeSys) highContrast() bool                { return f.hc }
 func (f *fakeSys) clientAreaAnimation() (bool, bool) { return f.anim, f.animOK }
+func (f *fakeSys) caretBlinkTime() (uint32, bool)    { return f.blink, f.blinkOK }
+func (f *fakeSys) caretTimeout() (uint32, bool)      { return f.timeout, f.timeoutOK }
 
 func TestReadAppearance(t *testing.T) {
 	p, d, a := regPersonalize+"|", regDWM+"|", regAccessibility+"|"
+	def, blink := driver.DefaultAppearance(), driver.DefaultCaretBlink
 	tests := []struct {
 		name string
 		sys  fakeSys
 		want driver.Appearance
 	}{
-		{"nothing readable", fakeSys{}, driver.Appearance{Accent: driver.DefaultAccent}},
+		{"nothing readable", fakeSys{}, def},
 		{"light, animations on", fakeSys{
 			reg:  map[string]uint32{p + "AppsUseLightTheme": 1, p + "EnableTransparency": 1, a + "DynamicScrollbars": 1},
 			anim: true, animOK: true,
-		}, driver.Appearance{Accent: driver.DefaultAccent}},
+		}, def},
 		{"dark, everything reduced", fakeSys{
 			reg: map[string]uint32{p + "AppsUseLightTheme": 0, p + "EnableTransparency": 0,
 				a + "DynamicScrollbars": 0},
 			hc: true, anim: false, animOK: true,
 		}, driver.Appearance{Dark: true, Accent: driver.DefaultAccent, IncreaseContrast: true,
-			ReduceMotion: true, ReduceTransparency: true, LegacyScrollers: true}},
+			ReduceMotion: true, ReduceTransparency: true, LegacyScrollers: true, CaretBlink: blink}},
 		{"AccentColor is ABGR", fakeSys{
 			reg:     map[string]uint32{d + "AccentColor": 0xFF_D7_78_00}, // the Windows default blue 0078D7
 			color:   0xC4_11_22_33,
 			colorOK: true,
-		}, driver.Appearance{Accent: driver.RGB8(0x00, 0x78, 0xD7)}},
+		}, driver.Appearance{Accent: driver.RGB8(0x00, 0x78, 0xD7), CaretBlink: blink}},
 		{"colorization is ARGB", fakeSys{color: 0x80_11_22_33, colorOK: true},
-			driver.Appearance{Accent: driver.RGB8(0x11, 0x22, 0x33)}},
+			driver.Appearance{Accent: driver.RGB8(0x11, 0x22, 0x33), CaretBlink: blink}},
 		{"animations unreadable: motion on", fakeSys{anim: false, animOK: false},
-			driver.Appearance{Accent: driver.DefaultAccent}},
+			def},
 	}
 	for _, tt := range tests {
 		if got := readAppearance(&tt.sys); got != tt.want {
@@ -489,6 +505,67 @@ func TestReadAppearanceLive(t *testing.T) {
 		t.Errorf("live accent %+v is not an opaque concrete color", a.Accent)
 	}
 	t.Logf("live appearance %+v", a)
+}
+
+func TestReadCaretBlink(t *testing.T) {
+	const ms = time.Millisecond
+	def := driver.DefaultCaretBlink
+	tests := []struct {
+		name string
+		sys  fakeSys
+		want driver.CaretBlink
+	}{
+		{"nothing readable", fakeSys{}, def},
+		{"the Windows defaults", fakeSys{blink: 530, blinkOK: true, timeout: 5000, timeoutOK: true},
+			driver.CaretBlink{Period: 1060 * ms, Timeout: 5 * time.Second}},
+		{"INFINITE blink time: no blink", fakeSys{blink: w32.INFINITE, blinkOK: true, timeout: 5000, timeoutOK: true},
+			driver.CaretBlink{Timeout: 5 * time.Second}},
+		{"timeout 0: never stops", fakeSys{blink: 200, blinkOK: true, timeout: 0, timeoutOK: true},
+			driver.CaretBlink{Period: 400 * ms}},
+		{"timeout INFINITE: never stops", fakeSys{blink: 200, blinkOK: true, timeout: w32.INFINITE, timeoutOK: true},
+			driver.CaretBlink{Period: 400 * ms}},
+		{"timeout unreadable: the default", fakeSys{blink: 250, blinkOK: true},
+			driver.CaretBlink{Period: 500 * ms, Timeout: def.Timeout}},
+		{"blink time unreadable: the default", fakeSys{timeout: 3000, timeoutOK: true},
+			driver.CaretBlink{Period: def.Period, Timeout: 3 * time.Second}},
+	}
+	for _, tt := range tests {
+		if got := readCaretBlink(&tt.sys); got != tt.want {
+			t.Errorf("%s: got %+v, want %+v", tt.name, got, tt.want)
+		}
+		if got := readAppearance(&tt.sys).CaretBlink; got != tt.want {
+			t.Errorf("%s: readAppearance's CaretBlink %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestReadCaretBlinkLive reads the host's caret settings through the real
+// APIs and checks them against GetCaretBlinkTime and SPI_GETCARETTIMEOUT
+// read directly.
+func TestReadCaretBlinkLive(t *testing.T) {
+	half, err := w32.GetCaretBlinkTime()
+	if err != nil {
+		t.Fatalf("GetCaretBlinkTime: %v", err)
+	}
+	timeout, err := w32.SystemParametersInfoUint32(w32.SPI_GETCARETTIMEOUT)
+	if err != nil {
+		t.Fatalf("SPI_GETCARETTIMEOUT: %v", err)
+	}
+	b := readCaretBlink(liveSys{})
+	wantPeriod := 2 * time.Duration(half) * time.Millisecond
+	if half == w32.INFINITE {
+		wantPeriod = 0
+	}
+	if b.Period != wantPeriod {
+		t.Errorf("Period %v, want %v (GetCaretBlinkTime %d)", b.Period, wantPeriod, half)
+	}
+	if timeout != 0 && timeout != w32.INFINITE && b.Timeout != time.Duration(timeout)*time.Millisecond {
+		t.Errorf("Timeout %v, want %d ms", b.Timeout, timeout)
+	}
+	if b.Period < 0 || b.Timeout < 0 {
+		t.Errorf("negative caret blink %+v", b)
+	}
+	t.Logf("live caret blink %+v (GetCaretBlinkTime %d ms, SPI_GETCARETTIMEOUT %d ms)", b, half, timeout)
 }
 
 // TestAppearanceChanged: the broadcasts re-read the appearance and call
@@ -515,6 +592,8 @@ func TestAppearanceChanged(t *testing.T) {
 			send(w32.WM_THEMECHANGED) // no change
 			sys.color, sys.colorOK = 0xFF_10_20_30, true
 			send(w32.WM_DWMCOLORIZATIONCOLORCHANGED)
+			sys.blink, sys.blinkOK = w32.INFINITE, true // the caret blink turned off
+			send(w32.WM_SETTINGCHANGE)
 			if !s.Appearance().Dark || s.Appearance().Accent != driver.RGB8(0x10, 0x20, 0x30) {
 				t.Errorf("Appearance() = %+v after the changes", s.Appearance())
 			}
@@ -524,9 +603,78 @@ func TestAppearanceChanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || !got[0].Dark || got[0].Accent != driver.DefaultAccent ||
-		got[1].Accent != driver.RGB8(0x10, 0x20, 0x30) {
-		t.Errorf("AppearanceChanged calls %+v, want dark, then the new accent", got)
+	if len(got) != 3 || !got[0].Dark || got[0].Accent != driver.DefaultAccent ||
+		got[1].Accent != driver.RGB8(0x10, 0x20, 0x30) || got[1].CaretBlink != driver.DefaultCaretBlink ||
+		got[2].CaretBlink.Period != 0 || got[2].CaretBlink.Timeout != driver.DefaultCaretBlink.Timeout {
+		t.Errorf("AppearanceChanged calls %+v, want dark, then the new accent, then no blink", got)
+	}
+}
+
+// TestAppearanceChangedEveryField (S6.1h): each of the three broadcasts
+// re-reads every field of the appearance, not only the one it is named
+// for: for each message and each OS setting behind a field, a change of
+// that setting alone and the message give exactly that field's new value
+// and one AppearanceChanged.
+func TestAppearanceChangedEveryField(t *testing.T) {
+	p, d, a := regPersonalize+"|", regDWM+"|", regAccessibility+"|"
+	changes := []struct {
+		field string
+		set   func(f *fakeSys)
+		get   func(a driver.Appearance) any
+	}{
+		{"Dark", func(f *fakeSys) { f.reg[p+"AppsUseLightTheme"] = 0 }, func(a driver.Appearance) any { return a.Dark }},
+		{"Accent (AccentColor)", func(f *fakeSys) { f.reg[d+"AccentColor"] = 0xFF_30_20_10 },
+			func(a driver.Appearance) any { return a.Accent }},
+		{"Accent (colorization)", func(f *fakeSys) { f.color, f.colorOK = 0xFF_40_50_60, true },
+			func(a driver.Appearance) any { return a.Accent }},
+		{"IncreaseContrast", func(f *fakeSys) { f.hc = true }, func(a driver.Appearance) any { return a.IncreaseContrast }},
+		{"ReduceMotion", func(f *fakeSys) { f.anim = false }, func(a driver.Appearance) any { return a.ReduceMotion }},
+		{"ReduceTransparency", func(f *fakeSys) { f.reg[p+"EnableTransparency"] = 0 },
+			func(a driver.Appearance) any { return a.ReduceTransparency }},
+		{"LegacyScrollers", func(f *fakeSys) { f.reg[a+"DynamicScrollbars"] = 0 },
+			func(a driver.Appearance) any { return a.LegacyScrollers }},
+		{"CaretBlink.Period", func(f *fakeSys) { f.blink = 250 }, func(a driver.Appearance) any { return a.CaretBlink.Period }},
+		{"CaretBlink.Timeout", func(f *fakeSys) { f.timeout = 0 }, func(a driver.Appearance) any { return a.CaretBlink.Timeout }},
+	}
+	messages := []struct {
+		name string
+		msg  uint32
+	}{
+		{"WM_SETTINGCHANGE", w32.WM_SETTINGCHANGE},
+		{"WM_DWMCOLORIZATIONCOLORCHANGED", w32.WM_DWMCOLORIZATIONCOLORCHANGED},
+		{"WM_THEMECHANGED", w32.WM_THEMECHANGED},
+	}
+	for _, m := range messages {
+		for _, c := range changes {
+			sys := &fakeSys{reg: map[string]uint32{
+				p + "AppsUseLightTheme": 1, p + "EnableTransparency": 1, a + "DynamicScrollbars": 1,
+			}, anim: true, animOK: true, blink: 530, blinkOK: true, timeout: 5000, timeoutOK: true}
+			s := newShell(sys)
+			var got []driver.Appearance
+			err := run(t, s, &handler{
+				ready: func() {
+					defer s.Quit()
+					before := s.Appearance()
+					c.set(sys)
+					want := readAppearance(sys)
+					if c.get(want) == c.get(before) {
+						t.Fatalf("%s: the setting does not change the field", c.field)
+					}
+					w32.SendMessage(s.listener, m.msg, 0, 0)
+					rethrow()
+					if s.Appearance() != want {
+						t.Errorf("%s after %s: Appearance() = %+v, want %+v", c.field, m.name, s.Appearance(), want)
+					}
+				},
+				appearance: func(a driver.Appearance) { got = append(got, a) },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 {
+				t.Errorf("%s after %s: %d AppearanceChanged calls, want 1", c.field, m.name, len(got))
+			}
+		}
 	}
 }
 

@@ -65,13 +65,18 @@ import (
 //   - Without the driver's timeline (a driver that is not running), the
 //     axes and the scrollers run on a still timeline with Reduce Motion:
 //     everything jumps, and an overlay scroller once shown never fades.
+//   - Reduce Motion turned on (S6.1f): the timeline ends a wheel step,
+//     momentum and a spring-back at their targets, and on the
+//     WindowStateEvent that follows each axis ends a drag's rubber band
+//     and OS momentum (scroll.Axis.FollowReduceMotion).
 //   - Keys (S3.5g) that bubble to the scroll view (the focused element
 //     and its ancestors inside did not take them), on key-down and
 //     repeat: Page Up and Page Down scroll by the viewport minus
 //     PageOverlap, Home and End to the start and the end, Space and
 //     Shift-Space as Page Down and Page Up but only when the focused
-//     element is not a FocusControl (other than the scroll view itself),
-//     so Space still presses a focused button or checkbox; the arrows
+//     element is neither a FocusControl nor a FocusText (other than the
+//     scroll view itself), so Space still presses a focused button or
+//     checkbox and a focused text field types it (S5.2g); the arrows
 //     scroll by WheelLineHeight, only when the scroll view itself has the
 //     focus. Paging, Home and End move the vertical axis when it has a
 //     scroller, else the horizontal one; Up/Down the vertical and
@@ -108,6 +113,12 @@ type ScrollView struct {
 	legacy   bool         // legacy scrollers
 	legacyIn driver.Insets
 	quiet    int // > 0: offset changes do not call Scrolled
+
+	// For the TextView's internal scroll view (S5.4f): inner hides the
+	// scroll area from accessibility (the text view is the node), and
+	// placed runs after every place, once the document follows the offset.
+	inner  bool
+	placed func()
 }
 
 // stillClock is the clock of a scroll view made without the driver's
@@ -191,6 +202,9 @@ func (s *ScrollView) place() {
 	if s.legacy && both {
 		s.view.Invalidate() // the corner
 	}
+	if s.placed != nil {
+		s.placed()
+	}
 }
 
 // sync quietly gives the axes the stub's viewport, range and offset, after
@@ -215,8 +229,9 @@ func (s *ScrollView) sync(stop bool) {
 }
 
 // updateLegacy follows the appearance's LegacyScrollers (see ScrollView);
-// fire reports a changed viewport through ViewportResized.
-func (s *ScrollView) updateLegacy(fire bool) {
+// fire reports a changed viewport through ViewportResized. It reports
+// whether it synced the axes (a changed viewport inset).
+func (s *ScrollView) updateLegacy(fire bool) bool {
 	on := appearanceIn(&s.view.Base, s.d).LegacyScrollers
 	var in driver.Insets
 	if on {
@@ -244,15 +259,18 @@ func (s *ScrollView) updateLegacy(fire bool) {
 			s.ViewportInset = in
 		}
 		s.sync(false)
+		return true
 	case kind:
 		s.place()
 	}
+	return false
 }
 
 func (s *ScrollView) SetFrame(r driver.Rect) {
 	s.peerBase.SetFrame(r)
-	s.updateLegacy(false)
-	s.sync(false)
+	if !s.updateLegacy(false) {
+		s.sync(false)
+	}
 }
 
 func (s *ScrollView) SetDocument(w driver.Widget) {
@@ -393,8 +411,8 @@ func (s *ScrollView) key(ev shell.KeyEvent) bool {
 	case driver.KeyEnd:
 		a, by, end = page, 1, true
 	case driver.KeySpace:
-		if focus != nil && !self && focus.base().focusKind == FocusControl {
-			return false // Space presses the focused control
+		if focus != nil && !self && (focus.base().focusKind == FocusControl || focus.base().focusKind == FocusText) {
+			return false // Space presses the focused control, or a field types it
 		}
 		a, by = page, 1
 		if shift {
@@ -524,7 +542,7 @@ func (s *ScrollView) reveal(f Element) {
 // track click).
 func (s *ScrollView) pressed() bool {
 	for _, b := range s.bars {
-		if b != nil && b.press.down {
+		if b != nil && b.press.Down() {
 			return true
 		}
 	}
@@ -576,6 +594,8 @@ func (e *scrollArea) HandleEvent(ev Event) bool {
 		return e.p.key(ev.KeyEvent)
 	case WindowStateEvent:
 		e.p.updateLegacy(true)
+		e.p.x.FollowReduceMotion() // S6.1f
+		e.p.y.FollowReduceMotion()
 	}
 	return false
 }
@@ -598,4 +618,11 @@ func (e *scrollArea) Paint(c render.Canvas) {
 	}
 }
 
-func (e *scrollArea) AccessibleNode() a11y.Node { return a11y.Node{Role: a11y.RoleScrollArea} }
+// AccessibleNode implements Element: a scroll area, or nothing inside a
+// TextView (its node stands for the scroll view too).
+func (e *scrollArea) AccessibleNode() a11y.Node {
+	if e.p.inner {
+		return a11y.Node{}
+	}
+	return a11y.Node{Role: a11y.RoleScrollArea}
+}

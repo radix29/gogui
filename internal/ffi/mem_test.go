@@ -246,3 +246,29 @@ func TestCopyBytesPinned(t *testing.T) {
 		}()
 	}
 }
+
+func TestWriteBytesPinned(t *testing.T) {
+	arr := new([16]byte)
+	var pin runtime.Pinner
+	pin.Pin(arr)
+	defer pin.Unpin()
+	base := uintptr(unsafe.Pointer(arr))
+	WriteBytes(base+3, []byte{1, 2, 3, 4, 5})
+	for i, b := range arr {
+		want := byte(0)
+		if i >= 3 && i < 8 {
+			want = byte(i - 2)
+		}
+		if b != want {
+			t.Errorf("arr[%d] = %d, want %d", i, b, want)
+		}
+	}
+	WriteBytes(0, nil) // empty: p is not touched
+	WriteBytes(0, []byte{})
+	defer func() {
+		if r := recover(); r == nil || !strings.Contains(r.(string), "NULL address") {
+			t.Errorf("WriteBytes(0, [1]) panic %v, want NULL address", r)
+		}
+	}()
+	WriteBytes(0, []byte{1})
+}

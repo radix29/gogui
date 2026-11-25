@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/radix29/gogui/internal/aqua"
 	"github.com/radix29/gogui/internal/aqua/theme"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/mainthread"
@@ -518,12 +517,13 @@ func TestTextPangoBytes(t *testing.T) {
 	})
 }
 
-// tlChromeLayouts lays out text as aqua's title bar and placeholders do
-// (internal/aqua chrome.go, placeholder.go: the window title in the
-// title font, truncated with an ellipsis, and "Kind: text" captions in
-// PlaceholderFont) and checks that every layout has a positive, finite
-// size, one line and the baseline inside it, and that widths grow with
-// the truncated prefix (truncate's binary search relies on it).
+// tlChromeLayouts lays out text as aqua's title bar and controls do
+// (internal/aqua chrome.go: the window title in the title font, truncated
+// with an ellipsis; control titles in the small system font, 11 pt, which
+// the placeholders' captions used until S5.5j) and checks that every
+// layout has a positive, finite size, one line and the baseline inside
+// it, and that widths grow with the truncated prefix (truncate's binary
+// search relies on it).
 func tlChromeLayouts(t *testing.T, ts render.TextSystem) {
 	t.Helper()
 	ty := &theme.Sequoia.Typography
@@ -550,14 +550,15 @@ func tlChromeLayouts(t *testing.T, ts render.TextSystem) {
 		}
 		prev = l.Size().W
 	}
-	for _, c := range []string{"Button: OK", "Slider: 0.5", "TextField: Hello, World", "ProgressIndicator"} {
-		check("placeholder", ts.NewLayout(c, aqua.PlaceholderFont, 0))
+	small := driver.Font{Size: ty.FontSize.At(driver.ControlSizeSmall)}
+	for _, c := range []string{"OK", "Medium", "Hello, World", "Custom size…"} {
+		check("small control title", ts.NewLayout(c, small, 0))
 	}
 }
 
 // TestTextPangoShell: in Ready, the shell's TextSystem gives Pango layouts
 // (not shell/fake's) with the UI family from GtkSettings, and the aqua
-// title bar's and placeholders' text lays out.
+// title bar's and controls' text lays out.
 func TestTextPangoShell(t *testing.T) {
 	s, reports := newGTKShell(t)
 	base := dispatch.Len()
@@ -580,7 +581,7 @@ func TestTextPangoShell(t *testing.T) {
 	checkGTKTornDown(t, s, reports, base)
 }
 
-// TestTextPangoChrome: the aqua title bar's and placeholders' text lays
+// TestTextPangoChrome: the aqua title bar's and controls' text lays
 // out over Pango without a display (TestTextPangoShell does it through the
 // shell, with one).
 func TestTextPangoChrome(t *testing.T) {
@@ -1148,6 +1149,129 @@ func TestTextPangoLargeText(t *testing.T) {
 		mid := len(s) / 2
 		if c := l.CaretRect(mid); !(c.Y > 0) || !tlFinite(c.X, c.Y, c.H) {
 			t.Errorf("CaretRect(%d) = %v, want on a later line", mid, c)
+		}
+	})
+}
+
+// tlCheckLines checks the render.LineMetrics contract on a Pango layout
+// (as win32's checkLines): the lines cover the text in order, tile the
+// layout's height and hold their baselines, the first one's is
+// Baseline(), Line clamps, and CaretRect at a line's start is on it. At a
+// soft break (a line starting where the one before ends) the upstream
+// caret is on the earlier line at its end, the downstream one on the
+// later line; elsewhere CaretRectUpstream is CaretRect. It returns the
+// soft breaks.
+func tlCheckLines(t *testing.T, l *textLayout) []int {
+	t.Helper()
+	n, text := l.LineCount(), l.Text()
+	var soft []int
+	top := 0.0
+	for i := range n {
+		m := l.Line(i)
+		t.Logf("TEXT-RESULT %q Line(%d) = %+v", text, i, m)
+		if i == 0 && (m.Start != 0 || !tlNear(m.Baseline, l.Baseline(), 0.01)) {
+			t.Errorf("%q: Line(0) = %+v, Baseline() %v", text, m, l.Baseline())
+		}
+		if m.Start > m.End || m.End > len(text) || !tlNear(m.Top, top, 0.01) || !(m.Height > 0) ||
+			!(m.Baseline > m.Top && m.Baseline < m.Top+m.Height) {
+			t.Errorf("%q: Line(%d) = %+v (top so far %v)", text, i, m, top)
+		}
+		if i > 0 {
+			p := l.Line(i - 1)
+			switch {
+			case p.End == m.Start:
+				soft = append(soft, m.Start)
+				up, down := l.CaretRectUpstream(m.Start), l.CaretRect(m.Start)
+				if !tlNear(up.Y, p.Top, 0.01) || !tlNear(up.H, p.Height, 0.01) || !tlNear(down.Y, m.Top, 0.01) {
+					t.Errorf("%q: at the soft break %d upstream %v, downstream %v; lines %+v %+v", text, m.Start, up, down, p, m)
+				}
+			case p.End < m.Start && strings.ContainsAny(text[p.End:m.Start], "\r\n\u2028\u2029"):
+			default:
+				t.Errorf("%q: Line(%d) %+v does not follow %+v", text, i, m, p)
+			}
+		}
+		if c := l.CaretRect(m.Start); !tlNear(c.Y, m.Top, 0.01) {
+			t.Errorf("%q: CaretRect(%d) = %v, not on line %d %+v", text, m.Start, c, i, m)
+		}
+		top += m.Height
+	}
+	if last := l.Line(n - 1); last.End != len(text) {
+		t.Errorf("%q: the last line ends at %d, want %d", text, last.End, len(text))
+	}
+	if !tlNear(top, l.Size().H, 0.01) {
+		t.Errorf("%q: the lines are %v high, the layout %v", text, top, l.Size().H)
+	}
+	if l.Line(-1) != l.Line(0) || l.Line(n) != l.Line(n-1) {
+		t.Errorf("%q: Line does not clamp", text)
+	}
+	isSoft := map[int]bool{}
+	for _, s := range soft {
+		isSoft[s] = true
+	}
+	for i := 0; i <= len(text); i++ {
+		if !isSoft[l.normalize(i)] && l.CaretRectUpstream(i) != l.CaretRect(i) {
+			t.Errorf("%q: CaretRectUpstream(%d) = %v, CaretRect %v", text, i, l.CaretRectUpstream(i), l.CaretRect(i))
+		}
+	}
+	return soft
+}
+
+// TestTextPangoLineMetrics (S5.4b): Line and CaretRectUpstream on wrapped
+// Latin with trailing spaces at the wrap, CJK, a bidi line, newlines and
+// empty text.
+func TestTextPangoLineMetrics(t *testing.T) {
+	tlPango(t, func(e *tlEnv) {
+		f := render.Font{}
+		const s = "hello world  again\nnext"
+		world := e.width("hello world", f)
+		l := e.geo(s, f, world+1)
+		if l == nil {
+			return
+		}
+		soft := tlCheckLines(t, l)
+		if l.LineCount() != 3 || len(soft) != 1 || soft[0] != 13 {
+			t.Errorf("%q at %v: %d lines, soft breaks %v; want 3 and [13]", s, world+1, l.LineCount(), soft)
+		} else {
+			up := l.CaretRectUpstream(13)
+			t.Logf("TEXT-RESULT upstream caret at the wrap %v (\"hello world\" %v, with the spaces %v)", up, world, e.width("hello world  ", f))
+			if !(up.X >= world-tlKern) || l.Line(0).End != 13 || l.Line(1).End != 18 {
+				t.Errorf("upstream caret %v, lines %+v %+v", up, l.Line(0), l.Line(1))
+			}
+		}
+
+		const cjk = "日本語のテキストを折り返す"
+		if c := e.geo(cjk, f, e.width("日本語の", f)+0.5); c != nil {
+			soft := tlCheckLines(t, c)
+			if c.LineCount() < 3 || len(soft) != c.LineCount()-1 {
+				t.Errorf("%q: %d lines, soft breaks %v", cjk, c.LineCount(), soft)
+			}
+			for i := range c.LineCount() {
+				if m := c.Line(i); m.Start%3 != 0 || m.End%3 != 0 {
+					t.Errorf("%q: Line(%d) = %+v, not at ideograph starts", cjk, i, m)
+				}
+			}
+		}
+
+		const bidi = "ab שלום עולם cd\nאבג"
+		for _, w := range []float64{0, e.width("ab שלום", f) + 1} {
+			if b := e.geo(bidi, f, w); b != nil {
+				soft := tlCheckLines(t, b)
+				if w == 0 && (b.LineCount() != 2 || len(soft) != 0) {
+					t.Errorf("%q unwrapped: %d lines, soft breaks %v", bidi, b.LineCount(), soft)
+				}
+				if w > 0 && len(soft) == 0 {
+					t.Errorf("%q at %v: no soft break", bidi, w)
+				}
+			}
+		}
+
+		for _, c := range []struct {
+			s string
+			w float64
+		}{{"", 0}, {"", 50}, {"ab\n\ncd\n", 0}, {"a\r\nb", 0}, {"a\u2028b", 0}, {"abcdefghij", e.width("abc", f) - 0.5}} {
+			if l := e.geo(c.s, f, c.w); l != nil {
+				tlCheckLines(t, l)
+			}
 		}
 	})
 }

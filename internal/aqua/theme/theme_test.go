@@ -233,12 +233,6 @@ func TestTracking(t *testing.T) {
 			t.Errorf("TrackingAt(%v) = %v, want %v", tt.size, got, tt.want)
 		}
 	}
-	if got := ty.TrackingPoints(16); got != -20*16.0/1000 {
-		t.Errorf("TrackingPoints(16) = %v", got)
-	}
-	if got := ty.LineHeightFor(16); got != 20 {
-		t.Errorf("LineHeightFor(16) = %v", got)
-	}
 	if got := (&theme.Typography{}).TrackingAt(13); got != 0 {
 		t.Errorf("empty table: %v", got)
 	}

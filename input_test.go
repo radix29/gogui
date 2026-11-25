@@ -52,18 +52,22 @@ func TestTextField(t *testing.T) {
 		f.SetEnabled(false)
 		textFieldEvents{f}.TextChanged("y") // reported anyway
 		textFieldEvents{f}.Submitted("y")
+		if f.Text() != "y" { // B14: the cache follows, only the handlers are skipped
+			t.Errorf("disabled field: Text %q, want the reported y", f.Text())
+		}
 		f.destroy()
 		textFieldEvents{f}.TextChanged("z")
-		if len(log) != 3 || f.Text() != "x" {
+		if len(log) != 3 || f.Text() != "y" {
 			t.Errorf("disabled or destroyed field: events %v, text %q", log, f.Text())
 		}
-		f.SetText("after")
-		if p.Value != "x" || f.Text() != "after" {
+		mustPanic(t, "TextField.SetText on a destroyed widget", func() { f.SetText("after") })
+		mustPanic(t, "TextField.OnChange on a destroyed widget", func() { f.OnChange(func(string) {}) })
+		if p.Value != "x" || f.Text() != "y" {
 			t.Errorf("destroyed field: peer %q, Text %q", p.Value, f.Text())
 		}
 
 		s := NewSecureField().SetPlaceholder("Password")
-		if sp := s.peer.(*stub.TextField); !sp.Secure || !s.Secure() || sp.Placeholder != "Password" {
+		if sp := s.peer.(*stub.TextField); !sp.Secure || !s.Secure() || sp.Placeholder != "Password" || s.Placeholder() != "Password" {
 			t.Errorf("secure field: %+v", sp)
 		}
 	})
@@ -133,6 +137,9 @@ func TestSlider(t *testing.T) {
 		}
 		s.SetEnabled(false)
 		sliderEvents{s}.ValueChanged(12)
+		if s.Value() != 12 { // B14: the cache follows, only the handler is skipped
+			t.Errorf("disabled slider: Value %v, want the reported 12", s.Value())
+		}
 		s.SetEnabled(true)
 		unsub()
 		p.UserDrag(16)
@@ -261,6 +268,9 @@ func TestPopUpButton(t *testing.T) {
 		}
 		b.SetEnabled(false)
 		popUpEvents{b}.SelectionChanged(0)
+		if b.Selected() != 0 { // B14
+			t.Errorf("disabled pop-up: selected %d, want the reported 0", b.Selected())
+		}
 		b.SetEnabled(true)
 		unsub()
 		p.UserSelect(0)

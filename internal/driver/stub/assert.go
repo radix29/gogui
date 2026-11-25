@@ -4,8 +4,6 @@ import "github.com/radix29/gogui/internal/driver"
 
 // Compile-time checks that every stub satisfies its peer interface.
 var (
-	_ driver.Driver = (*Driver)(nil)
-
 	_ driver.Widget      = (*Base)(nil)
 	_ driver.Container   = (*Container)(nil)
 	_ driver.Label       = (*Label)(nil)

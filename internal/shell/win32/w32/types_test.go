@@ -74,6 +74,10 @@ func layoutCases() []layoutCase {
 			f("Length", 0, 4), f("Flags", 4, 4), f("ShowCmd", 8, 4),
 			f("PtMinPosition", 12, 8), f("PtMaxPosition", 20, 8),
 			f("RcNormalPosition", 28, 16)}}},
+		{CompositionForm{}, ffi.Layout{Size: 28, Align: 4, Fields: []ffi.Field{
+			f("DwStyle", 0, 4), f("PtCurrentPos", 4, 8), f("RcArea", 12, 16)}}},
+		{CandidateForm{}, ffi.Layout{Size: 32, Align: 4, Fields: []ffi.Field{
+			f("DwIndex", 0, 4), f("DwStyle", 4, 4), f("PtCurrentPos", 8, 8), f("RcArea", 16, 16)}}},
 	}
 }
 
@@ -88,11 +92,13 @@ func TestStructLayouts(t *testing.T) {
 }
 
 // TestLayoutCasesComplete keeps the table in step with types.go: every
-// mirrored struct the S2.3a list names (and Size, S2.3d) has a case.
+// mirrored struct the S2.3a list names (and Size, S2.3d, and the IMM32
+// forms, S5.3e) has a case.
 func TestLayoutCasesComplete(t *testing.T) {
 	want := []string{"Point", "Rect", "Msg", "WndClassEx", "MinMaxInfo", "WindowPos",
 		"NCCalcSizeParams", "TrackMouseEventInfo", "MonitorInfo", "Margins",
-		"CreateStruct", "PaintStruct", "HighContrast", "WindowPlacement", "Size", "BitmapInfoHeader"}
+		"CreateStruct", "PaintStruct", "HighContrast", "WindowPlacement", "Size", "BitmapInfoHeader",
+		"CompositionForm", "CandidateForm"}
 	have := map[string]bool{}
 	for _, c := range layoutCases() {
 		have[typeName(c.v)] = true

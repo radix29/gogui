@@ -14,29 +14,42 @@ type Clock interface {
 	RequestFrame()
 }
 
-// SettleEpsilon is how close to its target, in the value's units and in
-// units per second, a spring has to come (Motion.Settled) before the value
-// jumps to the target and stops: well below a device pixel for positions
-// and below one 8-bit step for alphas and progress fractions.
-const SettleEpsilon = 1e-3
+// The tolerances of a Value (SetTolerance): the largest error, in the
+// value's units, that does not show. A spring that can no longer move
+// farther than its value's tolerance from its target is settled (it jumps
+// there and stops), and a frame that moves a running value by less than
+// its tolerance from what was last shown does not call its change func.
+const (
+	// DefaultTolerance is NewValue's: finer than any unit shows.
+	DefaultTolerance = 1e-3
+	// AlphaTolerance is for alphas and 0…1 fractions that scale an alpha or
+	// a few points: half an 8-bit step.
+	AlphaTolerance = 1.0 / 510
+	// PointTolerance is for positions in logical points: an eighth of a
+	// device pixel at 4×.
+	PointTolerance = 1.0 / 32
+)
 
 // Timeline runs the animated Values of one driver on a frame clock. The
 // driver installs Tick as the clock's frame function; Tick advances every
-// running value to the frame time, calls the change funcs, and requests
-// the next frame only while a value is still running, so an idle app
-// requests no frames.
+// running value to the frame time, calls the change funcs and the running
+// Tickers, and requests the next frame only while a value or a ticker is
+// still running, so an idle app requests no frames.
 //
 // With Reduce Motion (SetReduceMotion) nothing animates: AnimateTo,
 // SpringTo and SpringFrom jump to their target like Set, Decay jumps to its
 // rest position, Loop stays at its start (0), and turning it on finishes
 // the running values at once (a decay at its rest position, a loop stops
-// at 0).
+// at 0). Tickers are not motion and run on.
 //
-// A Timeline and its Values are used on the UI thread only.
+// A Timeline, its Values and its Tickers are used on the UI thread only.
 type Timeline struct {
 	clock   Clock
 	running []*Value
 	scratch []*Value // the snapshot Tick iterates
+
+	tickers  []*Ticker // the running tickers, and those stopped during Tick
+	tscratch []*Ticker // the snapshot Tick iterates
 
 	inTick    bool
 	frameTime time.Duration // of the Tick in progress
@@ -57,17 +70,23 @@ func NewTimeline(c Clock) *Timeline {
 // directly from Set, from the jumps of AnimateTo, SpringTo, SpringFrom and
 // Decay (no duration, Reduce Motion), from Decay without momentum (it stops
 // where the running animation is at that moment), from Loop (the jump to
-// its start) and from SetReduceMotion. It is typically the owning element's Invalidate.
+// its start) and from SetReduceMotion. It is typically the owning element's
+// Invalidate. The value's tolerance is DefaultTolerance (SetTolerance).
 func (tl *Timeline) NewValue(x float64, onChange func(x float64)) *Value {
 	checkFinite(x, "NewValue")
-	return &Value{tl: tl, x: x, onChange: onChange}
+	return &Value{tl: tl, x: x, onChange: onChange, tol: DefaultTolerance}
 }
 
-// Running returns the number of running values.
+// Running returns the number of running values and tickers.
 func (tl *Timeline) Running() int {
 	n := 0
 	for _, v := range tl.running {
 		if v.kind != idle {
+			n++
+		}
+	}
+	for _, t := range tl.tickers {
+		if t.on {
 			n++
 		}
 	}
@@ -113,13 +132,17 @@ func (tl *Timeline) SetReduceMotion(on bool) {
 // Tick advances every running value to frameTime (the frame clock's target
 // presentation time, so values step by whole frames even when the call is
 // late): a value whose animation has ended, or whose spring has settled
-// within SettleEpsilon, takes its exact target and stops; a loop never
-// ends (it takes its phase at frameTime). Change funcs
+// within the value's tolerance, takes its exact target and stops; a loop
+// never ends (it takes its phase at frameTime). A frame that moves a value
+// that runs on by less than its tolerance from its last shown value leaves
+// Value at that shown value and does not call its change func (Velocity
+// still follows the frame). Change funcs
 // are called in the order the values started; they may start, retarget or
 // stop any value, including their own. A value started during Tick starts
-// at frameTime and moves from the next frame on. If a value is still
-// running afterwards, Tick requests the next frame. It panics when called
-// from inside a Tick.
+// at frameTime and moves from the next frame on. The running tickers are
+// called after the change funcs (see Ticker). If a value or a ticker is
+// still running afterwards, Tick requests the next frame. It panics when
+// called from inside a Tick.
 func (tl *Timeline) Tick(frameTime time.Duration) {
 	if tl.inTick {
 		panic("anim: Timeline.Tick called from inside a Tick")
@@ -136,15 +159,25 @@ func (tl *Timeline) Tick(frameTime time.Duration) {
 		v.vel = vel
 		if done {
 			v.stop()
+		} else if math.Abs(x-v.x) < v.tol {
+			continue // does not show
 		}
 		v.change(x)
 	}
 	clear(tl.scratch)
+
+	tl.tscratch = append(tl.tscratch[:0], tl.tickers...)
+	for _, t := range tl.tscratch {
+		if t.on && !t.fresh { // not stopped by an earlier call, nor started in this Tick
+			t.tick(frameTime)
+		}
+	}
+	clear(tl.tscratch)
 }
 
-// endTick drops the values stopped during the Tick and requests the next
-// frame while a value runs. It also runs when a change func panics, so the
-// timeline stays usable.
+// endTick drops the values and tickers stopped during the Tick and
+// requests the next frame while a value or a ticker runs. It also runs
+// when a change func or a ticker panics, so the timeline stays usable.
 func (tl *Timeline) endTick() {
 	tl.inTick = false
 	if tl.dirty {
@@ -157,7 +190,15 @@ func (tl *Timeline) endTick() {
 			return false
 		})
 	}
-	if len(tl.running) > 0 {
+	tl.tickers = slices.DeleteFunc(tl.tickers, func(t *Ticker) bool {
+		t.fresh = false
+		if !t.on {
+			t.listed = false
+			return true
+		}
+		return false
+	})
+	if len(tl.running) > 0 || len(tl.tickers) > 0 {
 		tl.clock.RequestFrame()
 	}
 }
@@ -217,7 +258,8 @@ type Value struct {
 	tl       *Timeline
 	x, vel   float64
 	onChange func(float64)
-	listed   bool // in tl.running
+	listed   bool    // in tl.running
+	tol      float64 // SetTolerance
 
 	kind     kind
 	start    time.Duration
@@ -250,6 +292,23 @@ func (v *Value) Target() float64 {
 
 // Running reports whether an animation runs.
 func (v *Value) Running() bool { return v.kind != idle }
+
+// Tolerance returns the value's tolerance (SetTolerance).
+func (v *Value) Tolerance() float64 { return v.tol }
+
+// SetTolerance sets the largest error of the value, in its units, that
+// does not show (DefaultTolerance until then; AlphaTolerance and
+// PointTolerance for the usual units): a spring settles once it can no
+// longer move farther than tol from its target, and Tick does not show a
+// move by less than tol. It returns v. It panics when tol is not positive
+// and finite.
+func (v *Value) SetTolerance(tol float64) *Value {
+	if !(tol > 0) || math.IsInf(tol, 1) {
+		panic("anim: Value.SetTolerance with a tolerance that is not positive and finite")
+	}
+	v.tol = tol
+	return v
+}
 
 // Set jumps to x: any animation stops, the velocity becomes 0, and the
 // change func is called if the value changed. It panics when x is not
@@ -333,7 +392,7 @@ func (v *Value) AnimateAfter(x float64, delay, d time.Duration, c Curve) {
 // is at the start (the clock's Now, the frame time inside a Tick) with its
 // velocity there: the last frame's velocity for a value at rest is 0, a
 // running tween's or spring's comes from its curve or motion. Once the
-// spring settles within SettleEpsilon the value takes x exactly and stops.
+// spring settles within the value's tolerance the value takes x exactly and stops.
 // With Reduce Motion it jumps like Set. Springing to the target of the
 // running animation (a decay's rest position included), or to the value of
 // a value at rest, does nothing; from a loop it always starts, released at
@@ -364,7 +423,7 @@ func (v *Value) SpringTo(x float64, s Spring) {
 // Unlike SpringTo it always (re)starts, even when x is the running
 // animation's target, since the velocity is new; only a value at rest at
 // exactly x released with v0 == 0 does nothing (it would not move). Once
-// the spring settles within SettleEpsilon the value takes x exactly and
+// the spring settles within the value's tolerance the value takes x exactly and
 // stops. With Reduce Motion it jumps to x like Set. It panics when x or v0
 // is not finite or s is not valid (Spring.Motion).
 func (v *Value) SpringFrom(x, v0 float64, s Spring) {
@@ -398,7 +457,7 @@ func (v *Value) startSpring(start time.Duration, from, x, vel float64, s Spring)
 // after the start the value is from + v0/rate·(1 − e^(−rate·t)) with the
 // velocity v0·e^(−rate·t), in closed form from the frame time, so late
 // frames land where punctual ones would have. It is the momentum of a
-// flung scroll view (PLAN.md §5.6), the same motion as scroll.Decay.
+// flung scroll view (PLAN.md §5.6).
 //
 // The decay ends when the speed falls to stopVelocity, at the time
 // ln(|v0|/stopVelocity)/rate: the value then takes its rest position
@@ -520,8 +579,8 @@ func (v *Value) sample(t time.Duration) (x, vel float64, done bool) {
 			return v.to, 0, true
 		}
 		p := float64(e) / float64(v.dur)
-		x = Lerp(v.from, v.to, v.curve.At(p))
-		return x, (v.to - v.from) * v.curve.Slope(p) / v.dur.Seconds(), false
+		y, slope := v.curve.AtSlope(p)
+		return Lerp(v.from, v.to, y), (v.to - v.from) * slope / v.dur.Seconds(), false
 	case decay:
 		secs := e.Seconds()
 		// The second test catches the rounding of the stop time to whole
@@ -532,10 +591,10 @@ func (v *Value) sample(t time.Duration) (x, vel float64, done bool) {
 		k := -v.rate * secs
 		return v.from + v.v0/v.rate*-math.Expm1(k), v.v0 * math.Exp(k), false
 	}
-	if v.motion.Settled(e, SettleEpsilon) {
+	x, vel = v.motion.At(e)
+	if v.motion.settledAt(x, vel, v.tol) {
 		return v.to, 0, true
 	}
-	x, vel = v.motion.At(e)
 	return x, vel, false
 }
 

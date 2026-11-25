@@ -22,13 +22,14 @@ const (
 type Checkbox struct {
 	common[*Checkbox]
 	p        driver.Checkbox
+	title    string
 	state    CheckState
 	onChange subscribers[func(on bool)]
 }
 
 // NewCheckbox returns an unchecked checkbox with title.
 func NewCheckbox(title string) *Checkbox {
-	c := &Checkbox{}
+	c := &Checkbox{title: title}
 	p := driverFor("NewCheckbox").NewCheckbox(checkboxEvents{c})
 	c.p = p
 	c.init(c, kindCheckbox, p, nil)
@@ -39,12 +40,16 @@ func NewCheckbox(title string) *Checkbox {
 // SetTitle sets the title shown next to the box.
 func (c *Checkbox) SetTitle(title string) *Checkbox {
 	c.check("SetTitle")
+	c.title = title
 	if c.live() {
 		c.p.SetTitle(title)
 	}
 	c.invalidate()
 	return c
 }
+
+// Title returns the title.
+func (c *Checkbox) Title() string { c.get("Title"); return c.title }
 
 // SetChecked turns the checkbox on or off. It doesn't call the OnChange
 // handlers.
@@ -58,7 +63,7 @@ func (c *Checkbox) SetChecked(on bool) *Checkbox {
 
 // Checked reports whether the checkbox is on. A mixed checkbox counts as
 // on, as in OnChange.
-func (c *Checkbox) Checked() bool { c.check("Checked"); return c.state != StateOff }
+func (c *Checkbox) Checked() bool { c.get("Checked"); return c.state != StateOff }
 
 // SetState sets the state, including StateMixed. Values other than the
 // three states count as StateOn. It doesn't call the OnChange handlers.
@@ -68,7 +73,7 @@ func (c *Checkbox) SetState(s CheckState) *Checkbox {
 }
 
 // State returns the state.
-func (c *Checkbox) State() CheckState { c.check("State"); return c.state }
+func (c *Checkbox) State() CheckState { c.get("State"); return c.state }
 
 func (c *Checkbox) setState(s CheckState) *Checkbox {
 	if s != StateOff && s != StateMixed {
@@ -94,17 +99,21 @@ type checkboxEvents struct{ c *Checkbox }
 
 func (e checkboxEvents) StateChanged(s CheckState) {
 	c := e.c
-	if c.disabled || c.dead {
+	if c.dead {
 		return
 	}
-	c.state = s
+	c.state = s // the cache follows the native state even when disabled (B14)
+	if c.disabled {
+		return
+	}
 	on := s != StateOff
-	c.onChange.each(func(fn func(bool)) { fn(on) })
+	c.onChange.eachLive(&c.widget, func(fn func(bool)) { fn(on) })
 }
 
 // RadioGroup is a column of radio buttons, 6 points apart, of which at
 // most one is selected (NSButton radios that share an action). It doesn't
-// expand.
+// expand. The group is one Tab stop, its selected radio; the arrow keys
+// move the selection (and call OnChange).
 type RadioGroup struct {
 	common[*RadioGroup]
 	c        driver.Container
@@ -132,7 +141,7 @@ func NewRadioGroup(items ...string) *RadioGroup {
 		p := d.NewRadio(radioEvents{g, i})
 		p.SetTitle(item)
 		r := &radio{p: p}
-		r.kind, r.peer, r.n, r.parent = kindRadio, p, layout.NewLeaf(p), g
+		r.kind, r.peer, r.n, r.parent, r.self = kindRadio, p, layout.NewLeaf(p), g, r
 		r.applyExpand()
 		g.radios = append(g.radios, r)
 		nodes[i], peers[i] = r.n, p
@@ -155,7 +164,7 @@ func (g *RadioGroup) SetSelected(i int) *RadioGroup {
 }
 
 // Selected returns the index of the selected radio, or -1 if none is.
-func (g *RadioGroup) Selected() int { g.check("Selected"); return g.selected }
+func (g *RadioGroup) Selected() int { g.get("Selected"); return g.selected }
 
 func (g *RadioGroup) setSelected(i int) {
 	if i < 0 || i >= len(g.radios) {
@@ -247,12 +256,12 @@ type radioEvents struct {
 
 func (e radioEvents) StateChanged(s CheckState) {
 	g := e.g
-	if s != StateOn || g.disabled || g.dead {
+	if s != StateOn || g.dead {
 		return
 	}
 	changed := g.selected != e.i
-	g.setSelected(e.i) // also turns the others off
-	if changed {
-		g.onChange.each(func(fn func(int)) { fn(e.i) })
+	g.setSelected(e.i) // also turns the others off, even when disabled (B14)
+	if changed && !g.disabled {
+		g.onChange.eachLive(&g.widget, func(fn func(int)) { fn(e.i) })
 	}
 }

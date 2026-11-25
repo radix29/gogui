@@ -21,17 +21,34 @@ func useHeadless(t *testing.T) *headless.Driver {
 	return d
 }
 
-func setDriver(t *testing.T, d driver.Driver) {
+func setDriver(t testing.TB, d driver.Driver) {
+	t.Helper()
+	setDriverFunc(t, func() (driver.Driver, error) { return d, nil })
+}
+
+// setDriverFunc makes the next Run take its driver from fn, with the
+// UI-thread checks on.
+func setDriverFunc(t testing.TB, fn func() (driver.Driver, error)) {
 	t.Helper()
 	oldNew, oldChecks := newDriver, debugChecks
-	newDriver, debugChecks = func() driver.Driver { return d }, true
+	newDriver, debugChecks = fn, true
 	ran.Store(false)
-	t.Cleanup(func() { newDriver, debugChecks = oldNew, oldChecks })
+	t.Cleanup(func() {
+		newDriver, debugChecks = oldNew, oldChecks
+		ran.Store(false) // the next test, or Example, may call Run
+	})
 }
 
 // runTest calls Run on the test goroutine with a watchdog, so a Run that
-// never returns fails loudly instead of hanging.
-func runTest(t *testing.T, ready func(*App)) error {
+// never returns fails loudly instead of hanging. The app is named "Test".
+func runTest(t testing.TB, ready func(*App)) error {
+	t.Helper()
+	return runTestNamed(t, "Test", ready)
+}
+
+// runTestNamed is runTest for an app named name (AppConfig.Name, which
+// titles the app menu).
+func runTestNamed(t testing.TB, name string, ready func(*App)) error {
 	t.Helper()
 	stop := make(chan struct{})
 	defer close(stop)
@@ -42,7 +59,7 @@ func runTest(t *testing.T, ready func(*App)) error {
 			panic("gogui: Run did not return")
 		}
 	}()
-	return Run(AppConfig{Name: "Test"}, ready)
+	return Run(AppConfig{Name: name}, ready)
 }
 
 // runApp runs body in ready on a headless driver, drains the UI queue
@@ -88,7 +105,7 @@ func TestRunNilReady(t *testing.T) {
 		for d.Queue() == nil {
 			time.Sleep(time.Millisecond)
 		}
-		d.Post(d.Quit)
+		d.Queue().Do(d.Quit)
 	}()
 	if err := runTest(t, nil); err != nil {
 		t.Fatal(err)
@@ -106,17 +123,6 @@ func TestRunDriverError(t *testing.T) {
 	setDriver(t, failing{headless.New(io.Discard)})
 	if err := runTest(t, func(*App) { t.Error("ready called") }); !errors.Is(err, errNoGTK) {
 		t.Fatalf("Run = %v, want %v", err, errNoGTK)
-	}
-}
-
-// bare is a driver without a UI queue.
-type bare struct{ driver.Driver }
-
-func TestRunDriverWithoutQueue(t *testing.T) {
-	setDriver(t, bare{headless.New(io.Discard)})
-	err := runTest(t, nil)
-	if err == nil || !strings.Contains(err.Error(), "no UI-thread queue") {
-		t.Fatalf("Run = %v, want the missing-queue error", err)
 	}
 }
 

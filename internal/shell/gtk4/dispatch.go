@@ -57,14 +57,32 @@ const (
 	kindScrollDecelerate
 	// The keyboard of a surface (keyboard.go, S4.1k); its peer is the
 	// *surface: GtkEventControllerKey::key-pressed (sigBoolUintUintUint) and
-	// ::key-released (sigUintUintUint), GtkIMContext::commit (sigPointer).
+	// ::key-released (sigUintUintUint), GtkIMContext::commit (sigPointer)
+	// and, since S5.3i, ::preedit-start, ::preedit-changed and ::preedit-end
+	// (sigVoid, ime.go).
 	kindKeyPressed
 	kindKeyReleased
 	kindIMCommit
+	kindIMPreeditStart
+	kindIMPreeditChanged
+	kindIMPreeditEnd
 	// kindSettingNotify is notify::<name> of the default GtkSettings
 	// (gtksettings.go, S4.3d), through sigPointer; its peer is the
 	// *gtkSettings.
 	kindSettingNotify
+	// kindClipboardRead is one pending clipboard read (clipboard.go, S5.2b),
+	// through the one-shot asyncReady; its peer is the *clipboardRead.
+	kindClipboardRead
+	// kindAfter is the timeout source of the After timers (timer.go, S5.2c),
+	// through sourceFunc; its peer is the shell's *afterTimers.
+	kindAfter
+	// kindPopoverClosed is GtkPopover::closed (popup.go, S5.5f), through
+	// sigVoid; its peer is the popup's child *surface.
+	kindPopoverClosed
+	// kindPopupLeave is the idle source of a grab popup's deferred
+	// PointerLeave (popup.go, S5.6e), through sourceFunc; its peer is the
+	// *popup.
+	kindPopupLeave
 )
 
 // entry is what a handle in the dispatch table stands for: the Go peer
@@ -330,4 +348,28 @@ func sigUintUintUint(instance uintptr, a, b, c uint32, data uintptr) {
 		return
 	}
 	e.peer.(uintUintUintPeer).uintUintUint(e.kind, instance, a, b, c)
+}
+
+// asyncPeer handles a GAsyncReadyCallback,
+// void (*)(GObject *source, GAsyncResult *result, gpointer user_data): the
+// end of one asynchronous call, whose result it finishes on source.
+type asyncPeer interface {
+	asyncReady(k kind, source, result uintptr)
+}
+
+// asyncReady is the GAsyncReadyCallback of every asynchronous call (the
+// clipboard read, S5.2b); data is the handle of its entry. GIO calls it
+// exactly once, so it frees the handle, also when the peer panics (as
+// sourceFunc does for a source that goes). A stale handle (its owner
+// dropped it, at shutdown) does nothing: the GTask frees an unfinished
+// result itself.
+func asyncReady(source, result, data uintptr) {
+	defer trap(nameAsyncReady)
+	h := ffi.Handle(data)
+	e, ok := dispatch.Get(h)
+	if !ok {
+		return
+	}
+	defer dispatch.Free(h) // runs before trap
+	e.peer.(asyncPeer).asyncReady(e.kind, source, result)
 }

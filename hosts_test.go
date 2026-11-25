@@ -66,9 +66,10 @@ func TestBox(t *testing.T) {
 		if !stubBase(field).Destroyed || !p.Destroyed {
 			t.Error("closing the window didn't destroy the box and its content")
 		}
-		b.SetTitle("after")
-		if p.Title != "" || b.Title() != "after" {
-			t.Error("a destroyed box called its peer")
+		mustPanic(t, "Box.SetTitle on a destroyed widget", func() { b.SetTitle("after") })
+		mustPanic(t, "Box.SetContent on a destroyed widget", func() { b.SetContent(nil) })
+		if p.Title != "" || b.Title() != "" {
+			t.Error("a destroyed box called its peer or lost its title")
 		}
 
 		func() {
@@ -91,12 +92,12 @@ func notesTree(app *App) (win *Window, sidebar *ScrollView, settings *Stack, edi
 	for i := 1; i <= 30; i++ {
 		settings.Add(NewCheckbox(fmt.Sprintf("Option %d", i)))
 	}
-	sidebar = NewScrollView(settings.Padding(12)).SetHasVerticalScroller(true).SetMinWidth(180)
+	sidebar = NewScrollView(settings.SetPadding(12)).SetHasVerticalScroller(true).SetMinWidth(180)
 	win = app.NewWindow(WindowConfig{Size: Size{W: 720, H: 480}, MinSize: Size{W: 480, H: 320}})
 	win.SetContent(VStack(0,
 		HStack(0, sidebar, NewSeparator().SetVertical(true), editor),
 		NewSeparator(),
-		HStack(8, NewLabel("16 words, 89 characters"), Spacer()).Padding(6),
+		HStack(8, NewLabel("16 words, 89 characters"), Spacer()).SetPadding(6),
 	))
 	return win, sidebar, settings, editor
 }
@@ -246,15 +247,21 @@ func TestTextView(t *testing.T) {
 		}
 
 		v.SetEnabled(false)
+		p.Value = "Hi"                  // a native edit while disabled
 		textViewEvents{v}.TextChanged() // reported anyway
+		if v.Text() != "Hi" {           // B14: the cache follows, only the handlers are skipped
+			t.Errorf("disabled view: Text %q, want the reported Hi", v.Text())
+		}
 		v.destroy()
 		textViewEvents{v}.TextChanged()
-		v.SetText("after").SetSelection(0, 0)
-		if len(log) != 4 || p.Value != "Héllo" || v.Text() != "after" {
+		s0, e0 := v.Selection()
+		mustPanic(t, "TextView.SetText on a destroyed widget", func() { v.SetText("after") })
+		mustPanic(t, "TextView.SetSelection on a destroyed widget", func() { v.SetSelection(0, 0) })
+		if len(log) != 4 || p.Value != "Hi" || v.Text() != "Hi" {
 			t.Errorf("disabled or destroyed view: events %v, peer %q, Text %q", log, p.Value, v.Text())
 		}
-		if s, e := v.Selection(); s != 5 || e != 5 {
-			t.Errorf("selection of a destroyed view %d…%d, want the caret after SetText", s, e)
+		if s, e := v.Selection(); s != s0 || e != e0 {
+			t.Errorf("selection of a destroyed view %d…%d, want the last one %d…%d", s, e, s0, e0)
 		}
 	})
 }

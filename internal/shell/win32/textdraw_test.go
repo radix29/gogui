@@ -212,36 +212,85 @@ func TestCanvasDrawTextIgnored(t *testing.T) {
 	if b := allInk(s); b.n != 0 {
 		t.Errorf("ignored DrawTexts inked %+v", b)
 	}
-	// The canvas holds one reference to the native layout and release gives
-	// it back: with a reference of the test's own, release reports exactly
-	// that one left, and the test's Release is the last.
-	var held com.Ptr
-	var left []string
-	e.leak = func(what string, n uint32) { left = append(left, fmt.Sprintf("%s:%d", what, n)) }
-	_, _, _ = e.frame(1, false, func(c *canvas) {
-		c.DrawText(l, render.Point{X: 4, Y: 4}, black)
-		c.DrawText(l, render.Point{X: 4, Y: 40}, driver.RGB8(255, 0, 0))
-		if len(c.texts) != 1 {
-			t.Errorf("%d native layouts for one layout drawn twice", len(c.texts))
-		}
-		held = c.texts[l.(*layout)].Ptr
-		if n := held.RefCount(); n != 1 {
-			t.Errorf("the frame's native layout has %d references, want 1", n)
-		}
-		held.AddRef()
-	})
-	e.leak = nil
-	if len(left) != 1 || left[0] != "IDWriteTextLayout:1" {
-		t.Errorf("release reported %v, want IDWriteTextLayout:1", left)
+	// The text system's drawn-layout cache holds the one reference to the
+	// native layout NewLayout measured, and drawing uses it, in this frame
+	// and the next: nothing is built for drawing, and the frame releases
+	// nothing of it. Once evicted, the first draw builds it again.
+	ts := e.text
+	d := ts.drawn.m[l.(*layout)]
+	if d == nil {
+		t.Fatal("NewLayout kept no native layout")
 	}
-	if n := held.Release(); n != 0 {
-		t.Errorf("native layout: %d references left", n)
+	held := d.nl.Ptr
+	made := ts.drawn.made
+	for range 2 {
+		_, _, _ = e.frame(1, false, func(c *canvas) {
+			c.DrawText(l, render.Point{X: 4, Y: 4}, black)
+			c.DrawText(l, render.Point{X: 4, Y: 40}, driver.RGB8(255, 0, 0))
+		})
+		if d := ts.drawn.m[l.(*layout)]; d == nil || d.nl.Ptr != held || ts.drawn.made != made {
+			t.Fatalf("after a frame: cached %v, %d native layouts built", d != nil, ts.drawn.made-made)
+		}
+		if n := held.RefCount(); n != 1 {
+			t.Errorf("the cached native layout has %d references, want 1", n)
+		}
+	}
+	ts.releaseDrawn(func(what string, n uint32) { t.Errorf("%s: %d references left", what, n) })
+	_, _, _ = e.frame(1, false, func(c *canvas) { c.DrawText(l, render.Point{X: 4, Y: 4}, black) })
+	if ts.drawn.made != made+1 || ts.drawn.m[l.(*layout)] == nil {
+		t.Errorf("after an eviction: %d built", ts.drawn.made-made)
 	}
 	// After the frame, ended: ignored.
 	_, c, _ := e.frame(1, false, func(*canvas) {})
+	frame := ts.drawn.frame
+	ts.releaseDrawn(nil)
 	c.DrawText(l, render.Point{X: 4, Y: 4}, black)
-	if len(c.texts) != 0 {
-		t.Error("DrawText after finish made a native layout")
+	if ts.drawn.made != made+1 || ts.drawn.frame != frame || len(ts.drawn.m) != 0 {
+		t.Error("DrawText after finish used the cache")
+	}
+}
+
+// TestCanvasDrawTextCache: the drawn-layout cache keeps at most maxDrawn
+// native layouts, evicting the least recently made or drawn ones, never
+// one drawn in the current frame (a frame that draws more holds them all
+// until the next eviction), and the text system's release empties it with
+// every reference the last.
+func TestCanvasDrawTextCache(t *testing.T) {
+	e := newCanvasEnv(t)
+	ts := e.text
+	black := driver.RGB8(0, 0, 0)
+	ls := make([]render.TextLayout, maxDrawn+10)
+	for i := range ls {
+		ls[i] = ts.NewLayout(fmt.Sprintf("line %d", i), textFont, 0)
+	}
+	cached := func(l render.TextLayout) bool { return ts.drawn.m[l.(*layout)] != nil }
+	draw := func(ls ...render.TextLayout) {
+		_, _, _ = e.frame(1, false, func(c *canvas) {
+			for _, l := range ls {
+				c.DrawText(l, render.Point{X: 4, Y: 4}, black)
+			}
+		})
+	}
+	if n := len(ts.drawn.m); n != maxDrawn || cached(ls[9]) || !cached(ls[10]) {
+		t.Fatalf("made: %d cached, the oldest kept %v", n, cached(ls[9]))
+	}
+	draw(ls[10:20]...) // hits
+	if ts.drawn.made != 0 {
+		t.Fatalf("hits built %d", ts.drawn.made)
+	}
+	draw(ls...) // more than maxDrawn in one frame: all kept
+	if n := len(ts.drawn.m); n != len(ls) {
+		t.Fatalf("%d cached after a frame of %d", n, len(ls))
+	}
+	draw(ls[5])
+	extra := ts.NewLayout("extra", textFont, 0) // down to maxDrawn, ls[5] and extra kept
+	if n := len(ts.drawn.m); n != maxDrawn || !cached(ls[5]) || !cached(extra) {
+		t.Fatalf("after the next eviction: %d cached, ls[5] %v, extra %v", n, cached(ls[5]), cached(extra))
+	}
+	var refs []string
+	ts.release(func(what string, n uint32) { refs = append(refs, fmt.Sprintf("%s:%d", what, n)) })
+	if len(refs) != 0 || len(ts.drawn.m) != 0 {
+		t.Errorf("release: %v left, %d cached", refs, len(ts.drawn.m))
 	}
 }
 
@@ -306,14 +355,36 @@ func TestSurfaceText(t *testing.T) {
 		if len(s.leaks) != 0 {
 			t.Errorf("leaks after a text frame: %v", s.leaks)
 		}
-		s.fault = fault{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}
+		s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}}
 		w32.SendMessage(sf.hwnd, w32.WM_PAINT, 0, 0)
 		rethrow()
-		if s.losses != 1 || len(s.leaks) != 0 {
-			t.Fatalf("device loss: %d losses, leaks %v", s.losses, s.leaks)
+		if s.stats.losses != 1 || len(s.leaks) != 0 {
+			t.Fatalf("device loss: %d losses, leaks %v", s.stats.losses, s.leaks)
 		}
 		if again := frameInk("after the device loss"); again != first {
 			t.Errorf("ink after the device loss %+v, before %+v", again, first)
 		}
 	})
+}
+
+// TestCanvasDrawTextCacheEvictCost (review P17): with the cache full, a
+// new layout evicts the least recently used one without looking at the
+// others.
+func TestCanvasDrawTextCacheEvictCost(t *testing.T) {
+	e := newCanvasEnv(t)
+	ts := e.text
+	ls := make([]render.TextLayout, maxDrawn)
+	for i := range ls {
+		ls[i] = ts.NewLayout(fmt.Sprintf("line %d", i), textFont, 0)
+	}
+	before := ts.drawn.visits
+	for i := range 20 {
+		ts.NewLayout(fmt.Sprintf("more %d", i), textFont, 0)
+	}
+	if n := ts.drawn.visits - before; n > 20 {
+		t.Errorf("20 evictions looked at %d entries, want at most 20", n)
+	}
+	if n := len(ts.drawn.m); n != maxDrawn || ts.drawn.m[ls[19].(*layout)] != nil || ts.drawn.m[ls[20].(*layout)] == nil {
+		t.Errorf("%d cached; the 20 oldest should be gone, the rest kept", n)
+	}
 }

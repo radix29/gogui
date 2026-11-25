@@ -336,6 +336,9 @@ func TestScrollerLegacyStates(t *testing.T) {
 		{"dark, both scrollers", dark, func(e *scrollEnv) { e.sv.SetHasHorizontalScroller(true) }},
 		{"increased contrast", hc, nil},
 		{"dark, increased contrast", darkHC, nil},
+		{"inactive", legacySys, func(e *scrollEnv) { e.sh.Deactivate() }},
+		{"inactive, increased contrast", hc, func(e *scrollEnv) { e.sh.Deactivate() }},
+		{"dark, inactive, increased contrast", darkHC, func(e *scrollEnv) { e.sh.Deactivate() }},
 	} {
 		scrollRun(t, st.sys, func(e *scrollEnv) {
 			if st.set != nil {

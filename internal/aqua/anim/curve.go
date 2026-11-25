@@ -91,10 +91,23 @@ func bezierSlope(p1, p2, s float64) float64 {
 
 // Slope returns the curve's derivative dy/dx at the time fraction t, so
 // an animation along it from a to b over d moves at (b − a)·Slope(t)/d.
-// t is clamped like At. Where x is flat in the curve parameter (an end
-// with X1 = 0 or X2 = 1) the slope is unbounded; Slope then returns 0, as
-// a velocity that cannot be followed is better dropped.
+// t is clamped like At.
+//
+// Where x is flat in the curve parameter (an end with X1 = 0 or X2 = 1)
+// dy/dx is the limit of the ratio of the first derivatives in the curve
+// parameter that do not vanish there (l'Hôpital), so EaseOut {0, 0, 0.58,
+// 1} starts at Y2/X2 and EaseIn ends at (1 − Y1)/(1 − X1). Only where y
+// leaves the point at a lower order than x (X1 = 0 with Y1 ≠ 0, say) is
+// the slope unbounded; Slope then returns 0, as a velocity that cannot be
+// followed is better dropped.
 func (c Curve) Slope(t float64) float64 {
+	_, d := c.AtSlope(t)
+	return d
+}
+
+// AtSlope returns At(t) and Slope(t) together, solving for the curve
+// parameter once (a tween's frame needs both).
+func (c Curve) AtSlope(t float64) (y, slope float64) {
 	if !(t > 0) {
 		t = 0
 	}
@@ -102,13 +115,41 @@ func (c Curve) Slope(t float64) float64 {
 	s := 0.0
 	switch {
 	case t == 1:
-		s = 1
+		s, y = 1, 1
 	case t > 0:
 		s = c.solve(t)
+		y = bezier(c.Y1, c.Y2, s)
 	}
-	dx := bezierSlope(c.X1, c.X2, s)
-	if dx < 1e-9 {
-		return 0
+	return y, c.slopeAt(s)
+}
+
+// slopeAt returns dy/dx at the curve parameter s (see Slope).
+func (c Curve) slopeAt(s float64) float64 {
+	// The first, second and third derivatives in s. The third is
+	// constant; if it vanishes for x too, x is not monotonic.
+	const flat = 1e-9
+	dx := [3]float64{bezierSlope(c.X1, c.X2, s), bezierCurv(c.X1, c.X2, s), bezierJerk(c.X1, c.X2)}
+	dy := [3]float64{bezierSlope(c.Y1, c.Y2, s), bezierCurv(c.Y1, c.Y2, s), bezierJerk(c.Y1, c.Y2)}
+	for k := range dx {
+		if math.Abs(dx[k]) >= flat {
+			return dy[k] / dx[k]
+		}
+		if math.Abs(dy[k]) >= flat {
+			return 0 // unbounded
+		}
 	}
-	return bezierSlope(c.Y1, c.Y2, s) / dx
+	return 0
+}
+
+// bezierCurv returns the second derivative of bezier with respect to s.
+func bezierCurv(p1, p2, s float64) float64 {
+	a := 1 + 3*p1 - 3*p2
+	b := 3*p2 - 6*p1
+	return 6*a*s + 2*b
+}
+
+// bezierJerk returns the (constant) third derivative of bezier with
+// respect to s.
+func bezierJerk(p1, p2 float64) float64 {
+	return 6 * (1 + 3*p1 - 3*p2)
 }

@@ -111,3 +111,18 @@ func CopyBytes(p uintptr, n int) []byte {
 	copy(out, unsafe.Slice((*byte)(cptr(p)), n))
 	return out
 }
+
+// WriteBytes copies b into native memory at p (S5.2a), the counterpart of
+// CopyBytes. It is for native buffers the caller fills before handing them
+// to the OS, such as a locked GlobalAlloc block that becomes clipboard
+// data. p must be native memory of at least len(b) bytes that stays valid
+// for the call, never the address of Go memory; any alignment is fine. An
+// empty b does nothing and does not touch p. WriteBytes panics if p is 0
+// and b is not empty.
+func WriteBytes(p uintptr, b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	checkAligned("WriteBytes", p, 0, 1, "aligned")
+	copy(unsafe.Slice((*byte)(cptr(p)), len(b)), b)
+}

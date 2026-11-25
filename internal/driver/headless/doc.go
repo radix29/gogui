@@ -5,7 +5,7 @@
 // stubs from package stub, so nothing is ever shown: widgets record their
 // state, and tests simulate input through the stubs' User… methods.
 //
-// Unlike stub.Driver, whose Run loop uses a small mutex queue, the headless
-// Run loop drains a mainthread.Queue, the same queue the native drivers use.
-// Queue exposes it, so gogui.Do and gogui.DoSync can forward to it.
+// stub.Driver has no run loop; the headless driver adds one. Its Run loop
+// drains a mainthread.Queue, the same queue the native drivers use.
+// Driver.Queue exposes it, so gogui.Do and gogui.DoSync can forward to it.
 package headless

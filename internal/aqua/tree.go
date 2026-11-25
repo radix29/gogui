@@ -12,16 +12,16 @@ func (b *Base) Parent() Element {
 
 // Root returns the root of the tree b is in (b's element itself when it has
 // no parent). It panics before Init.
-func (b *Base) Root() Element {
-	e := b
-	for e.parent != nil {
-		e = e.parent
-	}
-	return e.mustSelf()
-}
+func (b *Base) Root() Element { return b.tree().root.mustSelf() }
 
 // Children returns a copy of the children in paint order.
 func (b *Base) Children() []Element { return slices.Clone(b.children) }
+
+// The children slice is copy-on-write (P8): no change writes into the
+// backing array below the current length (an append writes past it, every
+// other change builds a new slice), so a reader that took b.children
+// (paintTree) keeps a consistent snapshot even when a Paint changes the
+// tree, without cloning it.
 
 // ChildCount returns the number of children.
 func (b *Base) ChildCount() int { return len(b.children) }
@@ -65,8 +65,15 @@ func (b *Base) InsertChild(i int, c Element) {
 	}
 	old := cb.routedBy()
 	cb.detach()
-	b.children = slices.Insert(b.children, i, c)
+	if i == len(b.children) {
+		// Appending writes past every snapshot's length, so it stays in
+		// place (amortised O(1), P19).
+		b.children = append(b.children, c)
+	} else {
+		b.children = slices.Insert(slices.Clip(b.children), i, c) // copy-on-write
+	}
 	cb.parent = b
+	treeChange()
 	b.Invalidate()
 	old.validateTree()
 	b.treeChanged()
@@ -79,12 +86,20 @@ func (b *Base) InsertChild(i int, c Element) {
 // old parent) when the list changes; the same list again does nothing.
 func (b *Base) SetChildren(cs ...Element) {
 	b.mustSelf()
+	var seen map[*Base]bool // for long lists: the check stays linear (P19)
+	if len(cs) > 16 {
+		seen = make(map[*Base]bool, len(cs))
+	}
 	for i, c := range cs {
 		cb := b.adoptable(c)
-		for _, d := range cs[:i] {
-			if d.base() == cb {
-				panic("aqua: SetChildren with a repeated element")
-			}
+		repeated := seen[cb]
+		if seen != nil {
+			seen[cb] = true
+		} else {
+			repeated = slices.ContainsFunc(cs[:i], func(d Element) bool { return d.base() == cb })
+		}
+		if repeated {
+			panic("aqua: SetChildren with a repeated element")
 		}
 	}
 	if slices.Equal(cs, b.children) {
@@ -97,7 +112,9 @@ func (b *Base) SetChildren(cs ...Element) {
 	b.children = nil
 	for _, c := range cs {
 		if cb := c.base(); cb.parent != nil {
-			olds = append(olds, cb.routedBy())
+			if r := cb.routedBy(); r != nil && !slices.Contains(olds, r) {
+				olds = append(olds, r) // each router validated once (P8)
+			}
 			cb.detach()
 		}
 	}
@@ -105,6 +122,7 @@ func (b *Base) SetChildren(cs ...Element) {
 	for _, c := range cs {
 		c.base().parent = b
 	}
+	treeChange()
 	b.Invalidate()
 	for _, r := range olds {
 		r.validateTree()
@@ -138,8 +156,10 @@ func (b *Base) detach() *Base {
 	if p == nil {
 		return nil
 	}
-	p.children = slices.DeleteFunc(p.children, func(e Element) bool { return e.base() == b })
+	i := slices.IndexFunc(p.children, func(e Element) bool { return e.base() == b })
+	p.children = slices.Concat(p.children[:i], p.children[i+1:]) // copy-on-write
 	b.parent = nil
+	treeChange()
 	p.Invalidate()
 	return p
 }

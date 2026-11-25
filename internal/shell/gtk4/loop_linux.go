@@ -16,6 +16,7 @@ import (
 func New() *Shell {
 	s := newShell(&gtkLoop{report: gtk.Report})
 	s.text.open = openPango
+	s.clip.backend = nativeClipboard{}
 	var logf func(string, ...any) // a missing bus or portal: debug level only
 	if debugChecks {
 		logf = log.Printf
@@ -29,6 +30,9 @@ func New() *Shell {
 type gtkLoop struct {
 	main   uintptr         // GMainLoop *, 0 outside init…release
 	report func(err error) // gtk.Report; tests replace it
+	// cssDisplays are the displays the popovers' CSS provider was added
+	// to (popover_linux.go).
+	cssDisplays map[uintptr]bool
 }
 
 func (l *gtkLoop) init() error {
@@ -89,4 +93,19 @@ func (l *gtkLoop) frameInfo(frameClock uintptr) (frameTime, interval, presentati
 	frameTime = gtk.Gdk.FrameClockGetFrameTime(frameClock)
 	gtk.Gdk.FrameClockGetRefreshInfo(frameClock, frameTime, &interval, &presentation)
 	return frameTime, interval, presentation
+}
+
+func (l *gtkLoop) frameCounter(frameClock uintptr) int64 {
+	return gtk.Gdk.FrameClockGetFrameCounter(frameClock)
+}
+
+func (l *gtkLoop) presentation(frameClock uintptr, counter int64) (presented, interval int64, complete, gone bool) {
+	t := gtk.Gdk.FrameClockGetTimings(frameClock, counter)
+	if t == 0 {
+		return 0, 0, false, true
+	}
+	if gtk.Gdk.FrameTimingsGetComplete(t) == gtk.False {
+		return 0, 0, false, false
+	}
+	return gtk.Gdk.FrameTimingsGetPresentationTime(t), gtk.Gdk.FrameTimingsGetRefreshInterval(t), true, false
 }

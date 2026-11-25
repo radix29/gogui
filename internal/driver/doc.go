@@ -14,7 +14,8 @@
 // The public gogui package talks only to these interfaces. The backends are
 // the appkit driver (macOS), the aqua driver (Windows, Linux) and the
 // headless driver (tests, and the default until a native driver exists).
-// Package stub provides a no-op implementation of every peer.
+// Package stub provides a no-op implementation of every peer, and the
+// headless driver completes its stub.Driver with a run loop.
 //
 // Contracts shared by every backend:
 //
@@ -22,7 +23,8 @@
 //     relative to the content area of its parent (container, box, scroll
 //     view document or window).
 //   - Every peer method and every handler call happens on the UI thread. The
-//     only exception is Driver.Post, which may be called from any goroutine.
+//     only exception is Driver.Queue, which may be called from any goroutine
+//     (and so may the queue's Do and DoSync).
 //   - Setters that mirror a value (SetText, SetValue, SetState, SetSelected …)
 //     never call a handler. Handlers report changes made by the user or the
 //     OS, plus the few consequences documented on a method (Window.Close
@@ -37,5 +39,6 @@
 //   - Text indices (TextView selection) are byte offsets into the UTF-8
 //     text. Drivers convert to native units (UTF-16 on macOS and Windows).
 //
-// The package uses only the standard library.
+// The package uses only the standard library and internal/mainthread, the
+// UI-thread queue every driver exposes through Driver.Queue.
 package driver

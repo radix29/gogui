@@ -23,7 +23,7 @@ func setSettingBool(name string, b bool) {
 }
 
 // TestGtkSettingsNotify: over the real default GtkSettings (no session bus,
-// so the portal does not mask them) the three properties are read and
+// so the portal does not mask them) the watched properties are read and
 // watched; flipping gtk-overlay-scrolling with g_object_set_property gives
 // exactly one AppearanceChanged; after Run the handlers are disconnected
 // (their handles freed), so restoring the value reaches nothing.
@@ -45,10 +45,21 @@ func TestGtkSettingsNotify(t *testing.T) {
 			if n := dispatch.Len() - base; n != watched {
 				t.Errorf("%d handles for %d watched properties", n, watched)
 			}
-			for _, name := range gtkWatched {
+			for _, name := range gtkBoolProps {
 				v, ok := gs.gtkBool(name)
 				t.Logf("SETTINGS-RESULT: %s = %v (readable %v)", name, v, ok)
 			}
+			for _, name := range gtkIntProps {
+				v, ok := gs.gtkInt(name)
+				t.Logf("SETTINGS-RESULT: %s = %v (readable %v)", name, v, ok)
+				if !ok {
+					t.Errorf("%s not readable", name)
+				}
+			}
+			if b, want := s.Appearance().CaretBlink, readCaretBlink(s.settings); b != want {
+				t.Errorf("CaretBlink %+v, want %+v", b, want)
+			}
+			t.Logf("SETTINGS-RESULT: caret blink %+v", s.Appearance().CaretBlink)
 			before, read = gs.gtkBool(gtkOverlayScrolling)
 			if !read {
 				t.Errorf("%s not readable", gtkOverlayScrolling)

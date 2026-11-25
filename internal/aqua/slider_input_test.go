@@ -22,7 +22,7 @@ func (l inputSliderLog) ValueChanged(v float64) { *l.values = append(*l.values, 
 func inputSliderWindow(t *testing.T, values *[]float64) (*Slider, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 320, H: 320}, Style: allStyles})
 	var h driver.SliderHandler
 	if values != nil {
@@ -552,16 +552,19 @@ func TestSliderPressKnobNoRoundTrip(t *testing.T) {
 }
 
 func TestSliderHandlerDisablesOnPress(t *testing.T) {
-	for _, what := range []string{"disables", "hides"} {
+	for _, what := range []string{"disables", "hides", "removes"} {
 		t.Run(what, func(t *testing.T) {
-			s, _, sf, _ := inputSliderWindow(t, nil)
+			s, w, sf, _ := inputSliderWindow(t, nil)
 			var vals []float64
 			s.Handler = inputSliderFunc(func(v float64) {
 				vals = append(vals, v)
-				if what == "disables" {
+				switch what {
+				case "disables":
 					s.SetEnabled(false)
-				} else {
+				case "hides":
 					s.SetHidden(true)
+				default:
+					w.SetContent(nil) // B1: removed by its own handler
 				}
 			})
 			// A press on the track: the knob jumps, the handler turns it off,
@@ -573,6 +576,15 @@ func TestSliderHandlerDisablesOnPress(t *testing.T) {
 			}
 			s.SetEnabled(true)
 			s.SetHidden(false)
+			if what == "removes" {
+				// Re-added, it must neither draw pressed nor drag with
+				// the old grab.
+				s.Handler = inputSliderFunc(func(v float64) { vals = append(vals, v) })
+				w.SetContent(s)
+				if inputPressed(s) {
+					t.Fatal("a re-added slider draws pressed")
+				}
+			}
 			sf.Move(inputAt(150, 0))
 			sf.Release(inputAt(150, 0), shell.ButtonPrimary)
 			inputWant(t, s, vals, 100, 100)

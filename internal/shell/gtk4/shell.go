@@ -48,6 +48,11 @@ type loop interface {
 	// (window_linux.go), with p as the peer of its GGSurface and its
 	// signals. On error nothing of it is left.
 	newWindow(cfg windowConfig, p windowPeer) (window, error)
+	// newPopover creates a hidden popover parented to the GGSurface of
+	// parent, around a new GGSurface with p as the peer of it and of the
+	// popover's pointer signals, keys the peer of its key signals (popup.go, S5.5f; popover_linux.go). On error
+	// nothing of it is left.
+	newPopover(parent window, keys windowPeer, grab bool, p windowPeer) (popover, error)
 	// The frame clock's calls (clock.go).
 	clockLoop
 }
@@ -89,15 +94,33 @@ type Shell struct {
 	settings     appearanceSource
 	appearance   driver.Appearance
 
+	// clip is the clipboard (clipboard.go); its pending reads are dropped
+	// at shutdown.
+	clip clipboard
+
+	// timers are the pending After timers (timer.go); dropped at Quit and
+	// at shutdown.
+	timers afterTimers
+
 	// images is the shell's images (image.go); their textures go with the
 	// last surface and at the end of Run.
 	images imageSet
 
 	surfaces []openSurface // the open surfaces, in creation order
-	painting *surface      // the surface whose Paint runs, or nil
+	// modals are the open modal surfaces that have been shown, in first-Show
+	// order; the last one blocks the others (modal.go).
+	modals []*surface
+	// popups are the open popups, in creation order, and grab the one
+	// holding the grab (popup.go).
+	popups   []*popup
+	grab     *popup
+	painting *surface // the surface whose Paint runs, or nil
 	// inLayout is above 0 while a Resized handler runs inside GTK's
 	// size_allocate: native size changes, Close and Quit are posted.
 	inLayout int
+	// imReleases are the releaseIM of closed windows, run after the event
+	// that closed them (releaseLater).
+	imReleases []func()
 
 	// events keeps the input events' times from going backwards
 	// (eventTime, input.go).
@@ -113,7 +136,7 @@ type Shell struct {
 	wakes, drains atomic.Int64
 }
 
-var _ shell.Shell = (*Shell)(nil)
+var _ shell.PopupShell = (*Shell)(nil)
 
 func newShell(l loop) *Shell {
 	s := &Shell{
@@ -123,6 +146,7 @@ func newShell(l loop) *Shell {
 	s.text = newTextSystem(s.q)
 	s.clock = newClock(s, l)
 	s.clock.paint = s.paintInvalid
+	s.timers.s = s
 	return s
 }
 
@@ -178,7 +202,7 @@ func (s *Shell) Run(h shell.Handler) error {
 
 	s.q.SetWake(s.wake)
 	s.ready = true
-	h.Ready()
+	h.Ready(shell.Services{Text: s.text, Clock: s.clock})
 	rethrow()    // a callback run by a GTK call made in Ready
 	if !s.quit { // Quit in Ready: g_main_loop_quit before run would be lost
 		s.running = true
@@ -190,10 +214,11 @@ func (s *Shell) Run(h shell.Handler) error {
 	return nil
 }
 
-// shutdown closes the surfaces a panic left open (without Closed), stops
-// the appearance source, the frame clock and the wake, removes their
-// pending sources and frees the main loop. It runs on every way out of Run
-// after init, panics included.
+// shutdown closes the surfaces a panic left open (without Closed), runs
+// the input-method releases still pending (releaseLater), stops
+// the appearance source, the After timers, the frame clock and the wake,
+// removes their pending sources and frees the main loop. It runs on every
+// way out of Run after init, panics included.
 func (s *Shell) shutdown() {
 	s.quit = true
 	if s.settings != nil {
@@ -203,6 +228,9 @@ func (s *Shell) shutdown() {
 	if len(s.surfaces) > 0 { // left open by a panic
 		s.closeAll(true)
 	}
+	s.releaseIMs() // outside any input method now
+	s.clip.close()
+	s.timers.stop()
 	s.images.release()
 	s.text.release()
 	s.clock.close()
@@ -215,10 +243,11 @@ func (s *Shell) shutdown() {
 }
 
 // Quit implements shell.Shell. Every open surface is closed, last to first
-// (Closed, no CloseRequested), and Run returns once the current callback
-// has returned; later Post calls are dropped. Calling it again does
-// nothing. During a GTK layout (a Resized handler) it is posted instead,
-// so no window is destroyed while GTK allocates it.
+// (Closed, no CloseRequested), the pending After timers are dropped, and
+// Run returns once the current callback has returned; later Post calls
+// are dropped. Calling it again does nothing. During a GTK layout (a
+// Resized handler) it is posted instead, so no window is destroyed while
+// GTK allocates it.
 func (s *Shell) Quit() {
 	s.q.Check("gtk4.Shell.Quit")
 	if s.quit {
@@ -231,6 +260,7 @@ func (s *Shell) Quit() {
 	}
 	s.quit = true // first, so NewSurface in a Closed handler fails
 	s.closeAll(false)
+	s.timers.stop()
 	s.q.Close()
 	if s.running {
 		s.loop.quit()
@@ -258,8 +288,9 @@ func (s *Shell) closeAll(silent bool) {
 // before Run waits for it; after Quit it is dropped.
 func (s *Shell) Post(fn func()) { s.q.Do(fn) }
 
-// TextSystem implements shell.Shell: Pango (text.go), fixed-width metrics
-// without it.
+// TextSystem returns the text system Run hands to Handler.Ready
+// (shell.Services): Pango (text.go), fixed-width metrics without it. A
+// test accessor: shell.Shell has none.
 func (s *Shell) TextSystem() render.TextSystem {
 	s.checkReady("TextSystem")
 	return s.text
@@ -291,11 +322,20 @@ func (s *Shell) appearanceChanged() {
 	}
 }
 
-// Clock implements shell.Shell: the frame clock over GdkFrameClock
-// (clock.go).
+// Clock returns the frame clock over GdkFrameClock (clock.go) that Run
+// hands to Handler.Ready (shell.Services). A test accessor: shell.Shell
+// has none.
 func (s *Shell) Clock() shell.FrameClock {
 	s.checkReady("Clock")
 	return s.clock
+}
+
+// offScreen reports whether the shell has open surfaces and none that
+// paces (each hidden or known to be minimized): the clock's low rate
+// (S6.2b). Without any surface it is false, so the frames of start-up keep
+// the 60 Hz grid.
+func (s *Shell) offScreen() bool {
+	return len(s.surfaces) > 0 && s.pacingWidget() == 0
 }
 
 // pacingWidget returns the widget whose frame clock paces the frames: the

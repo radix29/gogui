@@ -14,15 +14,6 @@ import (
 // from the Controls tokens. Both keep their state in their stub peer, as
 // the Label does; neither is focusable.
 
-// scaleIn returns the device pixels per point of the window b is shown in,
-// or 1 outside a (live) window.
-func scaleIn(b *Base) float64 {
-	if r, ok := b.Root().(*windowRoot); ok && !r.w.closed {
-		return r.w.surface.Scale()
-	}
-	return 1
-}
-
 // snapPixel rounds v (in points) to the nearest device pixel at scale.
 func snapPixel(v, scale float64) float64 { return math.Round(v*scale) / scale }
 
@@ -92,18 +83,7 @@ func (e *separator) vertical() bool {
 
 // line returns the rectangle of the hairline in the element's coordinates.
 func (e *separator) line() driver.Rect {
-	b := e.Bounds()
-	s := scaleIn(&e.Base)
-	t := pixelWidth(tokens.Controls.SeparatorThickness, s)
-	var r driver.Rect
-	if e.vertical() {
-		r = pixelAlign(&e.Base, driver.Rect{X: (b.W - t) / 2, H: b.H}, s)
-		r.W = t
-	} else {
-		r = pixelAlign(&e.Base, driver.Rect{Y: (b.H - t) / 2, W: b.W}, s)
-		r.H = t
-	}
-	return r
+	return hairline(&e.Base, e.Bounds(), tokens.Controls.SeparatorThickness, scaleIn(&e.Base), e.vertical())
 }
 
 // Paint draws the hairline (nothing for an empty frame).
@@ -138,9 +118,7 @@ type Box struct {
 	view    *group
 	content *host
 
-	// The title layout and what it was made from.
-	title    render.TextLayout
-	titleKey string
+	title layoutMemo // the title layout
 }
 
 // NewBox returns an untitled box.
@@ -169,11 +147,7 @@ func (b *Box) titleLayout() render.TextLayout {
 	if strings.TrimSpace(b.Title) == "" {
 		return nil
 	}
-	if b.title == nil || b.titleKey != b.Title {
-		b.title = b.view.d.sh.TextSystem().NewLayout(oneLine(b.Title), boxTitleFont(), 0)
-		b.titleKey = b.Title
-	}
-	return b.title
+	return b.title.get(b.view.d.text, b.Title, boxTitleFont())
 }
 
 // band returns the height above the group: 0 without a title.
@@ -222,8 +196,9 @@ func (b *Box) SetContent(w driver.Widget) {
 // group is the element of a Box.
 type group struct {
 	Base
-	d *Driver
-	p *Box
+	d     *Driver
+	p     *Box
+	trunc truncMemo // the title truncated to the width
 }
 
 func (e *group) FittingSize(max driver.Size) driver.Size { return e.p.FittingSize(max) }
@@ -237,7 +212,11 @@ func (e *group) Paint(c render.Canvas) {
 	a := appearanceIn(&e.Base, e.d)
 	band := e.p.band()
 	if band > 0 {
-		if l := truncate(e.d.sh.TextSystem(), e.p.Title, boxTitleFont(), b.W); l != nil {
+		l := e.p.titleLayout()
+		if l != nil && l.Size().W > b.W {
+			l = e.trunc.truncate(e.d.text, e.p.Title, boxTitleFont(), b.W)
+		}
+		if l != nil {
 			col := driver.ColorLabel
 			if !e.EnabledInTree() {
 				col = driver.ColorDisabledControlText
@@ -259,11 +238,7 @@ func (e *group) Paint(c render.Canvas) {
 	if ct.BoxBorderWidth <= 0 {
 		return
 	}
-	bw := pixelWidth(ct.BoxBorderWidth, s)
-	if r.W > 2*bw && r.H > 2*bw {
-		c.StrokeRoundedRect(r.Inset(driver.UniformInsets(bw/2)), render.UniformRadii(max(0, radius-bw/2)), bw,
-			render.Solid(ct.BoxBorder.Value(a)))
-	}
+	strokeInside(c, r, radius, pixelWidth(ct.BoxBorderWidth, s), ct.BoxBorder.Value(a))
 }
 
 func (e *group) AccessibleNode() a11y.Node {

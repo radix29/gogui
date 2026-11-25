@@ -1,5 +1,11 @@
 package driver
 
+import (
+	"time"
+
+	"github.com/radix29/gogui/internal/mainthread"
+)
+
 // AppConfig configures the application. It is passed to Driver.Run.
 type AppConfig struct {
 	// Name is the application name. It is the title of the app menu and is
@@ -10,7 +16,7 @@ type AppConfig struct {
 // Driver is a platform backend. The public layer creates exactly one Driver
 // per process and talks to the OS only through it.
 //
-// Every method except Post must be called on the UI thread. The factory
+// Every method except Queue must be called on the UI thread. The factory
 // methods may be called only after AppHandler.Ready has been called. Every
 // handler argument must be non-nil.
 type Driver interface {
@@ -29,10 +35,20 @@ type Driver interface {
 	// call AppHandler.QuitRequested.
 	Quit()
 
-	// Post schedules fn to run on the UI thread. It may be called from any
-	// goroutine once Run has been called. Posted functions run in order.
-	// Functions posted after Quit may never run.
-	Post(fn func())
+	// Queue returns the UI-thread queue that Run drains, or nil before Run
+	// has created it. It may be called from any goroutine. Functions queued
+	// with Do run on the UI thread, in order; after Quit the queue is
+	// closed, so Do and DoSync drop their functions and return false.
+	// gogui.Do, gogui.DoSync and the UI-thread checks use it.
+	Queue() *mainthread.Queue
+
+	// ObserveFrames sets the function called with the timing of each frame
+	// after it, on the UI thread (the debug frame-time log, PLAN.md
+	// S6.2c); nil removes it. It returns the frame clock's Now, the
+	// timeline FrameTiming.Time is on, or nil if the driver has no frame
+	// clock (headless, appkit); fn is then never called. It may be called
+	// only after AppHandler.Ready has been called.
+	ObserveFrames(fn func(FrameTiming)) (now func() time.Duration)
 
 	// Appearance returns the current effective appearance.
 	Appearance() Appearance
@@ -41,6 +57,17 @@ type Driver interface {
 	// (AppearanceSystem). If the effective appearance changes, the driver
 	// calls AppHandler.AppearanceChanged.
 	SetAppearance(mode AppearanceMode)
+
+	// SetAccentColor overrides the OS accent color for the whole app
+	// (PLAN.md D10, S6.1g), or clears the override with the zero Color.
+	// A semantic c is resolved against the effective appearance each time
+	// it changes, with DefaultAccent for the colors that follow the accent
+	// (so ColorSystemBlue is blue); the result is made opaque.
+	// Appearance().Accent is then the override, and every accent-derived
+	// color follows it. If the effective appearance changes, the driver
+	// calls AppHandler.AppearanceChanged. A driver without an app-wide
+	// accent (appkit) records the color.
+	SetAccentColor(c Color)
 
 	// SetMenuBar replaces the whole menu bar. A nil bar installs the default
 	// menu bar: the app menu and the Edit menu. On macOS an Edit menu is
@@ -107,4 +134,41 @@ type AppHandler interface {
 	// MenuItemSelected is called when the user chooses a menu item with a
 	// non-zero ID, by clicking it or by its shortcut.
 	MenuItemSelected(id int)
+}
+
+// FrameTiming is the wall time the parts of one frame took on the UI
+// thread (PLAN.md S6.2c), as a Driver's frame observer (ObserveFrames)
+// receives it.
+// shell.FrameTiming is an alias of it, so the aqua driver passes a
+// FrameClock's records on as they are.
+//
+// A frame is the frame function, then the paint pass: on Win32 and the
+// fake shell every invalidated surface is painted inside the frame; on
+// gtk4 the paint pass queues draws, which GTK runs in the paint phase of
+// the same GDK frame, so the record is reported after the last of them
+// (or at the next frame, if one never came). A paint outside any frame (a
+// synchronous resize paint, a redraw GTK asks for by itself) is reported
+// as a record of its own with Time -1 and no frame function.
+type FrameTiming struct {
+	// Time is the frame's target time on the clock's Now timeline, -1
+	// for a paint outside a frame.
+	Time time.Duration
+	// FrameFunc is the frame function (the driver's animations).
+	FrameFunc time.Duration
+	// Paint is the SurfaceHandler.Paint and PopupHandler.Paint calls of
+	// the frame: the drawing on the canvas.
+	Paint time.Duration
+	// Submit is the rest of the CPU work of drawing: setting the canvas
+	// up and finishing it (Win32: BeginDraw and Clear, then the canvas's
+	// finish, EndDraw and the release of its resources; gtk4: the
+	// canvas's finish into the GtkSnapshot; the fake: the recorder's
+	// checks). GSK's rendering on gtk4 happens after the snapshot, in
+	// GTK, and is not in it.
+	Submit time.Duration
+	// Present is Present and the composition's Commit on Win32, which
+	// may wait for the display; 0 elsewhere. It is not part of the
+	// frame's budget.
+	Present time.Duration
+	// Surfaces is the number of surfaces and popups painted.
+	Surfaces int
 }

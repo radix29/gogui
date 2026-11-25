@@ -219,6 +219,34 @@ func TestScrollerStates(t *testing.T) {
 			t.Errorf("strip %v, horizontal hidden %v", v, e.hbar().Hidden())
 		}
 	})
+	// In an inactive window (S6.1a): the wheel scrolls and shows the
+	// scroller, drawn as in a key window, light and dark, one and both
+	// scrollers.
+	for _, ap := range []driver.Appearance{light, {Dark: true, Accent: driver.DefaultAccent},
+		{IncreaseContrast: true, Accent: driver.DefaultAccent}, {Dark: true, IncreaseContrast: true, Accent: driver.DefaultAccent}} {
+		mode := "light"
+		if ap.Dark {
+			mode = "dark"
+		}
+		if ap.IncreaseContrast {
+			mode += ", increased contrast"
+		}
+		dump("inactive, "+mode, ap, func(e *scrollEnv) {
+			e.sh.Deactivate()
+			e.sf.Wheel(e.at(50, 50), pt(0, -1))
+			e.fadeSettle(t)
+			if e.w.IsKey() || e.sv.Offset().Y != 16 {
+				t.Errorf("inactive: key %v, offset %v", e.w.IsKey(), e.sv.Offset())
+			}
+		})
+		dump("inactive, both scrollers, "+mode, ap, func(e *scrollEnv) {
+			e.sh.Deactivate()
+			e.sv.SetHasHorizontalScroller(true)
+			e.sv.SetDocumentSize(driver.Size{W: 300, H: 400})
+			e.sf.Wheel(e.at(50, 50), pt(0, -1))
+			e.fadeSettle(t)
+		})
+	}
 
 	got := out.String()
 	path := filepath.Join("testdata", "scroll.states")

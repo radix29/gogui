@@ -20,6 +20,15 @@ func TestVariants(t *testing.T) {
 	if got, want := strings.Join(names, " "), "gallery-light-x1 gallery-dark-x1 gallery-light-x2 gallery-dark-x2"; got != want {
 		t.Errorf("names %q, want %q", got, want)
 	}
+	var polish []string
+	for _, v := range PolishVariants {
+		polish = append(polish, v.Name())
+	}
+	if got, want := strings.Join(polish, " "), "gallery-light-inactive-x1 gallery-dark-inactive-x1 gallery-light-inactive-x2 gallery-dark-inactive-x2 "+
+		"gallery-light-contrast-x1 gallery-dark-contrast-x1 gallery-light-contrast-x2 gallery-dark-contrast-x2"; got != want {
+		t.Errorf("polish names %q, want %q", got, want)
+	}
+	names = append(names, polish...)
 	// Every variant has its committed golden.
 	for _, n := range names {
 		if _, err := os.Stat(filepath.Join("..", "testdata", "golden", n+".png")); err != nil {
@@ -217,5 +226,44 @@ func TestCheckRun(t *testing.T) {
 	if res := c.Run(r, Variant{Scale: 1}, changed); res != (golden.Result{}) || len(r.errs) != 1 ||
 		!strings.Contains(r.errs[0], "gallery-light-x1") || files(t, c.Out) != "" {
 		t.Errorf("missing: %v, errors %q", res, r.errs)
+	}
+}
+
+func TestCheckSweep(t *testing.T) {
+	grey := color.NRGBA{128, 128, 128, 255}
+	v := Variant{Scale: 1}
+	dir := t.TempDir()
+	if err := golden.WritePNG(filepath.Join(dir, v.Name()+".png"), solid(4, 3, grey)); err != nil {
+		t.Fatal(err)
+	}
+	got := solid(4, 3, grey)
+	got.SetNRGBA(1, 1, color.NRGBA{188, 128, 128, 255}) // a small change: max delta about 0.13
+	got.SetNRGBA(3, 2, color.NRGBA{255, 0, 0, 255})     // a large one, masked below
+
+	c := &Check{Dir: dir, Options: golden.DefaultOptions}
+	lines, err := c.Sweep(v, got)
+	if err != nil || len(lines) != len(SweepThresholds) {
+		t.Fatalf("Sweep without a mask: %v, %q", err, lines)
+	}
+	if !strings.HasPrefix(lines[0], "t=0.05 mask=off: FAIL: 2 differing") ||
+		!strings.HasPrefix(lines[len(lines)-1], "t=0.3 mask=off: FAIL: 1 differing") {
+		t.Errorf("unmasked lines %q", lines)
+	}
+
+	c.Options.Mask = []image.Rectangle{image.Rect(3, 2, 4, 3)}
+	lines, err = c.Sweep(v, got)
+	if err != nil || len(lines) != 2*len(SweepThresholds) {
+		t.Fatalf("Sweep with a mask: %v, %q", err, lines)
+	}
+	if l := lines[len(lines)-1]; !strings.HasPrefix(l, "t=0.3 mask=on (1 rects): pass: 0 differing") ||
+		!strings.HasSuffix(l, ", 1 masked") {
+		t.Errorf("last masked line %q", l)
+	}
+	if c.Options.Threshold != golden.DefaultOptions.Threshold || len(c.Options.Mask) != 1 {
+		t.Errorf("Sweep changed the options: %+v", c.Options)
+	}
+
+	if _, err := (&Check{Dir: t.TempDir()}).Sweep(v, got); err == nil {
+		t.Error("Sweep without a golden: no error")
 	}
 }

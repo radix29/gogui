@@ -9,3 +9,12 @@ Stack 0,0 380x220
   Stack 20,129 340x16
     ProgressBar 0,5 206x6
     Label 214,0 126x16
+titlebar
+  titlebar "Temperature" @0,0 380x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" [disabled] {press} @48,8 12x12
+  title "Temperature" 151.5,6 77x16
+  region caption 0,0 380x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12

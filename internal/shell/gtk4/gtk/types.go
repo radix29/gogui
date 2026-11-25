@@ -60,11 +60,16 @@ type ColorStop struct {
 // SIMD alignment is 16, which Go can't promise for its own values.
 const MatrixSize = 64
 
-// Allocation mirrors GtkAllocation (GdkRectangle): four C ints, 16 bytes.
-type Allocation struct {
+// Rectangle mirrors GdkRectangle: four C ints, 16 bytes (S5.5e: a
+// popover's pointing_to; the IME's cursor location).
+type Rectangle struct {
 	_                   structs.HostLayout
 	X, Y, Width, Height int32
 }
+
+// Allocation mirrors GtkAllocation, which gtkwidget.h declares as
+// "typedef GdkRectangle GtkAllocation", so it is an alias of Rectangle.
+type Allocation = Rectangle
 
 // PangoRectangle mirrors PangoRectangle: four C ints in Pango units, 16
 // bytes (S4.2h: the iterator's extents).
@@ -128,6 +133,61 @@ type GError struct {
 	Domain  uint32
 	Code    int32
 	Message uintptr
+}
+
+// GSList mirrors a GSList cell (S5.3h): its data and the next cell (NULL
+// at the end), 16 bytes, read from native memory.
+type GSList struct {
+	_          structs.HostLayout
+	Data, Next uintptr
+}
+
+// PangoAttribute mirrors the header every Pango attribute starts with
+// (S5.3h): its class and the UTF-8 byte range it applies to
+// (AttrIndexToTextEnd: to the end of the text), 16 bytes, read from
+// native memory.
+type PangoAttribute struct {
+	_                    structs.HostLayout
+	Klass                uintptr // const PangoAttrClass *
+	StartIndex, EndIndex uint32
+}
+
+// PangoAttrClass mirrors PangoAttrClass (S5.3h): the PangoAttrType
+// (Attr*) and the copy, destroy and equal functions, 32 bytes. gogui
+// reads only Type.
+type PangoAttrClass struct {
+	_                    structs.HostLayout
+	Type                 int32
+	Copy, Destroy, Equal uintptr
+}
+
+// AttrType returns the PangoAttrType of the PangoAttribute at attr
+// (native memory): its class's Type.
+func AttrType(attr uintptr) int32 {
+	klass := ffi.ReadUintptr(attr, unsafe.Offsetof(PangoAttribute{}.Klass))
+	return ffi.ReadInt32(klass, unsafe.Offsetof(PangoAttrClass{}.Type))
+}
+
+// PangoAttrInt mirrors PangoAttrInt (S5.3i): the header and an int value
+// (the PangoUnderline of an underline attribute), 24 bytes with the
+// padding, read from native memory.
+type PangoAttrInt struct {
+	_     structs.HostLayout
+	Attr  PangoAttribute
+	Value int32
+}
+
+// AttrRange returns the UTF-8 byte range of the PangoAttribute at attr
+// (native memory).
+func AttrRange(attr uintptr) (start, end uint32) {
+	return uint32(ffi.ReadInt32(attr, unsafe.Offsetof(PangoAttribute{}.StartIndex))),
+		uint32(ffi.ReadInt32(attr, unsafe.Offsetof(PangoAttribute{}.EndIndex)))
+}
+
+// AttrInt returns the value of the PangoAttrInt at attr (native memory),
+// which must be of an int type (AttrUnderline).
+func AttrInt(attr uintptr) int32 {
+	return ffi.ReadInt32(attr, unsafe.Offsetof(PangoAttrInt{}.Value))
 }
 
 // Rect returns the graphene_rect_t (x, y, w, h).
@@ -222,6 +282,30 @@ const (
 // ButtonPrimary is GDK_BUTTON_PRIMARY.
 const ButtonPrimary uint32 = 1
 
+// GtkPositionType (gtkenums.h), a popover's side of its anchor (S5.5e).
+const (
+	PosLeft   int32 = 0
+	PosRight  int32 = 1
+	PosTop    int32 = 2
+	PosBottom int32 = 3
+)
+
+// GTK_STYLE_PROVIDER_PRIORITY_* (gtkstyleprovider.h), for
+// StyleContextAddProviderForDisplay (S5.5e).
+const (
+	StyleProviderPriorityFallback    uint32 = 1
+	StyleProviderPriorityTheme       uint32 = 200
+	StyleProviderPrioritySettings    uint32 = 400
+	StyleProviderPriorityApplication uint32 = 600
+	StyleProviderPriorityUser        uint32 = 800
+)
+
+// GtkAlign and GtkTextDirection values the popovers use (S5.5f).
+const (
+	AlignStart int32 = 1
+	TextDirLTR int32 = 1
+)
+
 // GtkOrientation.
 const (
 	OrientationHorizontal int32 = 0
@@ -296,6 +380,21 @@ const (
 
 	LogAttrIsWhite          uint32 = 1 << 3
 	LogAttrIsCursorPosition uint32 = 1 << 4
+)
+
+// PangoAttrType values (pango-attributes.h, stable since 1.0), the ones
+// the preedit's segments come from (S5.3h), and
+// PANGO_ATTR_INDEX_TO_TEXT_END (G_MAXUINT).
+const (
+	AttrForeground int32 = 9
+	AttrBackground int32 = 10
+	AttrUnderline  int32 = 11
+
+	AttrIndexToTextEnd uint32 = math.MaxUint32
+
+	// UnderlineNone is PANGO_UNDERLINE_NONE: an underline attribute that
+	// draws nothing (S5.3i).
+	UnderlineNone int32 = 0
 )
 
 // cairo_hint_metrics_t (cairo.h), for the text system's font options

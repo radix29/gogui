@@ -2,6 +2,7 @@ package fake
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/radix29/gogui/internal/driver"
@@ -271,4 +272,140 @@ func TestSend(t *testing.T) {
 	mustPanic(t, "ModPrimary", func() { f.Send(shell.ScrollEvent{Mods: driver.ModPrimary}) })
 	mustPanic(t, "ModPrimary", func() { f.Send(shell.PointerEvent{Mods: driver.ModPrimary}) })
 	mustPanic(t, "ModPrimary", func() { f.Send(shell.KeyEvent{Mods: driver.ModPrimary}) })
+}
+
+// TestKeyShifted: key-downs carry the fake layout's Shift level (S5.6h),
+// US by default, key-ups none.
+func TestKeyShifted(t *testing.T) {
+	s := started(t)
+	var w win
+	f := open(t, s, &w, shell.SurfaceConfig{Size: sz(100, 100)})
+	var got []driver.Key
+	w.event = func(ev shell.Event) bool {
+		if k, ok := ev.(shell.KeyEvent); ok {
+			got = append(got, k.Shifted)
+		}
+		return false
+	}
+	f.KeyDown('=', driver.ModControl)
+	f.KeyRepeat('1', 0)
+	f.KeyDown('a', 0)
+	f.KeyUp('a', 0)
+	f.KeyDown(driver.KeyReturn, 0)
+	f.KeyDown('é', 0)
+	s.SetShiftLayout(map[driver.Key]driver.Key{'+': '*'})
+	f.KeyDown('+', driver.ModControl)
+	f.KeyDown('=', 0)
+	f.KeyDown('q', 0)
+	s.SetShiftLayout(nil)
+	f.KeyDown('/', 0)
+	want := []driver.Key{'+', '!', 'A', driver.KeyNone, driver.KeyNone, 'É', '*', driver.KeyNone, 'Q', '?'}
+	if !slices.Equal(got, want) {
+		t.Errorf("Shifted = %q, want %q", got, want)
+	}
+}
+
+// TestModifierKeys: ModifierDown, ModifierUp and TapModifier send a
+// modifier key alone (S5.6i): KeyNone, its Modifier, Mods as after the
+// event; a bad modifier panics.
+func TestModifierKeys(t *testing.T) {
+	s := started(t)
+	var w win
+	f := open(t, s, &w, shell.SurfaceConfig{Size: sz(100, 100)})
+	var got []shell.KeyEvent
+	w.event = func(ev shell.Event) bool {
+		if k, ok := ev.(shell.KeyEvent); ok {
+			k.Time = 0
+			got = append(got, k)
+			return k.Down
+		}
+		return false
+	}
+	if !f.TapModifier(driver.ModOption) {
+		t.Error("TapModifier: press not handled")
+	}
+	f.ModifierDown(driver.ModControl, 0)
+	f.ModifierDown(driver.ModShift, driver.ModControl)
+	f.ModifierUp(driver.ModControl, driver.ModControl|driver.ModShift)
+	want := []shell.KeyEvent{
+		{Down: true, Modifier: driver.ModOption, Mods: driver.ModOption},
+		{Modifier: driver.ModOption},
+		{Down: true, Modifier: driver.ModControl, Mods: driver.ModControl},
+		{Down: true, Modifier: driver.ModShift, Mods: driver.ModControl | driver.ModShift},
+		{Modifier: driver.ModControl, Mods: driver.ModShift},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("events %+v\nwant %+v", got, want)
+	}
+	for _, m := range []driver.Modifiers{0, driver.ModShift | driver.ModOption, driver.ModPrimary} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("ModifierDown(%v) did not panic", m)
+				}
+			}()
+			f.ModifierDown(m, m)
+		}()
+	}
+}
+
+// TestActivatingPress (S6.1b): a press into a surface that is not key makes
+// it key first and is flagged Activating, its release and the next press
+// are not; a press outside the surface activates nothing; a caption press
+// activates without being delivered; a press into a blocked surface makes
+// the active modal key and delivers nothing.
+func TestActivatingPress(t *testing.T) {
+	s := started(t)
+	var a, b win
+	fa := open(t, s, &a, shell.SurfaceConfig{Size: sz(400, 300)})
+	fb := open(t, s, &b, shell.SurfaceConfig{Size: sz(400, 300)})
+	a.take()
+	if s.Key() != fb {
+		t.Fatal("the surface shown last is not key")
+	}
+	fa.Click(pt(500, 10)) // outside: another window's press
+	if s.Key() != fb || a.take() != "" {
+		t.Fatal("a press outside activated the surface")
+	}
+	fa.Press(pt(10, 20), shell.ButtonPrimary)
+	fa.Move(pt(30, 20))
+	fa.Release(pt(30, 20), shell.ButtonPrimary)
+	if got := a.take(); got != "enter (10,20); move (10,20); key true; down (10,20) b=1 held=1 n=1 activating; "+
+		"move (30,20) held=1; up (30,20) b=1 n=1" {
+		t.Fatalf("activating press: %s", got)
+	}
+	if s.Key() != fa || b.take() != "key false" {
+		t.Fatal("the press did not move the key")
+	}
+	fa.ClickButton(pt(30, 20), shell.ButtonSecondary) // key now: not activating
+	if got := a.take(); got != "down (30,20) b=2 held=2 n=1; up (30,20) b=2 n=1" {
+		t.Fatalf("press into the key surface: %s", got)
+	}
+
+	s.Deactivate() // the app lost the foreground
+	a.take()
+	fa.ClickButton(pt(30, 20), shell.ButtonSecondary) // any button activates
+	if got := a.take(); got != "key true; down (30,20) b=2 held=2 n=2 activating; up (30,20) b=2 n=2" {
+		t.Fatalf("secondary activating press: %s", got)
+	}
+
+	caption := rc(0, 0, 400, 28)
+	caption.Kind = shell.RegionCaption
+	fb.SetChromeRegions([]shell.ChromeRegion{caption})
+	fb.Click(pt(200, 10))
+	if got := b.take(); got != "enter (200,10); move (200,10); key true" || s.Key() != fb {
+		t.Fatalf("caption press: %s", got)
+	}
+	a.take()
+
+	m := newModal(t, s, fa, sz(200, 100), &win{})
+	m.Show()
+	fb.Activate() // refused: the modal stays key
+	a.take()
+	b.take()
+	s.Deactivate()
+	fa.Click(pt(30, 40))
+	if got := a.take(); got != "" || s.Key() != m {
+		t.Fatalf("press into a blocked surface: %q, key %v", got, s.Key() == m)
+	}
 }

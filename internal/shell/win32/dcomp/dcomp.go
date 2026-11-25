@@ -64,20 +64,18 @@ func (d Device) Commit() error {
 // the tree above the window's GDI content; an HWND has at most one target
 // of each kind (a second fails with DCOMPOSITION_ERROR_WINDOW_ALREADY_COMPOSED).
 func (d Device) CreateTargetForHwnd(h windows.HWND, topmost bool) (Target, error) {
-	var out com.Ptr
 	var top uintptr
 	if topmost {
 		top = 1
 	}
-	err := d.CallHR("IDCompositionDevice::CreateTargetForHwnd", slotDeviceCreateTargetForHwnd,
-		uintptr(h), top, uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("IDCompositionDevice::CreateTargetForHwnd", slotDeviceCreateTargetForHwnd,
+		uintptr(h), top)
 	return Target{out}, err
 }
 
 // CreateVisual creates a visual.
 func (d Device) CreateVisual() (Visual, error) {
-	var out com.Ptr
-	err := d.CallHR("IDCompositionDevice::CreateVisual", slotDeviceCreateVisual, uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("IDCompositionDevice::CreateVisual", slotDeviceCreateVisual)
 	return Visual{out}, err
 }
 

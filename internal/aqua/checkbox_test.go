@@ -28,9 +28,6 @@ func newCheckbox(t *testing.T, title string) *Checkbox {
 
 func TestCheckboxIsReal(t *testing.T) {
 	c := newCheckbox(t, "Wrap")
-	if _, ok := Caption(c); ok {
-		t.Error("the checkbox is still a placeholder peer")
-	}
 	if e := ElementOf(c); e == nil || e != Element(c.view) || c.StubPeer() != c.Checkbox || c.Stub() != &c.Checkbox.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -187,6 +184,7 @@ func TestCheckboxPaint(t *testing.T) {
 	c.SetControlSize(driver.ControlSizeRegular)
 	parent := newBox("parent", 0, 0, 200, 100)
 	parent.disabled = true
+	treeChange() // set without SetEnabled
 	parent.AddChild(c.view)
 	if got := paintPeer(t, c, r); !strings.Contains(got, "pushOpacity 0.5") || !strings.Contains(got, `"Wrap" 13pt #00000040`) {
 		t.Errorf("disabled ancestor:\n%s", got)
@@ -215,7 +213,7 @@ func TestCheckboxRedraws(t *testing.T) {
 func checkboxWindow(t *testing.T, title string, states *[]driver.CheckState) (*Checkbox, *Window, *fake.Surface, *fake.Shell) {
 	t.Helper()
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	var h driver.ToggleHandler
 	if states != nil {
@@ -364,42 +362,45 @@ func TestCheckboxInWindow(t *testing.T) {
 
 // TestCheckboxStates pins every state (off, on, mixed, each plain and
 // pressed; disabled off and on; focused on) in light and dark, in a key
-// and an inactive window, as record dumps in testdata/checkbox.states.
+// and an inactive window, with and without Increase Contrast (S6.1e), as
+// record dumps in testdata/checkbox.states.
 func TestCheckboxStates(t *testing.T) {
 	var out strings.Builder
-	for _, dark := range []bool{false, true} {
-		for _, key := range []bool{true, false} {
-			for _, st := range []struct {
-				name              string
-				value             driver.CheckState
-				pressed           bool
-				disabled, focused bool
-			}{
-				{"off", driver.StateOff, false, false, false},
-				{"off pressed", driver.StateOff, true, false, false},
-				{"on", driver.StateOn, false, false, false},
-				{"on pressed", driver.StateOn, true, false, false},
-				{"mixed", driver.StateMixed, false, false, false},
-				{"mixed pressed", driver.StateMixed, true, false, false},
-				{"disabled off", driver.StateOff, false, true, false},
-				{"disabled on", driver.StateOn, false, true, false},
-				{"focused on", driver.StateOn, false, false, true},
-			} {
-				c, w, sf, s := checkboxWindow(t, "Wrap", nil)
-				w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent})
-				c.SetState(st.value)
-				c.SetEnabled(!st.disabled)
-				if st.focused && !c.view.Focus() {
-					t.Fatal("focus")
+	for _, contrast := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, key := range []bool{true, false} {
+				for _, st := range []struct {
+					name              string
+					value             driver.CheckState
+					pressed           bool
+					disabled, focused bool
+				}{
+					{"off", driver.StateOff, false, false, false},
+					{"off pressed", driver.StateOff, true, false, false},
+					{"on", driver.StateOn, false, false, false},
+					{"on pressed", driver.StateOn, true, false, false},
+					{"mixed", driver.StateMixed, false, false, false},
+					{"mixed pressed", driver.StateMixed, true, false, false},
+					{"disabled off", driver.StateOff, false, true, false},
+					{"disabled on", driver.StateOn, false, true, false},
+					{"focused on", driver.StateOn, false, false, true},
+				} {
+					c, w, sf, s := checkboxWindow(t, "Wrap", nil)
+					w.SetAppearance(driver.Appearance{Dark: dark, Accent: driver.DefaultAccent, IncreaseContrast: contrast})
+					c.SetState(st.value)
+					c.SetEnabled(!st.disabled)
+					if st.focused && !c.view.Focus() {
+						t.Fatal("focus")
+					}
+					if st.pressed {
+						sf.Press(pt(17, 46), shell.ButtonPrimary)
+					}
+					if !key {
+						s.Deactivate()
+					}
+					state := c.view.State()
+					fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 				}
-				if st.pressed {
-					sf.Press(pt(17, 46), shell.ButtonPrimary)
-				}
-				if !key {
-					s.Deactivate()
-				}
-				state := c.view.State()
-				fmt.Fprintf(&out, "## %s, %s\n%s\n", st.name, state, controlLines(paint(t, s, sf)))
 			}
 		}
 	}

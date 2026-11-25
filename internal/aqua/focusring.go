@@ -95,11 +95,11 @@ func (f *FocusRing) Track(owner Element, ev Event) {
 	tl := w.Timeline()
 	if f.v == nil || f.tl != tl {
 		f.tl = tl
-		f.v = tl.NewValue(0, func(x float64) { f.set(b, x) })
+		f.v = tl.NewValue(0, func(x float64) { f.set(b, x) }).SetTolerance(anim.AlphaTolerance)
 	}
 	f.v.Set(0)
 	an := &tokens.Animation
-	f.v.AnimateTo(1, an.Duration(an.FocusRingDuration, w.Appearance()), anim.Curve(an.EaseOut))
+	f.v.AnimateTo(1, an.FocusRingDuration, anim.Curve(an.EaseOut)) // the timeline jumps with Reduce Motion
 }
 
 // set changes the progress and repaints owner on a change.
@@ -112,15 +112,16 @@ func (f *FocusRing) set(owner *Base, p float64) {
 }
 
 // Paint draws the ring around shape with the current progress, in the
-// appearance of owner's window (the driver's outside one). It draws
-// nothing while the ring is hidden.
+// appearance owner's tree paints with (rootContext: its window's, the
+// driver's in a windowless alert), the default one in a tree without a
+// window root. It draws nothing while the ring is hidden.
 func (f *FocusRing) Paint(c render.Canvas, owner Element, shape FocusShape) {
 	if f.p <= 0 {
 		return
 	}
 	a := driver.DefaultAppearance()
-	if w := owner.base().Window(); w != nil {
-		a = w.Appearance()
+	if rc := owner.base().rootContext(); rc != nil {
+		a = rc.rootAppearance()
 	}
 	PaintFocusRing(c, shape, f.p, a)
 }

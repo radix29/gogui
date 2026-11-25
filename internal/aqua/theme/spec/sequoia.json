@@ -53,13 +53,13 @@
       "TitleBarSeparator": {"light": [0, 0, 0, 26], "dark": [0, 0, 0], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "light: ColorSeparator; dark: a black hairline (chrome.go, S2.2c)"},
 
       "CloseFill": {"light": [255, 95, 87], "dark": [255, 95, 87], "source": "memory", "note": "from provisional.go (S2.2c)"},
-      "CloseBorder": {"light": [224, 68, 62], "dark": [224, 68, 62], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "CloseBorder": {"light": [224, 68, 62], "dark": [224, 68, 62], "contrastLight": [166, 38, 34], "contrastDark": [166, 38, 34], "source": "memory", "note": "from provisional.go (S2.2c); contrast: darker (S6.1d)"},
       "CloseGlyph": {"light": [77, 0, 0], "dark": [77, 0, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
       "MinimizeFill": {"light": [254, 188, 46], "dark": [254, 188, 46], "source": "memory", "note": "from provisional.go (S2.2c)"},
-      "MinimizeBorder": {"light": [222, 161, 35], "dark": [222, 161, 35], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "MinimizeBorder": {"light": [222, 161, 35], "dark": [222, 161, 35], "contrastLight": [168, 112, 10], "contrastDark": [168, 112, 10], "source": "memory", "note": "from provisional.go (S2.2c); contrast: darker (S6.1d)"},
       "MinimizeGlyph": {"light": [153, 87, 0], "dark": [153, 87, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
       "ZoomFill": {"light": [40, 200, 64], "dark": [40, 200, 64], "source": "memory", "note": "from provisional.go (S2.2c)"},
-      "ZoomBorder": {"light": [26, 171, 41], "dark": [26, 171, 41], "source": "memory", "note": "from provisional.go (S2.2c)"},
+      "ZoomBorder": {"light": [26, 171, 41], "dark": [26, 171, 41], "contrastLight": [12, 122, 24], "contrastDark": [12, 122, 24], "source": "memory", "note": "from provisional.go (S2.2c); contrast: darker (S6.1d)"},
       "ZoomGlyph": {"light": [0, 101, 0], "dark": [0, 101, 0], "source": "memory", "note": "from provisional.go (S2.2c)"},
 
       "LightInactiveFill": {"light": [220, 220, 220], "dark": [84, 84, 84], "source": "memory", "note": "inactive window or disabled light; from provisional.go (S2.2c)"},
@@ -114,13 +114,16 @@
   "accent": {
     "colors": {
       "Base": {"light": [255, 255, 255], "dark": [89, 89, 89], "source": "memory", "note": "backdrop of the selection and inactive colors; the default accent at SelectionAlpha over it gives the old selection colors"},
-      "DefaultButtonText": {"light": [255, 255, 255], "dark": [255, 255, 255], "source": "memory", "note": "label on an accent fill"}
+      "DefaultButtonText": {"light": [255, 255, 255], "dark": [255, 255, 255], "source": "memory", "note": "label on an accent fill"},
+      "AccentDarkText": {"light": [0, 0, 0, 217], "dark": [0, 0, 0, 217], "source": "memory", "note": "label on a light accent fill, where DefaultButtonText falls below AccentTextMinContrast (S6.1g); labelColor's light value"}
     },
     "numbers": {
       "SelectionAlpha": {"value": 0.3, "source": "memory", "note": "accent over Base in the selection colors"},
       "FocusRingAlpha": {"value": 0.5, "source": "memory", "note": "the half alpha of S2.2c"},
+      "SelectionContrastAlpha": {"value": 0.5, "source": "memory", "note": "accent over Base in the selection colors with Increase Contrast (S6.1e)"},
       "PressedShade": {"value": 0.85, "source": "memory", "note": "channel factor of a pressed accent fill"},
-      "InactiveAlpha": {"value": 0.35, "source": "memory", "note": "the accent's grey over Base in an inactive window"}
+      "InactiveAlpha": {"value": 0.35, "source": "memory", "note": "the accent's grey over Base in an inactive window"},
+      "AccentTextMinContrast": {"value": 3, "source": "memory", "note": "the WCAG 2 contrast ratio DefaultButtonText needs on the accent, else AccentDarkText (S6.1g; WCAG's 3:1 for UI components)"}
     }
   },
   "animation": {
@@ -148,6 +151,7 @@
       "BezelFill": {"light": [255, 255, 255], "dark": [255, 255, 255, 64], "source": "memory", "note": "push button bezel, checkbox box and radio circle when off"},
       "BezelPressedFill": {"light": [222, 222, 222], "dark": [255, 255, 255, 107], "source": "memory", "note": "the same while pressed"},
       "BezelBorder": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "1 pt, drawn inside the bezel"},
+      "BezelOutline": {"light": [0, 0, 0, 0], "dark": [255, 255, 255, 0], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "Increase Contrast only (transparent otherwise): the outline of an accent-filled bezel (default button, on checkbox or radio, pop-up indicator), as dark as BezelBorder's contrast value"},
       "BoxFill": {"light": [0, 0, 0, 10], "dark": [255, 255, 255, 13], "source": "memory", "note": "the rounded group of a Box"},
       "BoxBorder": {"light": [0, 0, 0, 20], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 115], "contrastDark": [255, 255, 255, 115], "source": "memory"},
 
@@ -157,7 +161,8 @@
       "SliderKnobShadow": {"light": [0, 0, 0, 77], "dark": [0, 0, 0, 102], "contrastLight": [0, 0, 0, 128], "contrastDark": [0, 0, 0, 153], "source": "memory"},
       "SliderTickMark": {"light": [0, 0, 0, 64], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 153], "contrastDark": [255, 255, 255, 153], "source": "memory"},
       "ProgressTrack": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 102], "contrastDark": [255, 255, 255, 102], "source": "memory", "note": "the empty track of a progress bar; the filled part and the indeterminate band are ValueFill"},
-      "SpinnerSpoke": {"light": [0, 0, 0, 140], "dark": [255, 255, 255, 140], "contrastLight": [0, 0, 0, 217], "contrastDark": [255, 255, 255, 217], "source": "memory", "note": "the leading spoke; the trailing ones fade towards SpinnerTailAlpha"}
+      "SpinnerSpoke": {"light": [0, 0, 0, 140], "dark": [255, 255, 255, 140], "contrastLight": [0, 0, 0, 217], "contrastDark": [255, 255, 255, 217], "source": "memory", "note": "the leading spoke; the trailing ones fade towards SpinnerTailAlpha"},
+      "SliderTrackOutline": {"light": [0, 0, 0, 0], "dark": [255, 255, 255, 0], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "Increase Contrast only (transparent otherwise): the outline around the whole track, the filled part included"}
     },
     "numbers": {
       "BoxCornerRadius": {"value": 6, "source": "memory"},
@@ -228,6 +233,148 @@
       "ScrollerHoverDuration": {"ms": 150, "source": "memory", "note": "an overlay knob widening on hover"},
       "WheelStepDuration": {"ms": 150, "source": "memory", "note": "the smooth animation of one wheel notch or key step"},
       "VelocityWindow": {"ms": 80, "source": "memory", "note": "the precise samples before release that set the momentum velocity"}
+    }
+  },
+  "textField": {
+    "colors": {
+      "FieldBorder": {"light": [0, 0, 0, 46], "dark": [255, 255, 255, 38], "contrastLight": [0, 0, 0, 153], "contrastDark": [255, 255, 255, 153], "source": "memory", "note": "the bezel's border, drawn inside it; the bezel is filled with ColorTextBackground"},
+      "FieldInsetShadow": {"light": [0, 0, 0, 20], "dark": [0, 0, 0, 51], "source": "memory", "note": "the inset shadow under the bezel's top edge (the recessed look)"}
+    },
+    "numbers": {
+      "FieldBorderWidth": {"value": 1, "source": "memory"},
+      "FieldInsetShadowOffsetY": {"value": 0.5, "source": "memory"},
+      "FieldInsetShadowBlur": {"value": 1, "source": "memory"},
+      "CaretWidth": {"value": 2, "source": "memory", "note": "the insertion point of macOS 14 (NSTextInsertionIndicator), in the accent color (Theme.Caret)"}
+    },
+    "sizes": {
+      "FieldCornerRadius": {"regular": 0, "small": 0, "mini": 0, "large": 0, "source": "memory", "note": "a square bezel (NSTextField.BezelStyle.squareBezel); the focus ring follows it"},
+      "FieldPaddingX": {"regular": 4, "small": 3, "mini": 2, "large": 5, "source": "memory", "note": "bezel edge to text, border included; the text is centred vertically in ControlHeight"}
+    }
+  },
+  "textView": {
+    "numbers": {
+      "ContainerInsetY": {"value": 5, "source": "memory", "note": "the space above the first line and below the last (NSTextView.textContainerInset.height)"},
+      "LineFragmentPadding": {"value": 5, "source": "memory", "note": "the space left and right of every line (NSTextContainer.lineFragmentPadding); the text wraps at the viewport width minus twice this"}
+    }
+  },
+  "menu": {
+    "colors": {
+      "Background": {"light": [246, 246, 246, 166], "dark": [40, 40, 40, 166], "source": "memory", "note": "the translucent tint over the OS blur (NSVisualEffectView's menu material)"},
+      "OpaqueBackground": {"light": [242, 242, 242], "dark": [43, 43, 43], "contrastLight": [255, 255, 255], "contrastDark": [0, 0, 0], "source": "memory", "note": "the fill without a blur (Windows 10, high contrast, transparency effects off, Linux)"},
+      "Border": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 46], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "the panel's hairline, inside it"},
+      "Shadow": {"light": [0, 0, 0, 64], "dark": [0, 0, 0, 128], "source": "memory", "note": "only where the OS draws no shadow behind the popup (Menu's own shadow)"},
+      "Text": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "contrastLight": [0, 0, 0, 255], "contrastDark": [255, 255, 255, 255], "source": "memory", "note": "an enabled item's title and checkmark (labelColor)"},
+      "DisabledText": {"light": [0, 0, 0, 64], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "a disabled item (disabledControlTextColor)"},
+      "HighlightedText": {"light": [255, 255, 255], "dark": [255, 255, 255], "source": "memory", "note": "the highlighted item, on the accent (selectedMenuItemTextColor)"},
+      "Separator": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 26], "contrastLight": [0, 0, 0, 128], "contrastDark": [255, 255, 255, 128], "source": "memory", "note": "a separator item's line"}
+    },
+    "numbers": {
+      "BorderWidth": {"value": 1, "source": "memory", "note": "rounded to whole device pixels, at least one"},
+      "CornerRadius": {"value": 6, "source": "memory", "note": "the menus of macOS 11+"},
+      "ShadowOffsetY": {"value": 4, "source": "memory"},
+      "ShadowBlur": {"value": 12, "source": "memory"},
+      "PaddingY": {"value": 5, "source": "memory", "note": "the panel's edge to the first item and from the last"},
+      "HighlightInsetX": {"value": 5, "source": "memory", "note": "the inset rounded selection of macOS 11+"},
+      "HighlightRadius": {"value": 4, "source": "memory"},
+      "CheckColumnWidth": {"value": 16, "source": "memory", "note": "the highlight's edge to the titles; the checkmark is centred in it"},
+      "CheckmarkSize": {"value": 10, "source": "memory", "note": "the procedural check, drawn on the checkbox's 14-unit grid"},
+      "CheckmarkStroke": {"value": 1.75, "source": "memory"},
+      "TitlePaddingRight": {"value": 21, "source": "memory", "note": "the widest title to the panel's right side"},
+      "SeparatorHeight": {"value": 11, "source": "memory", "note": "the height of NSMenuItem.separatorItem"},
+      "SeparatorThickness": {"value": 1, "source": "memory", "note": "rounded to whole device pixels, at least one"},
+      "SeparatorInsetX": {"value": 10, "source": "memory", "note": "the panel's sides to the line"},
+      "ScrollArrowHeight": {"value": 16, "source": "memory", "note": "the strip of a scroll arrow at the top or bottom of a menu lower than its items"},
+      "ScrollArrowSize": {"value": 8, "source": "memory", "note": "the arrow's width; a triangle half as high, centred in its strip"},
+      "ShortcutGap": {"value": 24, "source": "memory", "note": "the least space between the widest title and the widest shortcut (the key-equivalent column, right-aligned)"},
+      "SubmenuChevronSize": {"value": 9, "source": "memory", "note": "the submenu chevron's height; it points right, half as wide, right-aligned in the shortcut column"},
+      "SubmenuChevronStroke": {"value": 1.5, "source": "memory"}
+    },
+    "sizes": {
+      "ItemHeight": {"regular": 22, "small": 19, "mini": 16, "large": 24, "source": "memory", "note": "a title item; the title is centred in it"}
+    }
+  },
+  "popUp": {
+    "numbers": {
+      "IndicatorInset": {"value": 2, "source": "memory", "note": "the bezel's top, right and bottom edges to the indicator (the accent square of macOS 11+)"},
+      "IndicatorGap": {"value": 4, "source": "memory", "note": "the title's truncation edge to the indicator"},
+      "ChevronStroke": {"value": 1.5, "source": "memory"},
+      "ChevronGap": {"value": 2, "source": "memory", "note": "between the open sides of the up and the down chevron"}
+    },
+    "sizes": {
+      "PaddingX": {"regular": 8, "small": 7, "mini": 6, "large": 8, "source": "memory", "note": "the bezel's left edge to the title (left-aligned)"},
+      "IndicatorWidth": {"regular": 16, "small": 13, "mini": 10, "large": 18, "source": "memory", "note": "the indicator's width; it is as high as the bezel minus twice IndicatorInset"},
+      "ChevronWidth": {"regular": 7, "small": 6, "mini": 5, "large": 8, "source": "memory", "note": "the width of each chevron, a right angle half as high"}
+    }
+  },
+  "menuBar": {
+    "colors": {
+      "Text": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "contrastLight": [0, 0, 0, 255], "contrastDark": [255, 255, 255, 255], "source": "memory", "note": "a menu title in a key window (labelColor)"},
+      "InactiveText": {"light": [0, 0, 0, 66], "dark": [255, 255, 255, 64], "contrastLight": [0, 0, 0, 140], "contrastDark": [255, 255, 255, 140], "source": "memory", "note": "a menu title in an inactive window, as the window title (tertiaryLabelColor)"},
+      "Highlight": {"light": [0, 0, 0, 26], "dark": [255, 255, 255, 38], "contrastLight": [0, 0, 0, 64], "contrastDark": [255, 255, 255, 77], "source": "memory", "note": "the rounded fill behind the open or keyboard-focused title; accent-free, as macOS's menu bar"}
+    },
+    "numbers": {
+      "StartGap": {"value": 12, "source": "memory", "note": "the traffic lights' right edge to the first title's slot"},
+      "TitlePaddingX": {"value": 7, "source": "memory", "note": "a title's text to either side of its slot; the highlight covers the slot"},
+      "HighlightHeight": {"value": 20, "source": "memory", "note": "centred in the title bar"},
+      "HighlightRadius": {"value": 5, "source": "memory"},
+      "MinDragWidth": {"value": 64, "source": "memory", "note": "the least caption left right of the last shown title; the titles that do not fit are dropped from the right"},
+      "WindowTitleGap": {"value": 16, "source": "memory", "note": "the least distance between the strip and the centred window title"}
+    }
+  },
+  "tooltip": {
+    "colors": {
+      "Background": {"light": [246, 246, 246], "dark": [44, 44, 46], "contrastLight": [255, 255, 255], "contrastDark": [0, 0, 0], "source": "memory", "note": "the panel's fill, opaque"},
+      "Border": {"light": [0, 0, 0, 46], "dark": [255, 255, 255, 51], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "the panel's hairline, inside it"},
+      "Text": {"light": [0, 0, 0, 217], "dark": [255, 255, 255, 217], "contrastLight": [0, 0, 0, 255], "contrastDark": [255, 255, 255, 255], "source": "memory", "note": "the text (labelColor)"},
+      "Shadow": {"light": [0, 0, 0, 51], "dark": [0, 0, 0, 102], "source": "memory", "note": "only where the OS draws no shadow behind the popup (the tooltip's own shadow)"}
+    },
+    "numbers": {
+      "BorderWidth": {"value": 1, "source": "memory", "note": "rounded to whole device pixels, at least one"},
+      "CornerRadius": {"value": 4, "source": "memory"},
+      "ShadowOffsetY": {"value": 1, "source": "memory"},
+      "ShadowBlur": {"value": 4, "source": "memory"},
+      "PaddingX": {"value": 5, "source": "memory", "note": "the panel's left and right edges to the text"},
+      "PaddingY": {"value": 2, "source": "memory", "note": "the panel's top and bottom edges to the text"},
+      "FontSize": {"value": 11, "source": "memory", "note": "NSFont.toolTipsFont's default size"},
+      "MaxWidth": {"value": 300, "source": "memory", "note": "the widest panel; longer text wraps"},
+      "OffsetX": {"value": 0, "source": "memory", "note": "the pointer's hot spot to the panel's left edge"},
+      "OffsetY": {"value": 20, "source": "memory", "note": "the pointer's hot spot to the panel's top: below the arrow cursor"}
+    },
+    "durations": {
+      "Delay": {"ms": 1000, "source": "memory", "note": "the pointer resting on a widget before its tooltip shows"},
+      "Grace": {"ms": 500, "source": "memory", "note": "after a tooltip hid by moving off its widget, the next one shows at once for this long"}
+    }
+  },
+  "alert": {
+    "colors": {
+      "Background": {"light": [242, 242, 242], "dark": [44, 44, 46], "contrastLight": [255, 255, 255], "contrastDark": [0, 0, 0], "source": "memory", "note": "the panel's fill, opaque (the alert's vibrant background without the blur)"},
+      "Border": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 38], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "the panel's hairline, inside it"},
+      "Shadow": {"light": [0, 0, 0, 77], "dark": [0, 0, 0, 128], "source": "memory", "note": "only where nothing draws a shadow behind the panel (a sheet)"},
+      "IconTop": {"light": [250, 250, 252], "dark": [110, 110, 115], "source": "memory", "note": "the app placeholder's gradient, top"},
+      "IconBottom": {"light": [214, 214, 220], "dark": [72, 72, 76], "source": "memory", "note": "the app placeholder's gradient, bottom"},
+      "IconBorder": {"light": [0, 0, 0, 38], "dark": [255, 255, 255, 38], "contrastLight": [0, 0, 0, 191], "contrastDark": [255, 255, 255, 191], "source": "memory", "note": "the app placeholder's hairline"},
+      "IconGlyph": {"light": [0, 0, 0, 115], "dark": [255, 255, 255, 140], "contrastLight": [0, 0, 0, 230], "contrastDark": [255, 255, 255, 230], "source": "memory", "note": "the window glyph on the app placeholder"},
+      "CautionFill": {"light": [255, 204, 0], "dark": [255, 214, 10], "source": "memory", "note": "the caution triangle (systemYellow)"},
+      "CautionMark": {"light": [0, 0, 0, 217], "dark": [0, 0, 0, 217], "source": "memory", "note": "the exclamation mark on the triangle"}
+    },
+    "numbers": {
+      "Width": {"value": 260, "source": "memory", "note": "the panel's fixed width (macOS 11+)"},
+      "CornerRadius": {"value": 10, "source": "memory"},
+      "BorderWidth": {"value": 1, "source": "memory", "note": "rounded to whole device pixels, at least one"},
+      "ShadowOffsetY": {"value": 8, "source": "memory"},
+      "ShadowBlur": {"value": 24, "source": "memory"},
+      "PaddingX": {"value": 16, "source": "memory", "note": "the panel's sides to the texts and the buttons"},
+      "PaddingTop": {"value": 20, "source": "memory", "note": "the panel's top to the icon"},
+      "PaddingBottom": {"value": 16, "source": "memory", "note": "the last button to the panel's bottom"},
+      "IconSize": {"value": 64, "source": "memory"},
+      "IconCornerRadius": {"value": 14, "source": "memory", "note": "the app placeholder's corners, about 22 % of its side"},
+      "BadgeSize": {"value": 32, "source": "memory", "note": "the app placeholder badge at the caution triangle's bottom right"},
+      "IconGap": {"value": 12, "source": "memory", "note": "the icon to the message"},
+      "MessageFontSize": {"value": 13, "source": "memory", "note": "bold (EmphasizedWeight)"},
+      "DetailFontSize": {"value": 11, "source": "memory", "note": "NSFont.smallSystemFontSize"},
+      "DetailGap": {"value": 6, "source": "memory", "note": "the message to the detail"},
+      "ButtonsGap": {"value": 16, "source": "memory", "note": "the texts to the buttons"},
+      "ButtonGap": {"value": 8, "source": "memory", "note": "between two buttons, side by side or stacked"}
     }
   }
 }

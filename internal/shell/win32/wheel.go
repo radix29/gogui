@@ -90,33 +90,33 @@ func wheelDelta(delta int16, horizontal, precise bool, ws wheelSettings) driver.
 }
 
 // wheel handles WM_MOUSEWHEEL and WM_MOUSEHWHEEL (the position in lp is in
-// screen pixels).
-func (sf *surface) wheel(msg uint32, wp, lp uintptr) {
+// screen pixels), of a surface or of a popup (grab.go).
+func (t *swapTarget) wheel(msg uint32, wp, lp uintptr) {
 	delta := int16(uint16(wp >> 16))
-	if delta == 0 || sf.dead {
+	if delta == 0 || t.dead {
 		return
 	}
-	precise, phase := sf.gesture.Next(isPreciseDelta(delta))
+	precise, phase := t.gesture.Next(isPreciseDelta(delta))
 	d := wheelDelta(delta, msg == w32.WM_MOUSEHWHEEL, precise, readWheelSettings())
-	pos := sf.screenPoint(signedXY(lp))
-	sf.scrollPos = pos
+	pos := t.screenPoint(signedXY(lp))
+	t.scrollPos = pos
 	if precise {
 		// Restarts the timer; fails only for a destroyed window.
-		_ = w32.SetTimer(sf.hwnd, timerGesture, gestureTimeout)
+		_ = w32.SetTimer(t.hwnd, timerGesture, gestureTimeout)
 	}
 	if d == (driver.Point{}) && phase == shell.PhaseNone {
 		return // scrolling is off
 	}
-	sf.h.Event(shell.ScrollEvent{Pos: pos, Delta: d, Precise: precise, Phase: phase,
-		Mods: modifiers(), Time: sf.s.eventTime()})
+	t.win.scrollEvent(shell.ScrollEvent{Pos: pos, Delta: d, Precise: precise, Phase: phase,
+		Mods: modifiers(), Time: t.s.eventTime()})
 }
 
 // endGesture ends a precise gesture with a PhaseEnded event (the timer).
-func (sf *surface) endGesture() {
-	_ = w32.KillTimer(sf.hwnd, timerGesture)
-	if !sf.gesture.End() || sf.dead {
+func (t *swapTarget) endGesture() {
+	_ = w32.KillTimer(t.hwnd, timerGesture)
+	if !t.gesture.End() || t.dead {
 		return
 	}
-	sf.h.Event(shell.ScrollEvent{Pos: sf.scrollPos, Precise: true, Phase: shell.PhaseEnded,
-		Mods: modifiers(), Time: sf.s.eventTime()})
+	t.win.scrollEvent(shell.ScrollEvent{Pos: t.scrollPos, Precise: true, Phase: shell.PhaseEnded,
+		Mods: modifiers(), Time: t.s.eventTime()})
 }

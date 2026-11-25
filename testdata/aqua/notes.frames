@@ -37,3 +37,41 @@ Stack 0,0 720x480
   Separator 0,451 720x1
   Stack 0,452 720x28
     Label 6,6 161x16
+titlebar
+  titlebar "Notes" @0,0 720x28
+    menubar "" @72,0 189x28
+      menubaritem "Notes" @72,0 49x28
+      menubaritem "File" @121,0 42x28
+      menubaritem "Edit" @163,0 42x28
+      menubaritem "Format" @205,0 56x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "Notes" 342.5,6 35x16
+  region caption 0,0 720x28
+  region client 72,0 49x28
+  region client 121,0 42x28
+  region client 163,0 42x28
+  region client 205,0 56x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12
+titlebar at 480x508
+  titlebar "Notes" @0,0 480x28
+    menubar "" @72,0 189x28
+      menubaritem "Notes" @72,0 49x28
+      menubaritem "File" @121,0 42x28
+      menubaritem "Edit" @163,0 42x28
+      menubaritem "Format" @205,0 56x28
+    button "Close" {press} @8,8 12x12
+    button "Minimize" {press} @28,8 12x12
+    button "Zoom" {press} @48,8 12x12
+  title "" 0,0 0x0
+  region caption 0,0 480x28
+  region client 72,0 49x28
+  region client 121,0 42x28
+  region client 163,0 42x28
+  region client 205,0 56x28
+  region close 8,8 12x12
+  region minimize 28,8 12x12
+  region maximize 48,8 12x12

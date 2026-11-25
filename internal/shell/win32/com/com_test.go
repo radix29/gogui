@@ -371,3 +371,33 @@ func TestBind(t *testing.T) {
 		}
 	})
 }
+
+// TestCallOut: CallOut appends the out pointer, returns the interface with
+// its own reference on success and nil with an *Error naming op on failure
+// (review R9). QueryInterface is the out-pointer method every object has.
+func TestCallOut(t *testing.T) {
+	inApartment(t, func() {
+		f, err := CreateInstance(&clsidWICImagingFactory, &iidIWICImagingFactory)
+		if err != nil {
+			t.Fatalf("CreateInstance: %v", err)
+		}
+		defer f.Release()
+		start := f.RefCount()
+		u, err := f.CallOut("QI", slotQueryInterface, uintptr(unsafe.Pointer(&IID_IUnknown)))
+		if err != nil || u.IsNil() {
+			t.Fatalf("CallOut(IUnknown) = %v, %v", u, err)
+		}
+		if n := f.RefCount(); n != start+1 {
+			t.Errorf("count after CallOut %d, want %d", n, start+1)
+		}
+		u.Release()
+		d, err := f.CallOut("QI(IDispatch)", slotQueryInterface, uintptr(unsafe.Pointer(&iidIDispatch)))
+		var ce *Error
+		if !d.IsNil() || !errors.Is(err, E_NOINTERFACE) || !errors.As(err, &ce) || ce.Op != "QI(IDispatch)" {
+			t.Errorf("CallOut(IDispatch) = %v, %v; want nil, E_NOINTERFACE from QI(IDispatch)", d, err)
+		}
+		if n := f.RefCount(); n != start {
+			t.Errorf("count after the calls %d, want %d", n, start)
+		}
+	})
+}

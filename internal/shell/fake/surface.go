@@ -6,6 +6,7 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/render/record"
 	"github.com/radix29/gogui/internal/shell"
+	"github.com/radix29/gogui/internal/shell/shellkit"
 )
 
 // Surface is a fake shell.Surface. It records its state for tests and
@@ -23,6 +24,7 @@ type Surface struct {
 	scale    float64
 	cursor   shell.Cursor
 	regions  []shell.ChromeRegion
+	pos      driver.Point // top-left on the screen, in points (UserMove)
 
 	visible, minimized, zoomed, dead bool
 	unzoomed                         driver.Size // size before Zoom
@@ -33,7 +35,14 @@ type Surface struct {
 	last     *record.Canvas
 	paintErr error
 
+	// Modal surfaces (modal.go): Modal and Owner from the config, whether
+	// it has been shown (placed and blocking), the key surface before that,
+	// and whether Close is running.
+	modal, modalShown, closing bool
+	owner, prevKey             *Surface
+
 	ptr pointer // input state, see input.go
+	ime ime     // text input state, see ime.go
 }
 
 var _ shell.Surface = (*Surface)(nil)
@@ -55,19 +64,10 @@ func (sf *Surface) change(what string) bool {
 	return true
 }
 
-// clamp limits size to the min and max sizes (zero components: no limit;
-// min wins over max) and to non-negative values.
+// clamp limits size to the min and max sizes as the real shells do
+// (shellkit.ClampSize).
 func (sf *Surface) clamp(size driver.Size) driver.Size {
-	lim := func(v, lo, hi float64) float64 {
-		if math.IsNaN(v) || v < 0 {
-			v = 0
-		}
-		if hi > 0 {
-			v = math.Min(v, hi)
-		}
-		return math.Max(v, lo)
-	}
-	return driver.Size{W: lim(size.W, sf.min.W, sf.max.W), H: lim(size.H, sf.min.H, sf.max.H)}
+	return shellkit.ClampSize(size, sf.min, sf.max)
 }
 
 // resize applies a new size and scale, calls Resized when either changed
@@ -77,6 +77,7 @@ func (sf *Surface) resize(size driver.Size, scale float64) bool {
 	if size == sf.size && scale == sf.scale {
 		return false
 	}
+	sf.dismissGrab() // a resize of the parent dismisses its grab popup
 	sf.size, sf.scale = size, scale
 	sf.h.Resized(size, scale)
 	sf.Invalidate()
@@ -109,18 +110,10 @@ func (sf *Surface) SetSize(size driver.Size) {
 	}
 }
 
-// SetMinSize implements shell.Surface.
-func (sf *Surface) SetMinSize(size driver.Size) {
-	if sf.change("SetMinSize") {
-		sf.min = size
-		sf.resize(sf.size, sf.scale)
-	}
-}
-
-// SetMaxSize implements shell.Surface.
-func (sf *Surface) SetMaxSize(size driver.Size) {
-	if sf.change("SetMaxSize") {
-		sf.max = size
+// SetSizeLimits implements shell.Surface.
+func (sf *Surface) SetSizeLimits(min, max driver.Size) {
+	if sf.change("SetSizeLimits") {
+		sf.min, sf.max = min, max
 		sf.resize(sf.size, sf.scale)
 	}
 }
@@ -154,9 +147,9 @@ func (sf *Surface) SetScale(scale float64) {
 // is clamped, Resized is called, and a visible surface is painted before
 // UserResize returns (the live-resize rule of SurfaceHandler.Resized). It
 // does nothing without driver.StyleResizable, and reports whether the size
-// changed.
+// changed. A blocked surface cannot be resized by the user.
 func (sf *Surface) UserResize(size driver.Size) bool {
-	if !sf.change("UserResize") || sf.style&driver.StyleResizable == 0 {
+	if !sf.change("UserResize") || sf.style&driver.StyleResizable == 0 || sf.blocked() {
 		return false
 	}
 	if !sf.resize(size, sf.scale) {
@@ -169,27 +162,38 @@ func (sf *Surface) UserResize(size driver.Size) bool {
 	return true
 }
 
-// Center implements shell.Surface.
+// Center implements shell.Surface. A modal surface that has been shown is
+// placed again (on its owner, see shell.SurfaceConfig.Modal); before its
+// first Show, Center does nothing for it.
 func (sf *Surface) Center() {
-	if sf.change("Center") {
+	switch {
+	case !sf.change("Center"):
+	case !sf.modal:
 		sf.centers++
+	case sf.modalShown:
+		sf.place()
 	}
 }
 
 // Centered returns how often the surface was centered (SurfaceConfig.Center
-// counts as one).
+// counts as one; for a modal surface every placement counts, the first Show
+// included).
 func (sf *Surface) Centered() int { sf.check("Centered"); return sf.centers }
 
 // Show implements shell.Surface. It also restores a minimized surface. The
-// surface becomes key, and is painted at the next frame if it is
-// invalidated.
+// surface becomes key (a blocked one makes the active modal key), and is
+// painted at the next frame if it is invalidated. The first Show of a modal
+// surface places it and blocks the others (shell.SurfaceConfig.Modal).
 func (sf *Surface) Show() {
 	if !sf.change("Show") {
 		return
 	}
 	sf.visible, sf.minimized = true, false
-	sf.shell.setKey(sf)
-	if sf.invalid {
+	if sf.modal && !sf.modalShown {
+		sf.showModal()
+	}
+	sf.shell.setKey(sf) // a blocked surface: the active modal
+	if sf.invalid || sf.popupInvalid() {
 		sf.shell.clock.RequestFrame()
 	}
 }
@@ -199,11 +203,12 @@ func (sf *Surface) Show() {
 func (sf *Surface) Visible() bool { sf.check("Visible"); return sf.visible }
 
 // Minimize implements shell.Surface. A minimized surface stops being key
-// and is not painted.
+// and is not painted. A modal surface cannot be minimized.
 func (sf *Surface) Minimize() {
-	if !sf.change("Minimize") || !sf.visible || sf.minimized {
+	if !sf.change("Minimize") || !sf.visible || sf.minimized || sf.modal {
 		return
 	}
+	sf.dismissGrab()
 	sf.minimized = true
 	if sf.shell.key == sf {
 		sf.shell.setKey(nil)
@@ -215,7 +220,8 @@ func (sf *Surface) Minimized() bool { sf.check("Minimized"); return sf.minimized
 
 // Activate simulates the user making the surface key (clicking it, the
 // taskbar, Alt-Tab); a minimized surface is restored. It does nothing for a
-// hidden surface.
+// hidden surface. For a blocked surface the OS refuses: the surface is
+// shown and restored, but the active modal becomes key.
 func (sf *Surface) Activate() {
 	if sf.change("Activate") && sf.visible {
 		sf.Show()
@@ -248,13 +254,23 @@ func (sf *Surface) Zoomed() bool {
 	return sf.zoomed
 }
 
-// Close implements shell.Surface.
+// Close implements shell.Surface. The modal surfaces the surface owns
+// close first. A closing modal surface leaves modality before its Closed,
+// so the others are no longer blocked inside it, and hands the key on
+// after it (modal.go, shell.SurfaceConfig.Modal).
 func (sf *Surface) Close() {
 	if !sf.change("Close") {
 		return
 	}
+	sf.closing = true
+	sf.closeOwned()
+	sf.closePopups()
+	if sf.modal {
+		sf.leaveModality()
+	}
 	sf.dead = true
 	s := sf.shell
+	wasKey := s.key == sf
 	for i, o := range s.surfaces {
 		if o == sf {
 			s.surfaces = append(s.surfaces[:i], s.surfaces[i+1:]...)
@@ -265,13 +281,17 @@ func (sf *Surface) Close() {
 		s.key = nil
 	}
 	sf.h.Closed()
+	if sf.modal {
+		sf.handOnKey(wasKey)
+	}
 }
 
 // UserClose simulates the user or the OS asking to close the surface
 // (Alt+F4, the taskbar): it asks CloseRequested and closes the surface if
-// allowed. It reports whether the surface closed.
+// allowed. It reports whether the surface closed. A blocked surface
+// refuses without asking.
 func (sf *Surface) UserClose() bool {
-	if !sf.change("UserClose") || !sf.h.CloseRequested() {
+	if !sf.change("UserClose") || sf.blocked() || !sf.h.CloseRequested() {
 		return false
 	}
 	sf.Close()
@@ -281,13 +301,14 @@ func (sf *Surface) UserClose() bool {
 // Closed reports whether the surface has closed.
 func (sf *Surface) Closed() bool { sf.check("Closed"); return sf.dead }
 
-// Invalidate implements shell.Surface.
+// Invalidate implements shell.Surface. From inside the frame function it
+// requests no frame: the frame's own paint pass paints the surface.
 func (sf *Surface) Invalidate() {
 	if !sf.live("Invalidate") {
 		return
 	}
 	sf.invalid = true
-	sf.shell.clock.RequestFrame()
+	sf.shell.clock.invalidated()
 }
 
 // Invalid reports whether the surface waits for a paint.
@@ -316,15 +337,14 @@ func (sf *Surface) ChromeRegions() []shell.ChromeRegion {
 	return append([]shell.ChromeRegion(nil), sf.regions...)
 }
 
-// HitTest answers the OS hit-test for p as the real shells do: the regions
-// are tested from last to first, the first one containing p wins, and a
-// point in none is RegionClient. (The fake has no resize borders.)
+// HitTest answers the OS hit-test for p as the real shells do
+// (shellkit.HitRegion): the regions are tested from last to first, the
+// first one containing p wins, and a point in none is RegionClient. (The
+// fake has no resize borders.)
 func (sf *Surface) HitTest(p driver.Point) shell.RegionKind {
 	sf.check("HitTest")
-	for i := len(sf.regions) - 1; i >= 0; i-- {
-		if sf.regions[i].Rect.Contains(p) {
-			return sf.regions[i].Kind
-		}
+	if k, ok := shellkit.HitRegion(sf.regions, p); ok {
+		return k
 	}
 	return shell.RegionClient
 }
@@ -334,15 +354,10 @@ func (sf *Surface) HitTest(p driver.Point) shell.RegionKind {
 func (sf *Surface) paint() {
 	sf.invalid = false
 	c := record.New(sf.size)
-	s := sf.shell
-	s.painting = sf
-	func() {
-		defer func() { s.painting = nil }()
-		sf.h.Paint(c)
-	}()
+	err := sf.shell.timedPaint(func() { sf.h.Paint(c) }, c)
 	sf.paints++
 	sf.last = c
-	sf.paintErr = c.End()
+	sf.paintErr = err
 }
 
 // Paints returns the number of paints so far.

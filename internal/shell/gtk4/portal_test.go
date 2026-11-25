@@ -3,6 +3,7 @@ package gtk4
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/radix29/gogui/internal/driver"
 )
@@ -11,6 +12,7 @@ import (
 type fakeSettings struct {
 	portal map[string]any
 	gtk    map[string]bool
+	ints   map[string]int32 // the int GtkSettings
 }
 
 func (f *fakeSettings) portalValue(key string) (any, bool) {
@@ -20,6 +22,11 @@ func (f *fakeSettings) portalValue(key string) (any, bool) {
 
 func (f *fakeSettings) gtkBool(name string) (bool, bool) {
 	v, ok := f.gtk[name]
+	return v, ok
+}
+
+func (f *fakeSettings) gtkInt(name string) (int32, bool) {
+	v, ok := f.ints[name]
 	return v, ok
 }
 
@@ -115,10 +122,10 @@ func TestReadAppearance(t *testing.T) {
 			},
 			gtk: map[string]bool{gtkPreferDark: false, gtkEnableAnimations: true, gtkOverlayScrolling: false},
 		}, driver.Appearance{Dark: true, Accent: driver.RGBA(1, 0, 0, 1), IncreaseContrast: true,
-			ReduceMotion: true, LegacyScrollers: true}},
+			ReduceMotion: true, LegacyScrollers: true, CaretBlink: driver.DefaultCaretBlink}},
 		{"unrelated keys ignored", fakeSettings{
 			portal: map[string]any{"cursor-size": uint32(48), "color-scheme-x": uint32(1)},
-			gtk:    map[string]bool{"gtk-cursor-blink": false},
+			gtk:    map[string]bool{"gtk-keynav-use-caret": true},
 		}, def},
 	}
 	for _, tt := range tests {
@@ -131,6 +138,46 @@ func TestReadAppearance(t *testing.T) {
 		}
 		if got.ReduceTransparency {
 			t.Errorf("%s: ReduceTransparency set; Linux has no source for it", tt.name)
+		}
+	}
+}
+
+func TestReadCaretBlink(t *testing.T) {
+	const ms = time.Millisecond
+	def := driver.DefaultCaretBlink
+	tests := []struct {
+		name string
+		src  fakeSettings
+		want driver.CaretBlink
+	}{
+		{"nothing readable", fakeSettings{}, def},
+		{"GTK's defaults", fakeSettings{
+			gtk:  map[string]bool{gtkCursorBlink: true},
+			ints: map[string]int32{gtkCursorBlinkTime: 1200, gtkCursorBlinkTimeout: 10},
+		}, driver.CaretBlink{Period: 1200 * ms, Timeout: 10 * time.Second}},
+		{"blink off", fakeSettings{
+			gtk:  map[string]bool{gtkCursorBlink: false},
+			ints: map[string]int32{gtkCursorBlinkTime: 1200, gtkCursorBlinkTimeout: 3},
+		}, driver.CaretBlink{Timeout: 3 * time.Second}},
+		{"blink off, nothing else readable", fakeSettings{gtk: map[string]bool{gtkCursorBlink: false}},
+			driver.CaretBlink{Timeout: def.Timeout}},
+		{"blink time without gtk-cursor-blink", fakeSettings{ints: map[string]int32{gtkCursorBlinkTime: 500}},
+			driver.CaretBlink{Period: 500 * ms, Timeout: def.Timeout}},
+		{"timeout G_MAXINT: never stops", fakeSettings{ints: map[string]int32{gtkCursorBlinkTimeout: math.MaxInt32}},
+			driver.CaretBlink{Period: def.Period}},
+		{"0 and negative values keep the defaults", fakeSettings{
+			ints: map[string]int32{gtkCursorBlinkTime: 0, gtkCursorBlinkTimeout: -1},
+		}, def},
+		{"the portal does not count", fakeSettings{
+			portal: map[string]any{gtkCursorBlink: false, gtkCursorBlinkTime: uint32(300)},
+		}, def},
+	}
+	for _, tt := range tests {
+		if got := readCaretBlink(&tt.src); got != tt.want {
+			t.Errorf("%s: got %+v, want %+v", tt.name, got, tt.want)
+		}
+		if got := readAppearance(&tt.src).CaretBlink; got != tt.want {
+			t.Errorf("%s: readAppearance's CaretBlink %+v, want %+v", tt.name, got, tt.want)
 		}
 	}
 }

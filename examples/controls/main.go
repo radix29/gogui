@@ -1,5 +1,9 @@
 // Command controls is the v0.1 control gallery. It shows every control in
-// its states (normal, disabled, default, mixed …).
+// its states (normal, disabled, default, mixed …), and a menu bar with an
+// app, an Edit and a View menu (the appearance and the accent color). A few
+// controls have tooltips: rest the pointer on them for a second. On
+// Windows/Linux the menu bar is drawn in the window's title-bar area, next
+// to the traffic lights; Alt or F10 reaches it from the keyboard.
 //
 // Run it on macOS (native AppKit) and on Windows/Linux (aqua) side by side to
 // check visual and behavioural parity. See PLAN.md §8.3.
@@ -21,6 +25,18 @@ func main() {
 				gogui.MenuItem("Toggle Appearance",
 					gogui.Shortcut(gogui.KeyPrimary|gogui.KeyShift, 'D'),
 					func() { app.SetAppearance(app.Appearance().Toggled()) }),
+				gogui.MenuSeparator(),
+				// The accent: the OS one, or an app override (v0.1 menus have
+				// no submenus, so the choices sit in View). Yellow is light
+				// enough that the labels on it turn dark.
+				gogui.MenuItem("System Accent", gogui.KeyShortcut{},
+					func() { app.SetAccentColor(gogui.ColorControlAccent) }),
+				gogui.MenuItem("Purple Accent", gogui.KeyShortcut{},
+					func() { app.SetAccentColor(gogui.RGB8(149, 61, 150)) }),
+				gogui.MenuItem("Green Accent", gogui.KeyShortcut{},
+					func() { app.SetAccentColor(gogui.RGB8(98, 186, 70)) }),
+				gogui.MenuItem("Yellow Accent", gogui.KeyShortcut{},
+					func() { app.SetAccentColor(gogui.RGB8(255, 197, 0)) }),
 			),
 		))
 
@@ -30,9 +46,11 @@ func main() {
 		// Buttons
 		push := gogui.NewButton("Push Button")
 		push.OnClick(func() { report("Push Button clicked") })
-		def := gogui.NewButton("Default").SetDefault(true)
+		def := gogui.NewButton("Default").SetDefault(true).
+			SetTooltip("The default button: Return clicks it")
 		def.OnClick(func() { report("Default clicked") })
-		disabled := gogui.NewButton("Disabled").SetEnabled(false)
+		disabled := gogui.NewButton("Disabled").SetEnabled(false).
+			SetTooltip("A disabled control still shows its tooltip")
 
 		// Checkboxes
 		check := gogui.NewCheckbox("Checkbox").SetChecked(true)
@@ -41,7 +59,8 @@ func main() {
 		checkOff := gogui.NewCheckbox("Disabled").SetEnabled(false)
 
 		// Radio group
-		radios := gogui.NewRadioGroup("Small", "Medium", "Large").SetSelected(1)
+		radios := gogui.NewRadioGroup("Small", "Medium", "Large").SetSelected(1).
+			SetTooltip("The arrow keys move the selection")
 		radios.OnChange(func(i int) { report("Radio: %d", i) })
 
 		// Text
@@ -51,7 +70,8 @@ func main() {
 
 		// Slider + progress
 		progress := gogui.NewProgressBar().SetRange(0, 100).SetValue(40)
-		slider := gogui.NewSlider().SetRange(0, 100).SetValue(40)
+		slider := gogui.NewSlider().SetRange(0, 100).SetValue(40).
+			SetTooltip("Drag it, or use the arrow, Page Up/Down, Home and End keys")
 		slider.OnChange(func(v float64) { progress.SetValue(v) })
 		busy := gogui.NewProgressBar().SetIndeterminate(true)
 
@@ -93,7 +113,7 @@ func main() {
 			),
 			gogui.NewSeparator(),
 			gogui.HStack(8, status, gogui.Spacer(), alert),
-		).Padding(20))
+		).SetPadding(20))
 
 		win.OnClose(app.Quit)
 		win.Show()

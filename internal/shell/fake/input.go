@@ -26,7 +26,8 @@ type pointer struct {
 	pos     driver.Point
 	inside  bool // PointerEnter sent, PointerLeave not yet
 	buttons shell.PointerButton
-	caption bool // a primary press on RegionCaption went to the OS
+	caption bool                // a primary press on RegionCaption went to the OS
+	eaten   shell.PointerButton // pressed outside a grab popup: the release is eaten too
 	mods    driver.Modifiers
 
 	lastButton shell.PointerButton
@@ -36,13 +37,14 @@ type pointer struct {
 }
 
 // input checks that input may be delivered: on the UI goroutine, not
-// during a Paint, to an open, visible, not minimized surface. It returns
-// false (the input is dropped) for a closed, hidden or minimized surface.
+// during a Paint, to an open, visible, not minimized surface that no modal
+// surface blocks. It returns false (the input is dropped) for a closed,
+// hidden, minimized or blocked surface.
 func (sf *Surface) input(what string) bool {
 	if !sf.change(what) {
 		return false
 	}
-	return sf.visible && !sf.minimized
+	return sf.visible && !sf.minimized && !sf.blocked()
 }
 
 func (sf *Surface) now() time.Duration { return sf.shell.clock.now }
@@ -65,6 +67,11 @@ func (sf *Surface) pointerEvent(kind shell.PointerKind, button shell.PointerButt
 func (sf *Surface) moveTo(p driver.Point) {
 	if math.IsNaN(p.X) || math.IsNaN(p.Y) {
 		panic("fake: pointer position is NaN")
+	}
+	if g := sf.grabbed(); g != nil {
+		sf.ptr.pos = p
+		g.moveTo(g.local(p))
+		return
 	}
 	moved := p != sf.ptr.pos
 	sf.ptr.pos = p
@@ -126,9 +133,22 @@ func singleButton(b shell.PointerButton) {
 // on a RegionCaption is not delivered: it starts the OS window move, and a
 // double-click there zooms the surface. Pressing a held button does
 // nothing.
+//
+// A press inside a surface that is not key makes it key first, as the OS
+// does (KeyChanged(true)), and its PointerDown has Activating set (S6.1b);
+// a caption press activates too. A press inside a surface that a modal
+// surface blocks is not delivered; the OS hands the activation to the
+// active modal, which becomes key.
 func (sf *Surface) Press(p driver.Point, b shell.PointerButton) {
 	singleButton(b)
+	if sf.change("Press") && sf.visible && !sf.minimized && sf.blocked() && sf.in(p) {
+		sf.shell.setKey(sf) // redirected to the active modal
+		return
+	}
 	if !sf.input("Press") {
+		return
+	}
+	if sf.pressGrab(p, b) {
 		return
 	}
 	sf.moveTo(p)
@@ -138,7 +158,15 @@ func (sf *Surface) Press(p driver.Point, b shell.PointerButton) {
 	if !sf.in(p) && sf.ptr.buttons == 0 {
 		return // presses outside go to another window
 	}
-	clicks := sf.countClick(p, b)
+	activating := false
+	if sf.shell.key != sf {
+		sf.shell.setKey(sf)
+		if !sf.input("Press") {
+			return // KeyChanged closed, hid or blocked it
+		}
+		activating = sf.shell.key == sf
+	}
+	clicks := sf.ptr.countClick(p, b, sf.now())
 	if b == shell.ButtonPrimary && sf.ptr.buttons == 0 && sf.HitTest(p) == shell.RegionCaption {
 		sf.ptr.caption = true
 		if clicks >= 2 {
@@ -147,12 +175,13 @@ func (sf *Surface) Press(p driver.Point, b shell.PointerButton) {
 		return
 	}
 	sf.ptr.buttons |= b
-	sf.pointerEvent(shell.PointerDown, b, clicks)
+	sf.h.Event(shell.PointerEvent{
+		Kind: shell.PointerDown, Pos: sf.ptr.pos, Button: b, Buttons: sf.ptr.buttons,
+		Clicks: clicks, Mods: sf.ptr.mods, Activating: activating, Time: sf.now(),
+	})
 }
 
-func (sf *Surface) countClick(p driver.Point, b shell.PointerButton) int {
-	pt := &sf.ptr
-	now := sf.now()
+func (pt *pointer) countClick(p driver.Point, b shell.PointerButton, now time.Duration) int {
 	if pt.clicks > 0 && b == pt.lastButton && now-pt.lastTime <= DoubleClickTime &&
 		math.Abs(p.X-pt.lastPos.X) <= DoubleClickDistance && math.Abs(p.Y-pt.lastPos.Y) <= DoubleClickDistance {
 		pt.clicks++
@@ -169,6 +198,9 @@ func (sf *Surface) countClick(p driver.Point, b shell.PointerButton) int {
 func (sf *Surface) Release(p driver.Point, b shell.PointerButton) {
 	singleButton(b)
 	if !sf.input("Release") {
+		return
+	}
+	if sf.releaseGrab(p, b) {
 		return
 	}
 	if b == shell.ButtonPrimary && sf.ptr.caption {
@@ -228,6 +260,11 @@ func (sf *Surface) CancelCapture() {
 	if !sf.input("CancelCapture") {
 		return
 	}
+	sf.ptr.eaten = 0
+	if g := sf.grabbed(); g != nil {
+		g.dismiss() // a lost capture ends the grab
+		return
+	}
 	for b := shell.ButtonPrimary; b <= shell.ButtonForward; b <<= 1 {
 		if sf.ptr.buttons&b != 0 {
 			sf.ptr.buttons &^= b
@@ -240,6 +277,13 @@ func (sf *Surface) CancelCapture() {
 
 func (sf *Surface) scrollEvent(ev shell.ScrollEvent) {
 	ev.Pos, ev.Mods, ev.Time = sf.ptr.pos, sf.ptr.mods, sf.now()
+	if g := sf.grabbed(); g != nil {
+		if g.ptr.inside {
+			ev.Pos = g.ptr.pos
+			g.h.Event(ev)
+		}
+		return
+	}
 	sf.h.Event(ev)
 }
 
@@ -347,7 +391,7 @@ func (sf *Surface) KeyDown(k driver.Key, mods driver.Modifiers) bool {
 	if !sf.keyInput("KeyDown") {
 		return false
 	}
-	return sf.h.Event(shell.KeyEvent{Down: true, Key: driver.NormalizeKey(k), Mods: mods, Time: sf.now()})
+	return sf.keyTo().Event(sf.keyDownEvent(k, mods, false))
 }
 
 // KeyRepeat sends an auto-repeated press and reports whether it was
@@ -357,7 +401,7 @@ func (sf *Surface) KeyRepeat(k driver.Key, mods driver.Modifiers) bool {
 	if !sf.keyInput("KeyRepeat") {
 		return false
 	}
-	return sf.h.Event(shell.KeyEvent{Down: true, Repeat: true, Key: driver.NormalizeKey(k), Mods: mods, Time: sf.now()})
+	return sf.keyTo().Event(sf.keyDownEvent(k, mods, true))
 }
 
 // KeyUp sends a key release. Unlike the presses it is dropped silently
@@ -366,7 +410,7 @@ func (sf *Surface) KeyRepeat(k driver.Key, mods driver.Modifiers) bool {
 func (sf *Surface) KeyUp(k driver.Key, mods driver.Modifiers) {
 	noPrimary(mods)
 	if sf.input("KeyUp") && sf.shell.key == sf {
-		sf.h.Event(shell.KeyEvent{Key: driver.NormalizeKey(k), Mods: mods, Time: sf.now()})
+		sf.keyTo().Event(shell.KeyEvent{Key: driver.NormalizeKey(k), Mods: mods, Time: sf.now()})
 	}
 }
 
@@ -375,6 +419,50 @@ func (sf *Surface) KeyUp(k driver.Key, mods driver.Modifiers) {
 func (sf *Surface) Key(k driver.Key, mods driver.Modifiers) bool {
 	handled := sf.KeyDown(k, mods)
 	sf.KeyUp(k, mods)
+	return handled
+}
+
+// oneModifier panics unless m is exactly one of ModShift, ModControl,
+// ModOption and ModCommand.
+func oneModifier(m driver.Modifiers) {
+	switch m {
+	case driver.ModShift, driver.ModControl, driver.ModOption, driver.ModCommand:
+	default:
+		panic("fake: a modifier key must be exactly one of ModShift, ModControl, ModOption and ModCommand")
+	}
+}
+
+// ModifierDown sends the press of the modifier key m alone (S5.6i: Key
+// KeyNone, Modifier m) and reports whether it was handled. mods is the
+// set held, as after the press, so normally includes m; m is added if
+// not. It panics as KeyDown, and unless m is exactly one physical
+// modifier.
+func (sf *Surface) ModifierDown(m, mods driver.Modifiers) bool {
+	oneModifier(m)
+	noPrimary(mods)
+	if !sf.keyInput("ModifierDown") {
+		return false
+	}
+	return sf.keyTo().Event(shell.KeyEvent{Down: true, Modifier: m, Mods: mods | m, Time: sf.now()})
+}
+
+// ModifierUp sends the release of the modifier key m; mods is the set
+// still held, as after the release (m is removed from it). It is dropped
+// as KeyUp when the surface is no longer key.
+func (sf *Surface) ModifierUp(m, mods driver.Modifiers) {
+	oneModifier(m)
+	noPrimary(mods)
+	if sf.input("ModifierUp") && sf.shell.key == sf {
+		sf.keyTo().Event(shell.KeyEvent{Modifier: m, Mods: mods &^ m, Time: sf.now()})
+	}
+}
+
+// TapModifier presses and releases the modifier key m with nothing else
+// held (a lone Alt: TapModifier(driver.ModOption)) and reports whether the
+// press was handled.
+func (sf *Surface) TapModifier(m driver.Modifiers) bool {
+	handled := sf.ModifierDown(m, m)
+	sf.ModifierUp(m, 0)
 	return handled
 }
 
@@ -412,7 +500,8 @@ func (sf *Surface) Type(text string) {
 			emit = false
 		}
 		if emit && sf.input("Type") && sf.shell.key == sf {
-			sf.h.Event(shell.TextEvent{Text: string(r), Time: sf.now()})
+			sf.ime.composing = false
+			sf.keyTo().Event(shell.TextEvent{Text: string(r), Time: sf.now()})
 		}
 		sf.KeyUp(k, mods)
 		if sf.dead || sf.shell.key != sf {
@@ -422,8 +511,9 @@ func (sf *Surface) Type(text string) {
 }
 
 // Commit sends committed text as one TextEvent with no key events, like an
-// IME commit or a paste from an input method. It panics for empty text,
-// invalid UTF-8 and control characters.
+// IME commit or a paste from an input method; it ends a composition
+// (Composing). It panics for empty text, invalid UTF-8 and control
+// characters.
 func (sf *Surface) Commit(text string) {
 	if text == "" || !utf8.ValidString(text) {
 		panic("fake: Commit with empty text or invalid UTF-8")
@@ -434,14 +524,19 @@ func (sf *Surface) Commit(text string) {
 		}
 	}
 	if sf.keyInput("Commit") {
-		sf.h.Event(shell.TextEvent{Text: text, Time: sf.now()})
+		sf.ime.composing = false
+		sf.keyTo().Event(shell.TextEvent{Text: text, Time: sf.now()})
 	}
 }
 
 // Send delivers ev as it is, for sequences the helpers do not cover. A zero
 // Time is set to the clock's Now. It reports what the handler returned. It
-// panics for ModPrimary, and for key and text events when the surface is
-// not key.
+// panics for ModPrimary, and for key, text and preedit events when the
+// surface is not key. Unlike Preedit it does not check a PreeditEvent, nor
+// that a text input is enabled; it only tracks Composing. During a grab
+// (shell.PopupShell.NewPopup) key, text and preedit events go to the grab popup, as
+// with the helpers; pointer and scroll events still go to the surface as
+// they are (Popup.Send reaches the popup).
 func (sf *Surface) Send(ev shell.Event) bool {
 	switch e := ev.(type) {
 	case shell.PointerEvent:
@@ -467,16 +562,43 @@ func (sf *Surface) Send(ev shell.Event) bool {
 			e.Time = sf.now()
 		}
 		ev = e
+	case shell.PreeditEvent:
+		if e.Time == 0 {
+			e.Time = sf.now()
+		}
+		ev = e
 	}
-	switch ev.(type) {
-	case shell.KeyEvent, shell.TextEvent:
+	switch e := ev.(type) {
+	case shell.KeyEvent:
 		if !sf.keyInput("Send") {
 			return false
 		}
+	case shell.TextEvent:
+		if !sf.keyInput("Send") {
+			return false
+		}
+		sf.ime.composing = false
+	case shell.PreeditEvent:
+		if !sf.keyInput("Send") {
+			return false
+		}
+		sf.ime.composing = e.Text != ""
 	default:
 		if !sf.input("Send") {
 			return false
 		}
 	}
+	switch ev.(type) {
+	case shell.KeyEvent, shell.TextEvent, shell.PreeditEvent:
+		return sf.keyTo().Event(ev)
+	}
 	return sf.h.Event(ev)
+}
+
+// keyDownEvent returns the KeyEvent of a press of k, with the fake
+// layout's Shifted (Shell.SetShiftLayout).
+func (sf *Surface) keyDownEvent(k driver.Key, mods driver.Modifiers, repeat bool) shell.KeyEvent {
+	k = driver.NormalizeKey(k)
+	return shell.KeyEvent{Down: true, Key: k, Shifted: sf.shell.shifted(k), Repeat: repeat,
+		Mods: mods, Time: sf.now()}
 }

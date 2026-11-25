@@ -7,12 +7,13 @@ import "github.com/radix29/gogui/internal/driver"
 type Button struct {
 	common[*Button]
 	p       driver.Button
+	title   string
 	onClick subscribers[func()]
 }
 
 // NewButton returns a push button with title.
 func NewButton(title string) *Button {
-	b := &Button{}
+	b := &Button{title: title}
 	p := driverFor("NewButton").NewButton(buttonEvents{b})
 	b.p = p
 	b.init(b, kindButton, p, nil)
@@ -23,12 +24,16 @@ func NewButton(title string) *Button {
 // SetTitle sets the title.
 func (b *Button) SetTitle(title string) *Button {
 	b.check("SetTitle")
+	b.title = title
 	if b.live() {
 		b.p.SetTitle(title)
 	}
 	b.invalidate()
 	return b
 }
+
+// Title returns the title.
+func (b *Button) Title() string { b.get("Title"); return b.title }
 
 // SetDefault makes this the window's default button: it is drawn with the
 // accent color and Return triggers it.
@@ -64,7 +69,7 @@ func (e buttonEvents) Clicked() {
 	if e.b.disabled || e.b.dead {
 		return
 	}
-	e.b.onClick.each(func(fn func()) { fn() })
+	e.b.onClick.eachLive(&e.b.widget, func(fn func()) { fn() })
 }
 
 // Separator is a hairline (NSBox with the separator type). A horizontal

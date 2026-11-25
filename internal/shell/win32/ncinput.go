@@ -68,12 +68,17 @@ func modifiersOf(down func(vk int32) bool) driver.Modifiers {
 // surface is still open afterwards. Buttons is the set held after the
 // event (sf.buttons, already updated by the caller).
 func (sf *surface) pointer(kind shell.PointerKind, pos driver.Point, button shell.PointerButton, clicks int) bool {
+	return sf.deliver(kind, pos, button, clicks, false)
+}
+
+// deliver is pointer with the event's Activating flag (press, input.go).
+func (sf *surface) deliver(kind shell.PointerKind, pos driver.Point, button shell.PointerButton, clicks int, activating bool) bool {
 	if sf.dead {
 		return false
 	}
 	sf.lastPos = pos
 	sf.h.Event(shell.PointerEvent{Kind: kind, Pos: pos, Button: button, Buttons: sf.buttons,
-		Clicks: clicks, Mods: modifiers(), Time: sf.s.eventTime()})
+		Clicks: clicks, Mods: modifiers(), Activating: activating, Time: sf.s.eventTime()})
 	return !sf.dead
 }
 
@@ -108,24 +113,6 @@ func (sf *surface) pointerOver(pt w32.Point) bool {
 	}
 	code := sf.hitAt(pt)
 	return code == w32.HTCLIENT || isChrome(code)
-}
-
-// screenPoint converts a screen pixel to surface points.
-func (sf *surface) screenPoint(pt w32.Point) driver.Point {
-	cl, err := sf.screenClient()
-	if err != nil {
-		return driver.Point{}
-	}
-	return pointAt(pt, cl, sf.px())
-}
-
-// screenToClient converts a screen pixel to client pixels.
-func (sf *surface) screenToClient(pt w32.Point) w32.Point {
-	cl, err := sf.screenClient()
-	if err != nil {
-		return w32.Point{}
-	}
-	return w32.Point{X: pt.X - cl.Left, Y: pt.Y - cl.Top}
 }
 
 // clientPoint converts a client-pixel lParam to surface points.
@@ -165,7 +152,8 @@ func (sf *surface) ncPointer(h windows.HWND, msg uint32, wp, lp uintptr) (r uint
 		return 0, false // DefWindowProcW tracks the Snap Layouts hover too
 	case w32.WM_NCLBUTTONDOWN, w32.WM_NCLBUTTONDBLCLK:
 		if !isLight(wp) || sf.buttons != 0 {
-			sf.clicks.Reset() // a caption press (the OS's) breaks a click series
+			sf.activating = false // a caption press (the OS's) only activates
+			sf.clicks.Reset()     // and breaks a click series
 			return 0, false
 		}
 		sf.press(h, shell.ButtonPrimary, sf.screenToClient(signedXY(lp)), msg == w32.WM_NCLBUTTONDBLCLK)

@@ -63,9 +63,7 @@ var ErrNoFonts = errors.New("dwrite: no usable font in the data")
 // has to be registered (RegisterFontFileLoader) before files are made with
 // it, and unregistered before its last release.
 func (f Factory) CreateInMemoryFontFileLoader() (InMemoryFontFileLoader, error) {
-	var out com.Ptr
-	err := f.CallHR("IDWriteFactory5::CreateInMemoryFontFileLoader", slotFactoryCreateInMemoryFontFileLoader,
-		uintptr(unsafe.Pointer(&out)))
+	out, err := f.CallOut("IDWriteFactory5::CreateInMemoryFontFileLoader", slotFactoryCreateInMemoryFontFileLoader)
 	return InMemoryFontFileLoader{out}, err
 }
 
@@ -88,9 +86,7 @@ func (f Factory) UnregisterFontFileLoader(l InMemoryFontFileLoader) error {
 // CreateFontSetBuilder returns an empty font set builder (the
 // IDWriteFontSetBuilder1 overload of IDWriteFactory5, which has AddFontFile).
 func (f Factory) CreateFontSetBuilder() (FontSetBuilder, error) {
-	var out com.Ptr
-	err := f.CallHR("IDWriteFactory5::CreateFontSetBuilder", slotFactoryCreateFontSetBuilder5,
-		uintptr(unsafe.Pointer(&out)))
+	out, err := f.CallOut("IDWriteFactory5::CreateFontSetBuilder", slotFactoryCreateFontSetBuilder5)
 	return FontSetBuilder{out}, err
 }
 
@@ -98,9 +94,8 @@ func (f Factory) CreateFontSetBuilder() (FontSetBuilder, error) {
 // The result is an IDWriteFontCollection1, usable wherever a FontCollection
 // is (CreateTextFormat).
 func (f Factory) CreateFontCollectionFromFontSet(s FontSet) (FontCollection, error) {
-	var out com.Ptr
-	err := f.CallHR("IDWriteFactory3::CreateFontCollectionFromFontSet", slotFactoryCreateFontCollectionFromFontSet,
-		uintptr(s.Ptr), uintptr(unsafe.Pointer(&out)))
+	out, err := f.CallOut("IDWriteFactory3::CreateFontCollectionFromFontSet", slotFactoryCreateFontCollectionFromFontSet,
+		uintptr(s.Ptr))
 	return FontCollection{out}, err
 }
 
@@ -137,16 +132,10 @@ func (l InMemoryFontFileLoader) CreateFontFileReference(f Factory, data []byte) 
 	if uint64(len(data)) > 1<<32-1 {
 		return FontFile{}, errors.New("dwrite: CreateInMemoryFontFileReference: font data over 4 GiB")
 	}
-	var out com.Ptr
-	err := l.CallHR("IDWriteInMemoryFontFileLoader::CreateInMemoryFontFileReference",
-		slotMemLoaderCreateInMemoryFontFileReference, uintptr(f.Ptr),
-		uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 0, uintptr(unsafe.Pointer(&out)))
+	out, err := l.CallOut("IDWriteInMemoryFontFileLoader::CreateInMemoryFontFileReference", slotMemLoaderCreateInMemoryFontFileReference,
+		uintptr(f.Ptr),
+		uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 0)
 	return FontFile{out}, err
-}
-
-// FileCount returns the number of files made with the loader so far.
-func (l InMemoryFontFileLoader) FileCount() uint32 {
-	return uint32(l.Call(slotMemLoaderGetFileCount))
 }
 
 // FontFile is IDWriteFontFile.
@@ -160,21 +149,6 @@ type FontFileAnalysis struct {
 	FaceCount uint32
 }
 
-// Analyze reads the file's header: whether DirectWrite supports it, its
-// file and face types and the number of faces (more than one for a TTC).
-// Unsupported data is no error, only Supported false.
-func (f FontFile) Analyze() (FontFileAnalysis, error) {
-	var supported int32
-	var a FontFileAnalysis
-	err := f.CallHR("IDWriteFontFile::Analyze", slotFontFileAnalyze, uintptr(unsafe.Pointer(&supported)),
-		uintptr(unsafe.Pointer(&a.FileType)), uintptr(unsafe.Pointer(&a.FaceType)), uintptr(unsafe.Pointer(&a.FaceCount)))
-	if err != nil {
-		return FontFileAnalysis{}, err
-	}
-	a.Supported = supported != 0
-	return a, nil
-}
-
 // FontSetBuilder is IDWriteFontSetBuilder1.
 type FontSetBuilder struct{ com.Ptr }
 
@@ -186,8 +160,7 @@ func (b FontSetBuilder) AddFontFile(f FontFile) error {
 
 // CreateFontSet returns a font set of the fonts added so far.
 func (b FontSetBuilder) CreateFontSet() (FontSet, error) {
-	var out com.Ptr
-	err := b.CallHR("IDWriteFontSetBuilder::CreateFontSet", slotBuilderCreateFontSet, uintptr(unsafe.Pointer(&out)))
+	out, err := b.CallOut("IDWriteFontSetBuilder::CreateFontSet", slotBuilderCreateFontSet)
 	return FontSet{out}, err
 }
 

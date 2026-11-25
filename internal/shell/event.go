@@ -7,7 +7,7 @@ import (
 )
 
 // Event is an input event delivered to SurfaceHandler.Event: a PointerEvent,
-// ScrollEvent, KeyEvent or TextEvent (the set is closed). Positions are in
+// ScrollEvent, KeyEvent, TextEvent or PreeditEvent (the set is closed). Positions are in
 // logical points relative to the surface's drawable area; times are on the
 // FrameClock.Now timeline.
 type Event interface {
@@ -22,6 +22,7 @@ var (
 	_ Event = ScrollEvent{}
 	_ Event = KeyEvent{}
 	_ Event = TextEvent{}
+	_ Event = PreeditEvent{}
 )
 
 // PointerKind is the kind of a PointerEvent.
@@ -88,6 +89,20 @@ type PointerEvent struct {
 
 	// Mods is the set of physical modifiers held (never ModPrimary).
 	Mods driver.Modifiers
+
+	// Activating marks the PointerDown that activated the surface: the
+	// press landed in a surface that was not key, and the shell made it key
+	// (KeyChanged(true) usually comes first). It is false for every other
+	// event, the PointerUp of that press included. The aqua driver lets
+	// such a press only activate the window, as AppKit's default
+	// acceptsFirstMouse = NO, except over the title bar's controls (PLAN.md
+	// S6.1b). A press whose activation the OS redirects to a modal surface
+	// is not delivered to the blocked surface at all. Win32 sets it from
+	// WM_MOUSEACTIVATE (S6.1c), after WM_ACTIVATE. gtk4 has no such message
+	// and marks the first press while the surface is not key (its
+	// KeyChanged(true) may then follow, as on Wayland) or the first press
+	// shortly after it became key (S6.1c, internal/shell/gtk4/input.go).
+	Activating bool
 
 	Time time.Duration
 }
@@ -177,12 +192,31 @@ type KeyEvent struct {
 	// are held.
 	Key driver.Key
 
+	// Shifted is the character key gives with Shift on the active layout,
+	// in canonical form (a letter's upper case, '+' for '=' on a US
+	// layout, '*' for '+' on a German one), on key-downs of character
+	// keys; driver.KeyNone on key-ups, for the named keys and when the
+	// layout gives no single character (S5.6h). The menu strip's
+	// accelerators match a shortcut on a shifted character with it
+	// (menubar.Bar.Lookup). Reading it never disturbs a pending dead key.
+	Shifted driver.Key
+
+	// Modifier is the modifier a modifier key alone stands for (S5.6i):
+	// exactly one of ModShift, ModControl, ModOption (Alt) and ModCommand
+	// (the Windows or Super key), on its presses and its release, left
+	// and right keys alike; 0 for every other key (Key is then not
+	// KeyNone, or the key is another one driver.Key cannot name, as
+	// Insert). AltGr is no modifier on gtk4; Win32 reports it as a
+	// Control and an Option key. The menu strip tells a lone Alt with it.
+	Modifier driver.Modifiers
+
 	// Repeat is true for auto-repeated presses (Down is then true).
 	Repeat bool
 
 	// Mods is the set of physical modifiers held during the event (never
-	// ModPrimary). The aqua driver resolves shortcuts against it with
-	// driver.Shortcut.Resolve(false).
+	// ModPrimary), as after it: a modifier key's own modifier is in Mods
+	// on its press and not on its release (S5.6i). The aqua driver
+	// resolves shortcuts against it with driver.Shortcut.Resolve(false).
 	Mods driver.Modifiers
 
 	Time time.Duration
@@ -192,10 +226,11 @@ type KeyEvent struct {
 func (e KeyEvent) EventTime() time.Duration { return e.Time }
 func (KeyEvent) isEvent()                   {}
 
-// TextEvent is committed text input: typed characters, dead-key results,
-// and (from S5.3) IME commits. It carries no control characters: Return,
-// Tab, Backspace and Escape arrive only as KeyEvents. IME preedit
-// (composition) text comes in S5.3.
+// TextEvent is committed text input: typed characters, dead-key results
+// and IME commits. It carries no control characters: Return, Tab, Backspace
+// and Escape arrive only as KeyEvents. The IME's composition text before
+// the commit comes as PreeditEvents; a TextEvent during a composition is
+// its commit (see PreeditEvent).
 type TextEvent struct {
 	// Text is the committed text, valid UTF-8, never empty. It may hold
 	// several characters (a surrogate pair joined, an IME commit).
@@ -207,3 +242,55 @@ type TextEvent struct {
 // EventTime returns e.Time.
 func (e TextEvent) EventTime() time.Duration { return e.Time }
 func (TextEvent) isEvent()                   {}
+
+// PreeditEvent is the IME's composition (preedit) text, sent to the key
+// surface while a text input is enabled (Surface.SetTextInput). The aqua
+// driver draws it at the caret; it is not part of the text until the IME
+// commits it.
+//
+// The rules every shell follows:
+//
+//   - A composition starts with the first PreeditEvent with a non-empty
+//     Text. Each further PreeditEvent replaces the whole preedit.
+//   - A PreeditEvent with an empty Text ends the composition (Cursor and
+//     Segments are then zero). The IME may send one when nothing is
+//     composed; the aqua driver ignores it then.
+//   - The commit is a TextEvent. A TextEvent during a composition replaces
+//     the preedit, which counts as empty until the next PreeditEvent. So a
+//     commit may come before or after the empty PreeditEvent that ends the
+//     composition, and a commit followed by a non-empty PreeditEvent starts
+//     the next composition (Win32 reports both in one message, the commit
+//     first).
+//   - Keys that the IME takes (VK_PROCESSKEY on Windows, the keys the GTK
+//     input method filters) are not delivered as KeyEvents.
+//   - Surface.SetTextInput with Enabled false and Surface.CancelComposition
+//     drop the composition without any event, not even a commit.
+type PreeditEvent struct {
+	// Text is the composition text, valid UTF-8 without control
+	// characters; empty ends the composition.
+	Text string
+
+	// Cursor is the IME's caret in Text as a UTF-8 byte offset on a rune
+	// start, from 0 to len(Text).
+	Cursor int
+
+	// Segments are the clauses of Text, in order and not overlapping, with
+	// byte offsets on rune starts and Start < End. They need not cover
+	// Text; an IME that reports no clauses sends none, and the aqua driver
+	// then underlines the whole text as one clause.
+	Segments []PreeditSegment
+
+	Time time.Duration
+}
+
+// PreeditSegment is one clause of a PreeditEvent: Text[Start:End].
+type PreeditSegment struct {
+	Start, End int
+	// Selected marks the clause being converted (the target clause),
+	// which the aqua driver underlines thicker.
+	Selected bool
+}
+
+// EventTime returns e.Time.
+func (e PreeditEvent) EventTime() time.Duration { return e.Time }
+func (PreeditEvent) isEvent()                   {}

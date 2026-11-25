@@ -242,12 +242,11 @@ func TestStackFirstLine(t *testing.T) {
 func TestStackSettersAndPanics(t *testing.T) {
 	a, _ := pl(10, 10)
 	s := NewHStack(-3, a).SetPadding(driver.Insets{Top: -1, Left: inf, Bottom: 2})
-	s.SetDirection(RightToLeft)
 	if s.Spacing() != 0 || s.Padding() != (driver.Insets{Bottom: 2}) || s.Axis() != Horizontal ||
-		s.Direction() != RightToLeft || len(s.Children()) != 1 {
-		t.Errorf("getters: %v %v %v %v", s.Spacing(), s.Padding(), s.Axis(), s.Direction())
+		len(s.Children()) != 1 {
+		t.Errorf("getters: %v %v %v", s.Spacing(), s.Padding(), s.Axis())
 	}
-	wantSize(t, "rtl as ltr", s.Measure(nil, driver.Unbounded()), driver.Size{W: 10, H: 12})
+	wantSize(t, "measure", s.Measure(nil, driver.Unbounded()), driver.Size{W: 10, H: 12})
 	defer func() {
 		if recover() == nil {
 			t.Error("nil child did not panic")

@@ -45,11 +45,16 @@ func (h *winLog) take() string {
 
 type shellApp struct{}
 
-func (shellApp) Ready()                              {}
+func (shellApp) Ready(shell.Services)                {}
 func (shellApp) AppearanceChanged(driver.Appearance) {}
 
+// services returns what s handed to Ready, for NewWindow outside a driver.
+func services(s *fake.Shell) shell.Services {
+	return shell.Services{Text: s.TextSystem(), Clock: s.Clock()}
+}
+
 // startShell returns a fake shell started on the test goroutine.
-func startShell(t *testing.T) *fake.Shell {
+func startShell(t testing.TB) *fake.Shell {
 	t.Helper()
 	s := fake.New()
 	if err := s.Start(shellApp{}); err != nil {
@@ -61,10 +66,10 @@ func startShell(t *testing.T) *fake.Shell {
 const allStyles = driver.StyleTitled | driver.StyleClosable | driver.StyleMiniaturizable | driver.StyleResizable
 
 // openWindow creates and shows a window, paints it once and clears the log.
-func openWindow(t *testing.T, s *fake.Shell, cfg driver.WindowConfig) (*Window, *fake.Surface, *winLog) {
+func openWindow(t testing.TB, s *fake.Shell, cfg driver.WindowConfig) (*Window, *fake.Surface, *winLog) {
 	t.Helper()
 	h := &winLog{}
-	w, err := NewWindow(s, cfg, h)
+	w, err := NewWindow(s, services(s), cfg, h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +83,7 @@ func openWindow(t *testing.T, s *fake.Shell, cfg driver.WindowConfig) (*Window, 
 	return w, sf, h
 }
 
-func paint(t *testing.T, s *fake.Shell, sf *fake.Surface) string {
+func paint(t testing.TB, s *fake.Shell, sf *fake.Surface) string {
 	t.Helper()
 	s.FakeClock().Flush()
 	if err := sf.PaintErr(); err != nil {
@@ -691,7 +696,7 @@ func (failShell) NewSurface(shell.SurfaceConfig, shell.SurfaceHandler) (shell.Su
 
 func TestWindowEdgeCases(t *testing.T) {
 	s := startShell(t)
-	if _, err := NewWindow(failShell{s}, driver.WindowConfig{}, &winLog{}); err != errNoSurface {
+	if _, err := NewWindow(failShell{s}, services(s), driver.WindowConfig{}, &winLog{}); err != errNoSurface {
 		t.Errorf("NewSurface error: %v", err)
 	}
 	func() {
@@ -700,7 +705,7 @@ func TestWindowEdgeCases(t *testing.T) {
 				t.Errorf("nil handler did not panic")
 			}
 		}()
-		NewWindow(s, driver.WindowConfig{}, nil)
+		NewWindow(s, services(s), driver.WindowConfig{}, nil)
 	}()
 
 	w, sf, h := openWindow(t, s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles})
@@ -797,7 +802,7 @@ func TestInitialFocus(t *testing.T) {
 	s := startShell(t)
 	newWin := func() (*Window, *fake.Surface) {
 		t.Helper()
-		w, err := NewWindow(s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles}, &winLog{})
+		w, err := NewWindow(s, services(s), driver.WindowConfig{Title: "W", Size: driver.Size{W: 200, H: 100}, Style: allStyles}, &winLog{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -920,4 +925,61 @@ func TestInitialFocus(t *testing.T) {
 	if w.Router().Focused() != nil {
 		t.Fatal("Show after Close focused")
 	}
+}
+
+// TestTitleBarSeparatorPixels: the title bar's bottom hairline is whole
+// device pixels on the bar's pixel-aligned bottom, at every scale (B17).
+func TestTitleBarSeparatorPixels(t *testing.T) {
+	s := startShell(t)
+	_, sf, _ := openWindow(t, s, driver.WindowConfig{Title: "Hello", Size: driver.Size{W: 200, H: 100}, Style: allStyles})
+	for _, tc := range []struct {
+		scale float64
+		want  string
+	}{
+		{1, "fillRRect (0,27,200,1) solid #0000001a"},
+		{2, "fillRRect (0,27,200,1) solid #0000001a"},
+		{1.5, "fillRRect (0,26.667,200,1.333) solid #0000001a"}, // 2 px on the 42 px bottom
+		{1.25, "fillRRect (0,27.2,200,0.8) solid #0000001a"},    // 1 px on the 35 px bottom
+		{1, "fillRRect (0,27,200,1) solid #0000001a"},
+	} {
+		sf.SetScale(tc.scale)
+		d := paint(t, s, sf)
+		if !strings.Contains(d, "\n"+tc.want+"\n") {
+			t.Errorf("scale %g: no %q in\n%s", tc.scale, tc.want, d)
+		}
+	}
+}
+
+// TestLightActivate (R2): a traffic light's Activate performs its action
+// as a click does, and a light the style disables refuses it.
+func TestLightActivate(t *testing.T) {
+	s := startShell(t)
+	w, sf, h := openWindow(t, s, driver.WindowConfig{Title: "W", Size: driver.Size{W: 300, H: 200}, Style: allStyles})
+	if !w.bar.lights[lightMinimize].Activate() || !sf.Minimized() || h.take() != "unkey" {
+		t.Errorf("minimize: Activate did not minimize")
+	}
+	sf.Activate()
+	h.take()
+	if !w.bar.lights[lightClose].Activate() || !sf.Closed() {
+		t.Errorf("close: Activate did not close")
+	}
+	if got := h.take(); got != "shouldClose closed" {
+		t.Errorf("close log %q", got)
+	}
+	w2, sf2, h2 := openWindow(t, s, driver.WindowConfig{Title: "T", Size: driver.Size{W: 300, H: 200}, Style: driver.StyleTitled})
+	for _, k := range []lightKind{lightClose, lightMinimize, lightZoom} {
+		if w2.bar.lights[k].Activate() {
+			t.Errorf("disabled light %d activated", k)
+		}
+	}
+	if sf2.Closed() || sf2.Minimized() || sf2.Zoomed() || h2.take() != "" {
+		t.Errorf("disabled lights acted")
+	}
+}
+
+// newDriver returns a driver on the started fake shell s, outside Run,
+// with the services s handed to its Ready (as the driver's Ready keeps
+// them).
+func newDriver(s *fake.Shell) *Driver {
+	return NewWithServices(s, services(s))
 }

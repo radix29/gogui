@@ -68,7 +68,7 @@ func (b *Button) SetCancel(isCancel bool)   { b.IsCancel = isCancel }
 
 // UserClick simulates a click.
 func (b *Button) UserClick() {
-	if b.Disabled || b.Handler == nil {
+	if !b.Enabled() || b.Handler == nil {
 		return
 	}
 	b.Handler.Clicked()
@@ -103,7 +103,7 @@ func (c *Checkbox) State() driver.CheckState     { return c.Value }
 
 // UserClick simulates a click: off turns on, on turns off, mixed turns on.
 func (c *Checkbox) UserClick() {
-	if c.Disabled {
+	if !c.Enabled() {
 		return
 	}
 	if c.Value == driver.StateOn {
@@ -138,7 +138,7 @@ func (r *Radio) On() bool              { return r.IsOn }
 // UserClick simulates selecting the radio. It reports StateOn even if the
 // radio was already on, like AppKit.
 func (r *Radio) UserClick() {
-	if r.Disabled {
+	if !r.Enabled() {
 		return
 	}
 	r.IsOn = true
@@ -177,7 +177,7 @@ func (t *TextField) SetEditable(editable bool)           { t.ReadOnly = !editabl
 
 // UserType simulates the user replacing the whole text with text.
 func (t *TextField) UserType(text string) {
-	if t.Disabled || t.ReadOnly {
+	if !t.Enabled() || t.ReadOnly {
 		return
 	}
 	t.Value = text
@@ -188,7 +188,7 @@ func (t *TextField) UserType(text string) {
 
 // UserSubmit simulates pressing Return.
 func (t *TextField) UserSubmit() {
-	if t.Disabled || t.Handler == nil {
+	if !t.Enabled() || t.Handler == nil {
 		return
 	}
 	t.Handler.Submitted(t.Value)
@@ -232,7 +232,7 @@ func (s *Slider) SetVertical(vertical bool) { s.Vertical = vertical }
 
 // UserDrag simulates the user moving the knob to v (clamped).
 func (s *Slider) UserDrag(v float64) {
-	if s.Disabled {
+	if !s.Enabled() {
 		return
 	}
 	s.Val = clamp(v, s.Min, s.Max)
@@ -314,7 +314,7 @@ func (p *PopUpButton) Selected() int { return p.Index }
 // UserSelect simulates the user choosing the item at index. Out-of-range
 // indices are ignored.
 func (p *PopUpButton) UserSelect(index int) {
-	if p.Disabled || index < 0 || index >= len(p.Items) {
+	if !p.Enabled() || index < 0 || index >= len(p.Items) {
 		return
 	}
 	p.Index = index
@@ -540,7 +540,7 @@ func isRuneStart(b byte) bool { return b&0xC0 != 0x80 }
 // UserType simulates the user replacing the selection with text. The caret
 // ends up after the inserted text.
 func (t *TextView) UserType(text string) {
-	if t.Disabled || t.ReadOnly {
+	if !t.Enabled() || t.ReadOnly {
 		return
 	}
 	t.Value = t.Value[:t.SelStart] + text + t.Value[t.SelEnd:]

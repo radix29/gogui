@@ -1,17 +1,3 @@
-// Package gogui is a cross-platform desktop GUI toolkit with a macOS look
-// and feel (PLAN.md). Apps import only this package; the same code builds on
-// macOS, Windows and Linux without build tags or cgo.
-//
-// A program calls Run from main. Run starts the UI event loop on the main OS
-// thread and calls the ready callback, which builds the UI. Every callback
-// runs on the UI thread. Other goroutines touch widgets only through Do or
-// DoSync. With GOGUI_DEBUG=1 set, using the toolkit off the UI thread
-// panics.
-//
-// Setters return their receiver, so calls chain. The setters every widget
-// shares (SetEnabled, SetHidden, SetTooltip, SetControlSize and Focus) are
-// defined once on an embedded generic type, so go doc shows them returning
-// T: T is always the widget's own type (*Button for a Button).
 package gogui
 
 import (
@@ -31,7 +17,9 @@ func init() {
 }
 
 // AppConfig configures the application. Name is the application name: the
-// title of the app menu and part of the default menu titles ("Quit Name").
+// title of the app menu and part of the standard menu titles ("About
+// Name", "Hide Name", "Quit Name"), and on Windows and Linux the title of
+// the app-modal alerts.
 type AppConfig = driver.AppConfig
 
 // errRunTwice is returned by Run when it is called a second time.
@@ -45,7 +33,7 @@ var cur atomic.Pointer[App]
 
 // App is the running application. Run passes it to the ready callback.
 type App struct {
-	drv uiDriver
+	drv driver.Driver
 
 	appearance  Appearance     // the effective appearance last reported
 	lastMenuID  int            // the last menu item ID handed out
@@ -58,6 +46,9 @@ type App struct {
 	// destroy the ones that were never placed in a window (or were taken
 	// out of one) when it returns.
 	live map[*widget]Widget
+
+	// frames is the debug frame-time log (framelog.go), nil when off.
+	frames *frameLog
 }
 
 // Run starts the application and blocks until Quit. It must be called once,
@@ -67,17 +58,20 @@ type App struct {
 // Run returns nil after Quit. It returns the driver's error if the platform
 // backend cannot start (for example, when GTK 4 is missing on Linux), and
 // an error if it is called a second time. It never calls os.Exit.
+//
+// On macOS, until the AppKit driver exists, Run uses the headless driver:
+// it prints one notice line to stderr and shows nothing (see the package
+// documentation, Platforms).
 func Run(cfg AppConfig, ready func(*App)) error {
 	if !ran.CompareAndSwap(false, true) {
 		return errRunTwice
 	}
-	d, err := selectDriver()
+	d, err := newDriver()
 	if err != nil {
 		return err
 	}
 	app := &App{drv: d, live: map[*widget]Widget{}}
-	cur.Store(app)
-	defer cur.Store(nil)
+	defer cur.Store(nil) // Ready stores app (A6)
 	err = d.Run(cfg, &appHandler{app: app, ready: ready})
 	app.destroyLeftovers()
 	return err
@@ -106,19 +100,51 @@ func (a *App) Appearance() Appearance {
 	return effectiveAppearance(a.drv.Appearance())
 }
 
+// SetAccentColor makes c the app's accent color instead of the OS one:
+// the default button, checked checkboxes and radios, the slider's track,
+// the focus ring, the selection, highlighted menu items and
+// ColorControlAccent all follow it. A semantic c (ColorSystemPurple …)
+// resolves against the current appearance and follows light and dark; an
+// accent is always opaque. ColorControlAccent or the zero Color removes
+// the override, so the OS accent applies again. On a light accent the
+// labels drawn on it turn dark to stay readable.
+//
+// On macOS the accent is a user setting with no app-wide override: the
+// color is recorded for the controls that take a tint (the headless
+// driver that stands in for AppKit for now applies only a concrete c).
+// OnAppearanceChange is not called.
+func (a *App) SetAccentColor(c Color) *App {
+	checkUI("App.SetAccentColor")
+	if c == ColorControlAccent {
+		c = Color{}
+	}
+	a.drv.SetAccentColor(c)
+	return a
+}
+
+// AccentColor returns the effective accent color, always concrete: the
+// override of SetAccentColor, or else the OS accent (macOS blue where the
+// OS has none).
+func (a *App) AccentColor() Color {
+	checkUI("App.AccentColor")
+	return a.drv.Appearance().Accent
+}
+
 // OnAppearanceChange calls fn with the new effective appearance when it
 // switches between light and dark, because the OS setting changed or
 // because of SetAppearance. Semantic colors and system fonts follow on
-// their own; fn is for anything the app picks or draws itself.
+// their own; fn is for anything the app picks or draws itself. A change of
+// the accent color (the OS one or SetAccentColor) does not call fn.
 func (a *App) OnAppearanceChange(fn func(Appearance)) Unsubscribe {
 	checkUI("App.OnAppearanceChange")
 	return a.onAppearance.add(fn)
 }
 
-// OnQuitRequested calls fn when the user asks to quit: the Quit menu item,
-// ⌘Q (Ctrl+Q), the Dock menu or the OS logging out. If fn returns false the
-// app keeps running, and the handlers subscribed after it are not called.
-// App.Quit doesn't ask.
+// OnQuitRequested calls fn when the user asks to quit: the Quit menu item
+// or ⌘Q (Ctrl+Q), and on macOS also the Dock menu and logging out. If fn
+// returns false the app keeps running, and the handlers subscribed after
+// it are not called. App.Quit doesn't ask. On Windows, logging out asks
+// each window's OnShouldClose handlers instead.
 func (a *App) OnQuitRequested(fn func() bool) Unsubscribe {
 	checkUI("App.OnQuitRequested")
 	return a.onQuit.add(fn)
@@ -135,8 +161,9 @@ func Do(fn func()) {
 }
 
 // DoSync runs fn on the UI thread and waits until it has returned. Called
-// on the UI thread itself, it runs fn at once. A panic in fn is re-raised in
-// the caller.
+// on the UI thread itself, it runs fn at once. A panic in fn is re-raised
+// in the caller as a *PanicError, on every thread (A7); its Value is the
+// original panic value and its Stack the stack where fn panicked.
 //
 // DoSync reports whether fn ran. It returns false, without running fn,
 // before Run has started, after it has returned, and from other goroutines
@@ -147,6 +174,10 @@ func DoSync(fn func()) bool {
 	}
 	return false
 }
+
+// PanicError is the panic value DoSync re-raises when fn panicked. It
+// unwraps to the original value when that is an error.
+type PanicError = mainthread.PanicError
 
 // queue returns the UI-thread queue of the running app, or nil.
 func queue() *mainthread.Queue {
@@ -173,8 +204,13 @@ type appHandler struct {
 }
 
 func (h *appHandler) Ready() {
+	// The app becomes current only now, so constructors and Do work from
+	// the ready callback on, as driverFor documents, and not while the
+	// driver is still starting.
+	cur.Store(h.app)
 	h.app.drv.Queue().SetChecks(debugChecks)
 	h.app.appearance = effectiveAppearance(h.app.drv.Appearance())
+	startFrameLog(h.app)
 	if h.ready != nil {
 		h.ready(h.app)
 	}
@@ -210,11 +246,18 @@ func (h *appHandler) MenuItemSelected(id int) { h.app.menuItemSelected(id) }
 // destroyLeftovers destroys, bottom-up, every widget tree that is still
 // alive when the event loop has ended: widgets that were never placed in a
 // window, or were taken out of one and not placed again. Closed windows
-// have already destroyed theirs.
+// have already destroyed theirs. Each live widget's tree is destroyed from
+// its topmost live ancestor, so no widget is skipped for having a parent
+// (B3). Deleting from the map while ranging over it is allowed.
 func (a *App) destroyLeftovers() {
 	for _, w := range a.live {
-		if b := w.base(); !b.dead && b.parent == nil {
-			destroyTree(w)
+		top := w.base()
+		for top.parent != nil && !top.parent.base().dead {
+			top = top.parent.base()
+		}
+		if !top.dead {
+			top.host = nil
+			destroyTree(top.self)
 		}
 	}
 	a.live = nil

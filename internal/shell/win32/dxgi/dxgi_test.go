@@ -46,14 +46,15 @@ func TestSlots(t *testing.T) {
 	com.CheckSlots(t, "IDXGIFactory2", vtFactory2, map[string]int{
 		"CreateSwapChainForComposition": slotFactoryCreateSwapChainForComposition})
 	com.CheckSlots(t, "IDXGISwapChain1", vtSwapChain1, map[string]int{
-		"Present":       slotSwapChainPresent,
-		"GetBuffer":     slotSwapChainGetBuffer,
-		"ResizeBuffers": slotSwapChainResizeBuffers,
-		"GetDesc1":      slotSwapChainGetDesc1,
+		"Present":             slotSwapChainPresent,
+		"GetBuffer":           slotSwapChainGetBuffer,
+		"ResizeBuffers":       slotSwapChainResizeBuffers,
+		"GetFrameStatistics":  slotSwapChainGetFrameStatistics,
+		"GetLastPresentCount": slotSwapChainGetLastPresentCount,
+		"GetDesc1":            slotSwapChainGetDesc1,
 	})
 	com.CheckSlots(t, "IDXGISwapChain2", vtSwapChain2, map[string]int{
 		"SetMaximumFrameLatency":        slotSwapChainSetMaximumFrameLatency,
-		"GetMaximumFrameLatency":        slotSwapChainGetMaximumFrameLatency,
 		"GetFrameLatencyWaitableObject": slotSwapChainGetFrameLatencyWaitableObject,
 	})
 }
@@ -83,6 +84,9 @@ func TestStructLayouts(t *testing.T) {
 			f("SubSysID", 264, 4), f("Revision", 268, 4), f("DedicatedVideoMemory", 272, 8),
 			f("DedicatedSystemMemory", 280, 8), f("SharedSystemMemory", 288, 8),
 			f("AdapterLuid", 296, 8)}}},
+		{FrameStatistics{}, ffi.Layout{Size: 32, Align: 8, Fields: []ffi.Field{
+			f("PresentCount", 0, 4), f("PresentRefreshCount", 4, 4), f("SyncRefreshCount", 8, 4),
+			f("SyncQPCTime", 16, 8), f("SyncGPUTime", 24, 8)}}},
 	} {
 		ffi.CheckLayout(t, c.v, c.want)
 		ffi.CheckNoGoPointers(t, c.v)

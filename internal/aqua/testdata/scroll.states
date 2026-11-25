@@ -29,3 +29,23 @@ fillRRect (12,130,67,6) r=3 solid #00000073
 fillRRect (152,43,6,21) r=3 solid #00000073
 ## both scrollers, horizontal cannot scroll
 fillRRect (152,44,6,24) r=3 solid #00000073
+## inactive, light
+fillRRect (152,44,6,24) r=3 solid #00000073
+## inactive, both scrollers, light
+fillRRect (12,130,67,6) r=3 solid #00000073
+fillRRect (152,43,6,21) r=3 solid #00000073
+## inactive, dark
+fillRRect (152,44,6,24) r=3 solid #ffffff73
+## inactive, both scrollers, dark
+fillRRect (12,130,67,6) r=3 solid #ffffff73
+fillRRect (152,43,6,21) r=3 solid #ffffff73
+## inactive, light, increased contrast
+fillRRect (152,44,6,24) r=3 solid #000000bf
+## inactive, both scrollers, light, increased contrast
+fillRRect (12,130,67,6) r=3 solid #000000bf
+fillRRect (152,43,6,21) r=3 solid #000000bf
+## inactive, dark, increased contrast
+fillRRect (152,44,6,24) r=3 solid #ffffffbf
+## inactive, both scrollers, dark, increased contrast
+fillRRect (12,130,67,6) r=3 solid #ffffffbf
+fillRRect (152,43,6,21) r=3 solid #ffffffbf

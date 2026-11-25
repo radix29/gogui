@@ -23,6 +23,7 @@ func openScroll(t *testing.T) (*surface, *fakeWindow, *sfHandler, *winFactory) {
 	_, f := newSurfaceTest(t)
 	h := &sfHandler{}
 	sf, fw := f.open(t, sfResizable, h)
+	pastFirstClick(sf, fw)
 	sf.Show()
 	f.frame(t)
 	fw.snap()
@@ -44,6 +45,7 @@ func openScrollHidden(t *testing.T) (*surface, *fakeWindow, *sfHandler, *winFact
 	_, f := newSurfaceTest(t)
 	h := &sfHandler{}
 	sf, fw := f.open(t, sfResizable, h)
+	pastFirstClick(sf, fw)
 	fw.snap()
 	if f.s.clock.requested || sf.invalid {
 		t.Fatalf("openScrollHidden: requested %v, invalid %v", f.s.clock.requested, sf.invalid)
@@ -288,7 +290,14 @@ func TestScrollPosModsTime(t *testing.T) {
 func TestScrollMomentum(t *testing.T) {
 	sf, fw, h, f := openScroll(t)
 	var evs []shell.ScrollEvent
-	h.onScroll = func(se shell.ScrollEvent) { evs = append(evs, se) }
+	endedAt := -1 // the frame that sent PhaseEnded
+	h.onScroll = func(se shell.ScrollEvent) {
+		evs = append(evs, se)
+		sf.Invalidate() // as the content it scrolls (S6.2a: no frame after the last)
+		if se.Momentum == shell.PhaseEnded {
+			endedAt = f.s.clock.frames
+		}
+	}
 	startMomentum(t, fw, h, 300, 1000)
 	evs = nil
 	if !f.s.clock.requested || !sf.scr.mom.on {
@@ -335,6 +344,9 @@ func TestScrollMomentum(t *testing.T) {
 	}
 	if f.s.clock.requested {
 		t.Error("a frame is still requested after the momentum ended")
+	}
+	if endedAt != f.s.clock.frames {
+		t.Errorf("the momentum ended in frame %d, the clock ran %d", endedAt, f.s.clock.frames)
 	}
 	if frames < len(evs) {
 		t.Errorf("%d events in %d frames", len(evs), frames)

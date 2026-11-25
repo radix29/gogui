@@ -5,11 +5,18 @@ import "github.com/radix29/gogui/internal/driver"
 // TextField is a single-line editable text field (NSTextField). With
 // NewSecureField it hides its text (NSSecureTextField). It expands
 // horizontally.
+//
+// On Windows and Linux the field edits as an NSTextField does (word and
+// line movement with Option and Primary, double- and triple-click
+// selection, undo), with Ctrl as Primary; plain Home and End move the
+// caret to the line's ends. Input methods compose inline (IMM32 on
+// Windows; IBus or Fcitx through GTK on Linux), except in a secure field.
 type TextField struct {
 	common[*TextField]
 	p        driver.TextField
 	secure   bool
 	text     string
+	place    string // the placeholder
 	font     Font
 	onChange subscribers[func(string)]
 	onSubmit subscribers[func(string)]
@@ -32,7 +39,7 @@ func newTextField(what string, secure bool) *TextField {
 }
 
 // Secure reports whether the field was created by NewSecureField.
-func (t *TextField) Secure() bool { t.check("Secure"); return t.secure }
+func (t *TextField) Secure() bool { t.get("Secure"); return t.secure }
 
 // SetText replaces the text. It doesn't call the OnChange handlers.
 func (t *TextField) SetText(text string) *TextField {
@@ -46,17 +53,21 @@ func (t *TextField) SetText(text string) *TextField {
 }
 
 // Text returns the text, including the user's edits.
-func (t *TextField) Text() string { t.check("Text"); return t.text }
+func (t *TextField) Text() string { t.get("Text"); return t.text }
 
 // SetPlaceholder sets the gray text shown while the field is empty.
 func (t *TextField) SetPlaceholder(text string) *TextField {
 	t.check("SetPlaceholder")
+	t.place = text
 	if t.live() {
 		t.p.SetPlaceholder(text)
 	}
 	t.invalidate()
 	return t
 }
+
+// Placeholder returns the text set with SetPlaceholder.
+func (t *TextField) Placeholder() string { t.get("Placeholder"); return t.place }
 
 // SetFont sets the font. The zero Font is the system font at the default
 // size for the control size.
@@ -71,7 +82,7 @@ func (t *TextField) SetFont(f Font) *TextField {
 }
 
 // Font returns the font set with SetFont.
-func (t *TextField) Font() Font { t.check("Font"); return t.font }
+func (t *TextField) Font() Font { t.get("Font"); return t.font }
 
 // SetAlignment sets the horizontal alignment of the text. The default is
 // AlignLeading.
@@ -113,18 +124,24 @@ type textFieldEvents struct{ t *TextField }
 
 func (e textFieldEvents) TextChanged(text string) {
 	t := e.t
-	if t.disabled || t.dead {
+	if t.dead {
 		return
 	}
-	t.text = text
-	t.onChange.each(func(fn func(string)) { fn(text) })
+	t.text = text // the cache follows the native text even when disabled (B14)
+	if t.disabled {
+		return
+	}
+	t.onChange.eachLive(&t.widget, func(fn func(string)) { fn(text) })
 }
 
 func (e textFieldEvents) Submitted(text string) {
 	t := e.t
-	if t.disabled || t.dead {
+	if t.dead {
 		return
 	}
 	t.text = text
-	t.onSubmit.each(func(fn func(string)) { fn(text) })
+	if t.disabled {
+		return
+	}
+	t.onSubmit.eachLive(&t.widget, func(fn func(string)) { fn(text) })
 }

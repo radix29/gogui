@@ -29,7 +29,7 @@ func main() {
 				greeting,
 				name,
 				gogui.HStack(8, gogui.Spacer(), greet),
-			).Padding(20),
+			).SetPadding(20),
 		)
 		win.OnClose(app.Quit)
 		win.Show()

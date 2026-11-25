@@ -3,6 +3,8 @@
 package win32
 
 import (
+	"time"
+
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/shell/win32/w32"
 )
@@ -27,6 +29,11 @@ type sysReader interface {
 	highContrast() bool
 	// clientAreaAnimation is SPI_GETCLIENTAREAANIMATION.
 	clientAreaAnimation() (on, ok bool)
+	// caretBlinkTime is GetCaretBlinkTime: the half-period in ms, INFINITE
+	// for no blink.
+	caretBlinkTime() (ms uint32, ok bool)
+	// caretTimeout is SPI_GETCARETTIMEOUT in ms.
+	caretTimeout() (ms uint32, ok bool)
 }
 
 type liveSys struct{}
@@ -65,8 +72,10 @@ func (liveSys) clientAreaAnimation() (bool, bool) {
 //   - LegacyScrollers: "Always show scrollbars" is on, that is
 //     Accessibility\DynamicScrollbars is 0 (missing, before Windows 10
 //     1803's setting existed: overlay scrollers).
+//   - CaretBlink: readCaretBlink. Changes arrive as WM_SETTINGCHANGE
+//     (SPI_SETCARETTIMEOUT) and as a broadcast after SetCaretBlinkTime.
 func readAppearance(r sysReader) driver.Appearance {
-	a := driver.Appearance{Accent: driver.DefaultAccent}
+	a := driver.DefaultAppearance()
 	if v, ok := r.regDWORD(regPersonalize, "AppsUseLightTheme"); ok {
 		a.Dark = v == 0
 	}
@@ -85,5 +94,41 @@ func readAppearance(r sysReader) driver.Appearance {
 	if v, ok := r.regDWORD(regAccessibility, "DynamicScrollbars"); ok {
 		a.LegacyScrollers = v == 0
 	}
+	a.CaretBlink = readCaretBlink(r)
 	return a
+}
+
+func (liveSys) caretBlinkTime() (uint32, bool) {
+	v, err := w32.GetCaretBlinkTime()
+	return v, err == nil
+}
+
+func (liveSys) caretTimeout() (uint32, bool) {
+	v, err := w32.SystemParametersInfoUint32(w32.SPI_GETCARETTIMEOUT)
+	return v, err == nil
+}
+
+// readCaretBlink maps the caret settings onto a driver.CaretBlink,
+// starting from driver.DefaultCaretBlink:
+//
+//   - Period: twice GetCaretBlinkTime (Windows reports the half-period);
+//     INFINITE is no blink (Period 0); unreadable keeps the default.
+//   - Timeout: SPI_GETCARETTIMEOUT; 0 and INFINITE never stop blinking
+//     (Timeout 0); unreadable keeps the default.
+func readCaretBlink(r sysReader) driver.CaretBlink {
+	b := driver.DefaultCaretBlink
+	if ms, ok := r.caretBlinkTime(); ok {
+		if ms == w32.INFINITE {
+			b.Period = 0
+		} else {
+			b.Period = 2 * time.Duration(ms) * time.Millisecond
+		}
+	}
+	if ms, ok := r.caretTimeout(); ok {
+		if ms == w32.INFINITE {
+			ms = 0
+		}
+		b.Timeout = time.Duration(ms) * time.Millisecond
+	}
+	return b
 }

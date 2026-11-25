@@ -2,6 +2,7 @@ package layout
 
 import (
 	"math"
+	"slices"
 
 	"github.com/radix29/gogui/internal/driver"
 )
@@ -26,7 +27,6 @@ type Stack struct {
 	spacing  float64
 	padding  driver.Insets
 	peer     Peer
-	dir      LayoutDirection
 	children []Node
 	props    Props
 }
@@ -52,6 +52,18 @@ func (s *Stack) SetChildren(children ...Node) *Stack {
 	return s
 }
 
+// AppendChildren appends children after the current ones (amortised
+// O(len(children)), P19). It panics if a child is nil.
+func (s *Stack) AppendChildren(children ...Node) *Stack {
+	for _, c := range children {
+		if c == nil {
+			panic("layout: nil stack child")
+		}
+	}
+	s.children = append(s.children, children...)
+	return s
+}
+
 // SetSpacing sets the gap between neighbouring visible children (spacers
 // included). Negative, NaN and +Inf values count as 0.
 func (s *Stack) SetSpacing(v float64) *Stack { s.spacing = finite(v); return s }
@@ -67,10 +79,6 @@ func (s *Stack) SetPadding(in driver.Insets) *Stack {
 // SetPeer sets the stack's native view; nil makes it a transparent group.
 func (s *Stack) SetPeer(p Peer) *Stack { s.peer = p; return s }
 
-// SetDirection sets the reading direction (RightToLeft is laid out as
-// LeftToRight for now).
-func (s *Stack) SetDirection(d LayoutDirection) *Stack { s.dir = d; return s }
-
 // Axis returns the main axis (Vertical for a VStack).
 func (s *Stack) Axis() Axis { return s.axis }
 
@@ -83,9 +91,6 @@ func (s *Stack) Padding() driver.Insets { return s.padding }
 // Peer returns the native view, or nil for a transparent group.
 func (s *Stack) Peer() Peer { return s.peer }
 
-// Direction returns the reading direction.
-func (s *Stack) Direction() LayoutDirection { return s.dir }
-
 // Children returns the children, hidden ones included. Do not modify it.
 func (s *Stack) Children() []Node { return s.children }
 
@@ -94,12 +99,15 @@ func (s *Stack) Props() *Props { return &s.props }
 
 // Expands implements Node: the stack's own flag, or any visible child that
 // expands on a. On the main axis, a Spacer counts as expanding.
-func (s *Stack) Expands(a Axis) bool {
+func (s *Stack) Expands(a Axis) bool { return s.expandsIn(nil, a) }
+
+// expandsIn is Expands with the children asked through p (passExpander).
+func (s *Stack) expandsIn(p *Pass, a Axis) bool {
 	if s.props.expand[a] {
 		return true
 	}
 	for _, c := range s.children {
-		if !c.Props().Hidden() && s.childExpands(c, a) {
+		if !c.Props().Hidden() && s.childExpands(p, c, a) {
 			return true
 		}
 	}
@@ -116,6 +124,7 @@ func (s *Stack) Measure(p *Pass, max driver.Size) driver.Size {
 	max = normSize(max)
 	main, cross := s.axis, s.axis.Cross()
 	kids := s.visible()
+	defer p.release(p.mark())
 	extra := s.pad(main) + s.gaps(len(kids))
 	lo, _ := s.props.Min(cross)
 	_, hi := s.props.limits(cross, lo)
@@ -128,7 +137,7 @@ func (s *Stack) Measure(p *Pass, max driver.Size) driver.Size {
 		minimum += sp.min
 	}
 	m := s.props.resolve(main, natural+extra, minimum+extra, get(max, main))
-	sizes := distribute(spans, m-extra)
+	sizes := distributeIn(p, spans, m-extra)
 	var c float64
 	for i, k := range kids {
 		c = math.Max(c, get(p.Measure(k, mk(main, sizes[i], innerCross)), cross))
@@ -157,12 +166,13 @@ func (s *Stack) Arrange(p *Pass, frame driver.Rect) {
 		W: norm(frame.W - s.padding.Horizontal()), H: norm(frame.H - s.padding.Vertical()),
 	}
 	innerCross := get(inner.Size(), cross)
-	sizes := distribute(s.spans(p, kids, innerCross), get(inner.Size(), main)-s.gaps(len(kids)))
+	defer p.release(p.mark())
+	sizes := distributeIn(p, s.spans(p, kids, innerCross), get(inner.Size(), main)-s.gaps(len(kids)))
 	pos, crossPos := getPt(inner.Origin(), main), getPt(inner.Origin(), cross)
 	for i, k := range kids {
 		c := get(p.Measure(k, mk(main, sizes[i], innerCross)), cross)
 		slot := driver.RectOf(mkPt(main, pos, crossPos), mk(main, sizes[i], innerCross))
-		h, v := Leading, s.crossAlign(k)
+		h, v := Leading, s.crossAlign(p, k)
 		if main == Vertical {
 			h, v = v, h
 		}
@@ -193,31 +203,31 @@ func (s *Stack) FirstLine(p *Pass, max driver.Size) float64 {
 // each child at the inner cross extent.
 func (s *Stack) spans(p *Pass, kids []Node, innerCross float64) []span {
 	main := s.axis
-	out := make([]span, len(kids))
+	out := p.spanBuf(len(kids))
 	for i, k := range kids {
 		out[i] = span{
 			natural: get(p.Measure(k, mk(main, math.Inf(1), innerCross)), main),
 			min:     get(p.Measure(k, mk(main, 0, innerCross)), main),
 			max:     k.Props().Max(main),
-			expand:  s.childExpands(k, main),
+			expand:  s.childExpands(p, k, main),
 		}
 	}
 	return out
 }
 
-func (s *Stack) childExpands(c Node, a Axis) bool {
+func (s *Stack) childExpands(p *Pass, c Node, a Axis) bool {
 	if _, ok := c.(*Spacer); ok && a == s.axis {
 		return true
 	}
-	return c.Expands(a)
+	return p.Expands(c, a)
 }
 
-func (s *Stack) crossAlign(c Node) Align {
+func (s *Stack) crossAlign(p *Pass, c Node) Align {
 	cross := s.axis.Cross()
 	switch {
 	case c.Props().Align(cross) != AlignDefault:
 		return c.Props().Align(cross)
-	case c.Expands(cross):
+	case p.Expands(c, cross):
 		return Fill
 	case s.axis == Vertical:
 		return Leading
@@ -226,7 +236,12 @@ func (s *Stack) crossAlign(c Node) Align {
 	}
 }
 
+// visible returns the visible children: the children themselves (not a
+// copy, P7) when none is hidden.
 func (s *Stack) visible() []Node {
+	if !slices.ContainsFunc(s.children, func(c Node) bool { return c.Props().Hidden() }) {
+		return s.children
+	}
 	out := make([]Node, 0, len(s.children))
 	for _, c := range s.children {
 		if !c.Props().Hidden() {

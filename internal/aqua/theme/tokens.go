@@ -9,7 +9,7 @@ import (
 )
 
 // Sequoia is the token set of spec/sequoia.json. macOS 14/15 (Sonoma/Sequoia) look, PLAN.md §5.2.
-// 160 of its 160 tokens are provisional (from memory, to be measured).
+// 261 of its 261 tokens are provisional (from memory, to be measured).
 var Sequoia = Theme{
 	Name: "Sequoia",
 	Colors: Colors{
@@ -58,13 +58,13 @@ var Sequoia = Theme{
 		TitleBarInactive:    ColorToken{Light: rgba8(243, 243, 243, 255), Dark: rgba8(43, 43, 43, 255)},                                                                                                       // provisional
 		TitleBarSeparator:   ColorToken{Light: rgba8(0, 0, 0, 26), Dark: rgba8(0, 0, 0, 255), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 102), ContrastDark: rgba8(255, 255, 255, 102)},                 // provisional
 		CloseFill:           ColorToken{Light: rgba8(255, 95, 87, 255), Dark: rgba8(255, 95, 87, 255)},                                                                                                        // provisional
-		CloseBorder:         ColorToken{Light: rgba8(224, 68, 62, 255), Dark: rgba8(224, 68, 62, 255)},                                                                                                        // provisional
+		CloseBorder:         ColorToken{Light: rgba8(224, 68, 62, 255), Dark: rgba8(224, 68, 62, 255), HasContrast: true, ContrastLight: rgba8(166, 38, 34, 255), ContrastDark: rgba8(166, 38, 34, 255)},      // provisional
 		CloseGlyph:          ColorToken{Light: rgba8(77, 0, 0, 255), Dark: rgba8(77, 0, 0, 255)},                                                                                                              // provisional
 		MinimizeFill:        ColorToken{Light: rgba8(254, 188, 46, 255), Dark: rgba8(254, 188, 46, 255)},                                                                                                      // provisional
-		MinimizeBorder:      ColorToken{Light: rgba8(222, 161, 35, 255), Dark: rgba8(222, 161, 35, 255)},                                                                                                      // provisional
+		MinimizeBorder:      ColorToken{Light: rgba8(222, 161, 35, 255), Dark: rgba8(222, 161, 35, 255), HasContrast: true, ContrastLight: rgba8(168, 112, 10, 255), ContrastDark: rgba8(168, 112, 10, 255)},  // provisional
 		MinimizeGlyph:       ColorToken{Light: rgba8(153, 87, 0, 255), Dark: rgba8(153, 87, 0, 255)},                                                                                                          // provisional
 		ZoomFill:            ColorToken{Light: rgba8(40, 200, 64, 255), Dark: rgba8(40, 200, 64, 255)},                                                                                                        // provisional
-		ZoomBorder:          ColorToken{Light: rgba8(26, 171, 41, 255), Dark: rgba8(26, 171, 41, 255)},                                                                                                        // provisional
+		ZoomBorder:          ColorToken{Light: rgba8(26, 171, 41, 255), Dark: rgba8(26, 171, 41, 255), HasContrast: true, ContrastLight: rgba8(12, 122, 24, 255), ContrastDark: rgba8(12, 122, 24, 255)},      // provisional
 		ZoomGlyph:           ColorToken{Light: rgba8(0, 101, 0, 255), Dark: rgba8(0, 101, 0, 255)},                                                                                                            // provisional
 		LightInactiveFill:   ColorToken{Light: rgba8(220, 220, 220, 255), Dark: rgba8(84, 84, 84, 255)},                                                                                                       // provisional
 		LightInactiveBorder: ColorToken{Light: rgba8(201, 201, 201, 255), Dark: rgba8(74, 74, 74, 255), HasContrast: true, ContrastLight: rgba8(128, 128, 128, 255), ContrastDark: rgba8(140, 140, 140, 255)}, // provisional
@@ -129,12 +129,15 @@ var Sequoia = Theme{
 		},
 	},
 	Accent: Accent{
-		Base:              ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(89, 89, 89, 255)},    // provisional
-		DefaultButtonText: ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(255, 255, 255, 255)}, // provisional
-		SelectionAlpha:    0.3,                                                                           // provisional
-		FocusRingAlpha:    0.5,                                                                           // provisional
-		PressedShade:      0.85,                                                                          // provisional
-		InactiveAlpha:     0.35,                                                                          // provisional
+		Base:                   ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(89, 89, 89, 255)},    // provisional
+		DefaultButtonText:      ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(255, 255, 255, 255)}, // provisional
+		AccentDarkText:         ColorToken{Light: rgba8(0, 0, 0, 217), Dark: rgba8(0, 0, 0, 217)},             // provisional
+		SelectionAlpha:         0.3,                                                                           // provisional
+		FocusRingAlpha:         0.5,                                                                           // provisional
+		SelectionContrastAlpha: 0.5,                                                                           // provisional
+		PressedShade:           0.85,                                                                          // provisional
+		InactiveAlpha:          0.35,                                                                          // provisional
+		AccentTextMinContrast:  3,                                                                             // provisional
 	},
 	Animation: Animation{
 		DurationFast:         100 * time.Millisecond,                          // provisional
@@ -154,6 +157,7 @@ var Sequoia = Theme{
 		BezelFill:               ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(255, 255, 255, 64)},                                                                                            // provisional
 		BezelPressedFill:        ColorToken{Light: rgba8(222, 222, 222, 255), Dark: rgba8(255, 255, 255, 107)},                                                                                           // provisional
 		BezelBorder:             ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(255, 255, 255, 26), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(255, 255, 255, 140)},   // provisional
+		BezelOutline:            ColorToken{Light: rgba8(0, 0, 0, 0), Dark: rgba8(255, 255, 255, 0), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(255, 255, 255, 140)},     // provisional
 		BoxFill:                 ColorToken{Light: rgba8(0, 0, 0, 10), Dark: rgba8(255, 255, 255, 13)},                                                                                                   // provisional
 		BoxBorder:               ColorToken{Light: rgba8(0, 0, 0, 20), Dark: rgba8(255, 255, 255, 26), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 115), ContrastDark: rgba8(255, 255, 255, 115)},   // provisional
 		SliderTrack:             ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(255, 255, 255, 38), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 128), ContrastDark: rgba8(255, 255, 255, 128)},   // provisional
@@ -161,6 +165,7 @@ var Sequoia = Theme{
 		SliderKnobBorder:        ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(0, 0, 0, 64), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(0, 0, 0, 191)},               // provisional
 		SliderKnobShadow:        ColorToken{Light: rgba8(0, 0, 0, 77), Dark: rgba8(0, 0, 0, 102), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 128), ContrastDark: rgba8(0, 0, 0, 153)},              // provisional
 		SliderTickMark:          ColorToken{Light: rgba8(0, 0, 0, 64), Dark: rgba8(255, 255, 255, 64), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 153), ContrastDark: rgba8(255, 255, 255, 153)},   // provisional
+		SliderTrackOutline:      ColorToken{Light: rgba8(0, 0, 0, 0), Dark: rgba8(255, 255, 255, 0), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(255, 255, 255, 140)},     // provisional
 		ProgressTrack:           ColorToken{Light: rgba8(0, 0, 0, 26), Dark: rgba8(255, 255, 255, 26), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 102), ContrastDark: rgba8(255, 255, 255, 102)},   // provisional
 		SpinnerSpoke:            ColorToken{Light: rgba8(0, 0, 0, 140), Dark: rgba8(255, 255, 255, 140), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 217), ContrastDark: rgba8(255, 255, 255, 217)}, // provisional
 		BoxCornerRadius:         6,                                                                                                                                                                       // provisional
@@ -219,5 +224,115 @@ var Sequoia = Theme{
 		ScrollerHoverDuration:   150 * time.Millisecond,                                                                                                                                                  // provisional
 		WheelStepDuration:       150 * time.Millisecond,                                                                                                                                                  // provisional
 		VelocityWindow:          80 * time.Millisecond,                                                                                                                                                   // provisional
+	},
+	TextField: TextField{
+		FieldBorder:             ColorToken{Light: rgba8(0, 0, 0, 46), Dark: rgba8(255, 255, 255, 38), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 153), ContrastDark: rgba8(255, 255, 255, 153)}, // provisional
+		FieldInsetShadow:        ColorToken{Light: rgba8(0, 0, 0, 20), Dark: rgba8(0, 0, 0, 51)},                                                                                                       // provisional
+		FieldBorderWidth:        1,                                                                                                                                                                     // provisional
+		FieldInsetShadowOffsetY: 0.5,                                                                                                                                                                   // provisional
+		FieldInsetShadowBlur:    1,                                                                                                                                                                     // provisional
+		CaretWidth:              2,                                                                                                                                                                     // provisional
+		FieldCornerRadius:       SizeTable{0, 0, 0, 0},                                                                                                                                                 // provisional
+		FieldPaddingX:           SizeTable{4, 3, 2, 5},                                                                                                                                                 // provisional
+	},
+	TextView: TextView{
+		ContainerInsetY:     5, // provisional
+		LineFragmentPadding: 5, // provisional
+	},
+	Menu: Menu{
+		Background:           ColorToken{Light: rgba8(246, 246, 246, 166), Dark: rgba8(40, 40, 40, 166)},                                                                                                 // provisional
+		OpaqueBackground:     ColorToken{Light: rgba8(242, 242, 242, 255), Dark: rgba8(43, 43, 43, 255), HasContrast: true, ContrastLight: rgba8(255, 255, 255, 255), ContrastDark: rgba8(0, 0, 0, 255)}, // provisional
+		Border:               ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(255, 255, 255, 46), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 191), ContrastDark: rgba8(255, 255, 255, 191)},      // provisional
+		Shadow:               ColorToken{Light: rgba8(0, 0, 0, 64), Dark: rgba8(0, 0, 0, 128)},                                                                                                           // provisional
+		Text:                 ColorToken{Light: rgba8(0, 0, 0, 217), Dark: rgba8(255, 255, 255, 217), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 255), ContrastDark: rgba8(255, 255, 255, 255)},    // provisional
+		DisabledText:         ColorToken{Light: rgba8(0, 0, 0, 64), Dark: rgba8(255, 255, 255, 64), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(255, 255, 255, 140)},      // provisional
+		HighlightedText:      ColorToken{Light: rgba8(255, 255, 255, 255), Dark: rgba8(255, 255, 255, 255)},                                                                                              // provisional
+		Separator:            ColorToken{Light: rgba8(0, 0, 0, 26), Dark: rgba8(255, 255, 255, 26), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 128), ContrastDark: rgba8(255, 255, 255, 128)},      // provisional
+		BorderWidth:          1,                                                                                                                                                                          // provisional
+		CornerRadius:         6,                                                                                                                                                                          // provisional
+		ShadowOffsetY:        4,                                                                                                                                                                          // provisional
+		ShadowBlur:           12,                                                                                                                                                                         // provisional
+		PaddingY:             5,                                                                                                                                                                          // provisional
+		HighlightInsetX:      5,                                                                                                                                                                          // provisional
+		HighlightRadius:      4,                                                                                                                                                                          // provisional
+		CheckColumnWidth:     16,                                                                                                                                                                         // provisional
+		CheckmarkSize:        10,                                                                                                                                                                         // provisional
+		CheckmarkStroke:      1.75,                                                                                                                                                                       // provisional
+		TitlePaddingRight:    21,                                                                                                                                                                         // provisional
+		SeparatorHeight:      11,                                                                                                                                                                         // provisional
+		SeparatorThickness:   1,                                                                                                                                                                          // provisional
+		SeparatorInsetX:      10,                                                                                                                                                                         // provisional
+		ScrollArrowHeight:    16,                                                                                                                                                                         // provisional
+		ScrollArrowSize:      8,                                                                                                                                                                          // provisional
+		ShortcutGap:          24,                                                                                                                                                                         // provisional
+		SubmenuChevronSize:   9,                                                                                                                                                                          // provisional
+		SubmenuChevronStroke: 1.5,                                                                                                                                                                        // provisional
+		ItemHeight:           SizeTable{22, 19, 16, 24},                                                                                                                                                  // provisional
+	},
+	PopUp: PopUp{
+		IndicatorInset: 2,                         // provisional
+		IndicatorGap:   4,                         // provisional
+		ChevronStroke:  1.5,                       // provisional
+		ChevronGap:     2,                         // provisional
+		PaddingX:       SizeTable{8, 7, 6, 8},     // provisional
+		IndicatorWidth: SizeTable{16, 13, 10, 18}, // provisional
+		ChevronWidth:   SizeTable{7, 6, 5, 8},     // provisional
+	},
+	MenuBar: MenuBar{
+		Text:            ColorToken{Light: rgba8(0, 0, 0, 217), Dark: rgba8(255, 255, 255, 217), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 255), ContrastDark: rgba8(255, 255, 255, 255)}, // provisional
+		InactiveText:    ColorToken{Light: rgba8(0, 0, 0, 66), Dark: rgba8(255, 255, 255, 64), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 140), ContrastDark: rgba8(255, 255, 255, 140)},   // provisional
+		Highlight:       ColorToken{Light: rgba8(0, 0, 0, 26), Dark: rgba8(255, 255, 255, 38), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 64), ContrastDark: rgba8(255, 255, 255, 77)},     // provisional
+		StartGap:        12,                                                                                                                                                                      // provisional
+		TitlePaddingX:   7,                                                                                                                                                                       // provisional
+		HighlightHeight: 20,                                                                                                                                                                      // provisional
+		HighlightRadius: 5,                                                                                                                                                                       // provisional
+		MinDragWidth:    64,                                                                                                                                                                      // provisional
+		WindowTitleGap:  16,                                                                                                                                                                      // provisional
+	},
+	Tooltip: Tooltip{
+		Background:    ColorToken{Light: rgba8(246, 246, 246, 255), Dark: rgba8(44, 44, 46, 255), HasContrast: true, ContrastLight: rgba8(255, 255, 255, 255), ContrastDark: rgba8(0, 0, 0, 255)}, // provisional
+		Border:        ColorToken{Light: rgba8(0, 0, 0, 46), Dark: rgba8(255, 255, 255, 51), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 191), ContrastDark: rgba8(255, 255, 255, 191)},      // provisional
+		Text:          ColorToken{Light: rgba8(0, 0, 0, 217), Dark: rgba8(255, 255, 255, 217), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 255), ContrastDark: rgba8(255, 255, 255, 255)},    // provisional
+		Shadow:        ColorToken{Light: rgba8(0, 0, 0, 51), Dark: rgba8(0, 0, 0, 102)},                                                                                                           // provisional
+		BorderWidth:   1,                                                                                                                                                                          // provisional
+		CornerRadius:  4,                                                                                                                                                                          // provisional
+		ShadowOffsetY: 1,                                                                                                                                                                          // provisional
+		ShadowBlur:    4,                                                                                                                                                                          // provisional
+		PaddingX:      5,                                                                                                                                                                          // provisional
+		PaddingY:      2,                                                                                                                                                                          // provisional
+		FontSize:      11,                                                                                                                                                                         // provisional
+		MaxWidth:      300,                                                                                                                                                                        // provisional
+		OffsetX:       0,                                                                                                                                                                          // provisional
+		OffsetY:       20,                                                                                                                                                                         // provisional
+		Delay:         1000 * time.Millisecond,                                                                                                                                                    // provisional
+		Grace:         500 * time.Millisecond,                                                                                                                                                     // provisional
+	},
+	Alert: Alert{
+		Background:       ColorToken{Light: rgba8(242, 242, 242, 255), Dark: rgba8(44, 44, 46, 255), HasContrast: true, ContrastLight: rgba8(255, 255, 255, 255), ContrastDark: rgba8(0, 0, 0, 255)}, // provisional
+		Border:           ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(255, 255, 255, 38), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 191), ContrastDark: rgba8(255, 255, 255, 191)},      // provisional
+		Shadow:           ColorToken{Light: rgba8(0, 0, 0, 77), Dark: rgba8(0, 0, 0, 128)},                                                                                                           // provisional
+		IconTop:          ColorToken{Light: rgba8(250, 250, 252, 255), Dark: rgba8(110, 110, 115, 255)},                                                                                              // provisional
+		IconBottom:       ColorToken{Light: rgba8(214, 214, 220, 255), Dark: rgba8(72, 72, 76, 255)},                                                                                                 // provisional
+		IconBorder:       ColorToken{Light: rgba8(0, 0, 0, 38), Dark: rgba8(255, 255, 255, 38), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 191), ContrastDark: rgba8(255, 255, 255, 191)},      // provisional
+		IconGlyph:        ColorToken{Light: rgba8(0, 0, 0, 115), Dark: rgba8(255, 255, 255, 140), HasContrast: true, ContrastLight: rgba8(0, 0, 0, 230), ContrastDark: rgba8(255, 255, 255, 230)},    // provisional
+		CautionFill:      ColorToken{Light: rgba8(255, 204, 0, 255), Dark: rgba8(255, 214, 10, 255)},                                                                                                 // provisional
+		CautionMark:      ColorToken{Light: rgba8(0, 0, 0, 217), Dark: rgba8(0, 0, 0, 217)},                                                                                                          // provisional
+		Width:            260,                                                                                                                                                                        // provisional
+		CornerRadius:     10,                                                                                                                                                                         // provisional
+		BorderWidth:      1,                                                                                                                                                                          // provisional
+		ShadowOffsetY:    8,                                                                                                                                                                          // provisional
+		ShadowBlur:       24,                                                                                                                                                                         // provisional
+		PaddingX:         16,                                                                                                                                                                         // provisional
+		PaddingTop:       20,                                                                                                                                                                         // provisional
+		PaddingBottom:    16,                                                                                                                                                                         // provisional
+		IconSize:         64,                                                                                                                                                                         // provisional
+		IconCornerRadius: 14,                                                                                                                                                                         // provisional
+		BadgeSize:        32,                                                                                                                                                                         // provisional
+		IconGap:          12,                                                                                                                                                                         // provisional
+		MessageFontSize:  13,                                                                                                                                                                         // provisional
+		DetailFontSize:   11,                                                                                                                                                                         // provisional
+		DetailGap:        6,                                                                                                                                                                          // provisional
+		ButtonsGap:       16,                                                                                                                                                                         // provisional
+		ButtonGap:        8,                                                                                                                                                                          // provisional
 	},
 }

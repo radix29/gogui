@@ -23,7 +23,8 @@
 //     through the native frames, and are re-raised as a *PanicError by the
 //     message loop once the message has returned.
 //   - Appearance reads dark mode, the accent, high contrast, client-area
-//     animations, transparency and the scroll-bar setting; changes are
+//     animations, transparency, the scroll-bar setting and the caret blink
+//     (GetCaretBlinkTime, SPI_GETCARETTIMEOUT); changes are
 //     reported once per actual change.
 //   - The text system (text.go, S2.5d) is DirectWrite's; the interim
 //     fixed-width one, the interim GDI paint and the interim frame clock
@@ -91,6 +92,23 @@
 // S2.5f draws text: the canvas draws the layouts of the shell's text
 // system with DrawTextLayout, from a native layout rebuilt once per layout
 // and frame, in grayscale antialiasing (canvas.go).
+//
+// S5.5b adds popups (popup.go): owned WS_POPUP windows of a second class
+// (CS_DROPSHADOW, the same window procedure) that are never activated,
+// each with its own transparent-cleared composition chain painted after
+// the surfaces, placed with shellkit.PlacePopup in the work area of the
+// anchor's monitor at its DPI, and closed with their parent.
+//
+// S5.5c adds the grab (grab.go): a grab popup holds the mouse capture and
+// gets the parent's keys, eats and is dismissed by an outside press, and
+// is dismissed by the parent's deactivation, move, resize, a mode cancel
+// or a lost capture; a popup without grab is transparent to the mouse.
+//
+// S5.5d adds the backdrop (backdrop.go): the small rounded corners, the
+// dark-mode tint and, from Windows 11 22H2 on, outside high contrast and
+// with transparency effects on, the Acrylic system backdrop behind the
+// transparent chain, which Popup.Translucent reports; re-applied on every
+// appearance change.
 //
 // Everything runs on the UI thread, the goroutine that called Run, except
 // Shell.Post.

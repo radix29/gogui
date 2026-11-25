@@ -144,6 +144,10 @@ func TestStartStep(t *testing.T) {
 	if a.ready != 1 || n != 0 {
 		t.Fatal("Start ran posted work or not Ready")
 	}
+	// Ready hands over the text system and the clock (R10).
+	if a.services.Text != s.TextSystem() || a.services.Clock != s.Clock() || a.services.Clock == nil {
+		t.Fatalf("Ready services %+v", a.services)
+	}
 	s.Post(func() { n++; s.Post(func() { n += 10 }) })
 	if got := s.Step(); got != 2 || n != 2 {
 		t.Fatalf("Step ran %d, n = %d", got, n)
@@ -232,6 +236,9 @@ func TestBeforeReady(t *testing.T) {
 	if got != driver.DefaultAppearance() {
 		t.Errorf("Appearance in Ready = %v", got)
 	}
+	if want := (driver.CaretBlink{Period: time.Second, Timeout: 10 * time.Second}); got.CaretBlink != want {
+		t.Errorf("default CaretBlink %+v, want %+v", got.CaretBlink, want)
+	}
 }
 
 func TestSurfaceState(t *testing.T) {
@@ -267,13 +274,13 @@ func TestSurfaceState(t *testing.T) {
 	if w.take() != "resized 300x600 @1; resized 100x200 @1" {
 		t.Fatalf("log %v", w.log)
 	}
-	f.SetMinSize(sz(150, 250))
-	f.SetMaxSize(sz(160, 0))
+	// SetSizeLimits sets both at once: one clamp, one Resized.
+	f.SetSizeLimits(sz(150, 250), sz(160, 0))
 	if f.Size() != sz(150, 250) || w.take() != "resized 150x250 @1" {
 		t.Fatalf("limits: %v", f.Size())
 	}
-	f.SetMaxSize(sz(140, 0)) // min wins
-	if f.Size() != sz(150, 250) {
+	f.SetSizeLimits(sz(150, 250), sz(140, 0)) // min wins
+	if f.Size() != sz(150, 250) || f.MinSize() != sz(150, 250) || f.MaxSize() != sz(140, 0) {
 		t.Fatalf("min must win over max: %v", f.Size())
 	}
 	f.SetScale(1.5)
@@ -433,6 +440,21 @@ func TestPaintOnFrame(t *testing.T) {
 	if n := clock.Advance(3 * FrameInterval); n != 3 || f.Paints() != 5 {
 		t.Fatalf("frames %d paints %d", n, f.Paints())
 	}
+	// An Invalidate inside the frame function joins that frame's paint
+	// pass and requests no frame (S6.2a): the last step of an animation
+	// ends without an empty frame after it.
+	w.paint = func(render.Canvas) {}
+	clock.SetFrameFunc(func(time.Duration) { f.Invalidate() })
+	clock.RequestFrame()
+	if n := clock.Advance(time.Second); n != 1 || f.Paints() != 6 || f.Invalid() || clock.Requested() {
+		t.Fatalf("Invalidate in the frame function: %d frames, %d paints, invalid %v", n, f.Paints(), f.Invalid())
+	}
+	// Outside a frame it requests one again.
+	clock.SetFrameFunc(nil)
+	f.Invalidate()
+	if !clock.Requested() {
+		t.Fatal("Invalidate after a frame requested nothing")
+	}
 	// An unbalanced paint is reported, not panicked.
 	w.paint = func(c render.Canvas) { c.Save() }
 	s.Flush()
@@ -524,5 +546,71 @@ func TestChromeRegions(t *testing.T) {
 	f.SetChromeRegions(nil)
 	if f.ChromeRegions() != nil || f.HitTest(pt(200, 10)) != shell.RegionClient {
 		t.Error("nil: all client")
+	}
+}
+
+// TestShellSetChecks: with the checks off a call off the UI goroutine
+// does not panic (S6.2c's benchmarks); on again, it does.
+func TestShellSetChecks(t *testing.T) {
+	s := started(t)
+	off := func() (r any) {
+		done := make(chan any)
+		go func() {
+			defer func() { done <- recover() }()
+			s.Clock().Now()
+		}()
+		return <-done
+	}
+	if off() == nil {
+		t.Fatal("no panic off the UI goroutine with the checks on")
+	}
+	s.SetChecks(false)
+	if r := off(); r != nil {
+		t.Fatalf("panic with the checks off: %v", r)
+	}
+	s.SetChecks(true)
+	if off() == nil {
+		t.Fatal("no panic with the checks on again")
+	}
+}
+
+// closedFunc is a win whose Closed also runs fn.
+type closedFunc struct {
+	*win
+	fn func()
+}
+
+func (c closedFunc) Closed() { c.win.Closed(); c.fn() }
+
+// TestQuitFirst (V2): Quit marks the shell quitting before it closes the
+// surfaces, as the real shells do, so NewSurface in a Closed handler (and
+// after Quit) returns ErrQuit; a second Quit does nothing.
+func TestQuitFirst(t *testing.T) {
+	s := started(t)
+	var w win
+	var inClosed error
+	var quitting bool
+	sf, err := s.NewSurface(shell.SurfaceConfig{}, closedFunc{&w, func() {
+		quitting = s.Quitting()
+		_, inClosed = s.NewSurface(shell.SurfaceConfig{Size: sz(10, 10)}, &win{})
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sf.Show()
+	w.take()
+	s.Quit()
+	if !quitting || !errors.Is(inClosed, ErrQuit) {
+		t.Fatalf("in Closed under Quit: Quitting %v, NewSurface error %v", quitting, inClosed)
+	}
+	if got := w.take(); got != "closed" || len(s.Surfaces()) != 0 {
+		t.Fatalf("Quit: log %q, %d surfaces", got, len(s.Surfaces()))
+	}
+	if _, err := s.NewSurface(shell.SurfaceConfig{}, &win{}); !errors.Is(err, ErrQuit) {
+		t.Fatalf("NewSurface after Quit = %v, want ErrQuit", err)
+	}
+	s.Quit()
+	if len(w.log) != 0 || !s.Quitting() {
+		t.Fatal("a second Quit did something")
 	}
 }

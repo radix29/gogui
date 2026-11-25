@@ -37,7 +37,6 @@ type Form struct {
 	rows   []Row
 	labels []*Leaf // one per row; nil for a nil Label
 	peer   Peer
-	dir    LayoutDirection
 	props  Props
 }
 
@@ -62,30 +61,26 @@ func (f *Form) SetRows(rows ...Row) *Form {
 // SetPeer sets the form's native view; nil makes it a transparent group.
 func (f *Form) SetPeer(p Peer) *Form { f.peer = p; return f }
 
-// SetDirection sets the reading direction (RightToLeft is laid out as
-// LeftToRight for now).
-func (f *Form) SetDirection(d LayoutDirection) *Form { f.dir = d; return f }
-
 // Rows returns the rows, hidden ones included. Do not modify it.
 func (f *Form) Rows() []Row { return f.rows }
 
 // Peer returns the native view, or nil for a transparent group.
 func (f *Form) Peer() Peer { return f.peer }
 
-// Direction returns the reading direction.
-func (f *Form) Direction() LayoutDirection { return f.dir }
-
 // Props implements Node.
 func (f *Form) Props() *Props { return &f.props }
 
 // Expands implements Node: the form's own flag, or any visible row's
 // control that expands on a. Labels never expand.
-func (f *Form) Expands(a Axis) bool {
+func (f *Form) Expands(a Axis) bool { return f.expandsIn(nil, a) }
+
+// expandsIn is Expands with the controls asked through p (passExpander).
+func (f *Form) expandsIn(p *Pass, a Axis) bool {
 	if f.props.expand[a] {
 		return true
 	}
 	for _, r := range f.rows {
-		if !r.Control.Props().Hidden() && r.Control.Expands(a) {
+		if !r.Control.Props().Hidden() && p.Expands(r.Control, a) {
 			return true
 		}
 	}
@@ -116,6 +111,7 @@ func (f *Form) Measure(p *Pass, max driver.Size) driver.Size {
 		return driver.Size{}
 	}
 	max = normSize(max)
+	defer p.release(p.mark())
 	c := f.columns(p)
 	var nat, lo float64
 	for _, r := range c.rows {
@@ -142,18 +138,19 @@ func (f *Form) Arrange(p *Pass, frame driver.Rect) {
 		f.peer.SetFrame(frame)
 		origin = driver.Point{}
 	}
+	defer p.release(p.mark())
 	c := f.columns(p)
 	if len(c.rows) == 0 {
 		return
 	}
 	cw := norm(frame.W - c.lead)
 	widths(p, c.rows, cw)
-	sizes := distribute(spans(p, c.rows), frame.H-rowGaps(len(c.rows)))
+	sizes := distributeIn(p, spans(p, c.rows), frame.H-rowGaps(len(c.rows)))
 	y := origin.Y
 	for i, r := range c.rows {
 		slot := driver.Rect{X: origin.X + c.lead, Y: y, W: cw, H: sizes[i]}
 		h := p.Measure(r.ctrl, driver.Size{W: r.w, H: sizes[i]}).H
-		cf := controlFrame(r.ctrl, slot, driver.Size{W: r.w, H: h})
+		cf := controlFrame(p, r.ctrl, slot, driver.Size{W: r.w, H: h})
 		r.ctrl.Arrange(p, cf)
 		if r.label != nil {
 			fl := firstLine(p, r.ctrl, cf.Size())
@@ -173,6 +170,7 @@ func (f *Form) FirstLine(p *Pass, max driver.Size) float64 {
 		return 0
 	}
 	max = normSize(max)
+	defer p.release(p.mark())
 	c := f.columns(p)
 	if len(c.rows) == 0 {
 		return p.Measure(f, max).H
@@ -185,7 +183,7 @@ func (f *Form) FirstLine(p *Pass, max driver.Size) float64 {
 // columns collects the visible rows and measures their labels. Labels are
 // measured unbounded: they never shrink or wrap.
 func (f *Form) columns(p *Pass) formCols {
-	c := formCols{rows: make([]formRow, 0, len(f.rows))}
+	c := formCols{rows: p.rowBuf(len(f.rows))}
 	for i, r := range f.rows {
 		if r.Control.Props().Hidden() {
 			continue
@@ -208,7 +206,7 @@ func widths(p *Pass, rows []formRow, cw float64) {
 	for i := range rows {
 		ctrl := rows[i].ctrl
 		w := p.Measure(ctrl, driver.Size{W: cw, H: math.Inf(1)}).W
-		if alignOf(ctrl, Horizontal) == Fill {
+		if alignOf(p, ctrl, Horizontal) == Fill {
 			w = math.Max(w, math.Min(cw, ctrl.Props().Max(Horizontal)))
 		}
 		rows[i].w = w
@@ -219,14 +217,14 @@ func widths(p *Pass, rows []formRow, cw float64) {
 // at least as tall as its label and expands when its control expands
 // vertically.
 func spans(p *Pass, rows []formRow) []span {
-	out := make([]span, len(rows))
+	out := p.spanBuf(len(rows))
 	for i, r := range rows {
 		lh := r.lsize.H
 		out[i] = span{
 			natural: math.Max(lh, p.Measure(r.ctrl, driver.Size{W: r.w, H: math.Inf(1)}).H),
 			min:     math.Max(lh, p.Measure(r.ctrl, driver.Size{W: r.w}).H),
 			max:     math.Max(lh, r.ctrl.Props().Max(Vertical)),
-			expand:  r.ctrl.Expands(Vertical),
+			expand:  p.Expands(r.ctrl, Vertical),
 		}
 	}
 	return out
@@ -235,8 +233,8 @@ func spans(p *Pass, rows []formRow) []span {
 // controlFrame places a control of the given size in its row slot. The
 // width already includes horizontal Fill (widths). Vertical Fill stretches
 // to the slot, capped by the control's max but never below size.
-func controlFrame(c Node, slot driver.Rect, size driver.Size) driver.Rect {
-	h, v := alignOf(c, Horizontal), alignOf(c, Vertical)
+func controlFrame(p *Pass, c Node, slot driver.Rect, size driver.Size) driver.Rect {
+	h, v := alignOf(p, c, Horizontal), alignOf(p, c, Vertical)
 	if h == Fill {
 		h = Leading
 	}
@@ -249,11 +247,11 @@ func controlFrame(c Node, slot driver.Rect, size driver.Size) driver.Rect {
 
 // alignOf resolves a control's alignment in its row on axis a: explicit,
 // else Fill when it expands on a, else Leading.
-func alignOf(c Node, a Axis) Align {
+func alignOf(p *Pass, c Node, a Axis) Align {
 	switch {
 	case c.Props().Align(a) != AlignDefault:
 		return c.Props().Align(a)
-	case c.Expands(a):
+	case p.Expands(c, a):
 		return Fill
 	default:
 		return Leading

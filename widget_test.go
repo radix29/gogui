@@ -74,27 +74,120 @@ func TestLabelIsWidget(t *testing.T) {
 
 func TestDestroyedWidget(t *testing.T) {
 	runApp(t, func(*App) {
-		l := NewLabel("a").SetTooltip("t")
+		l := NewLabel("a").SetTooltip("t").SetFont(SystemFont(20))
 		p := stubLabel(t, l)
 		h := &countingHost{}
 		l.host = h
 		l.destroy()
 		l.destroy() // idempotent
+		l.Destroy() // so is the public one
 		if !p.Destroyed {
 			t.Fatal("peer not destroyed")
 		}
-		l.SetText("b").SetFont(SystemFont(20)).SetTextColor(ColorSystemRed).SetAlignment(AlignTrailing).
-			SetSelectable(true).SetWraps(true).SetEnabled(false).SetHidden(true).SetTooltip("u").
-			SetControlSize(ControlSizeLarge).Focus()
-		if p.Text != "a" || p.Font != (Font{}) || p.Wraps || p.Disabled || p.Hidden || p.Tooltip != "t" ||
+		// D13: every setter, subscription and action panics; the getters
+		// return the last values.
+		for name, fn := range map[string]func(){
+			"SetText":       func() { l.SetText("b") },
+			"SetFont":       func() { l.SetFont(Font{}) },
+			"SetTextColor":  func() { l.SetTextColor(ColorSystemRed) },
+			"SetAlignment":  func() { l.SetAlignment(AlignTrailing) },
+			"SetSelectable": func() { l.SetSelectable(true) },
+			"SetWraps":      func() { l.SetWraps(true) },
+			"SetEnabled":    func() { l.SetEnabled(false) },
+			"SetHidden":     func() { l.SetHidden(true) },
+			"SetTooltip":    func() { l.SetTooltip("u") },
+			"SetControlSize": func() {
+				l.SetControlSize(ControlSizeLarge)
+			},
+			"Focus": func() { l.Focus() },
+		} {
+			mustPanic(t, "Label."+name+" on a destroyed widget", fn)
+		}
+		if p.Text != "a" || p.Wraps || p.Disabled || p.Hidden || p.Tooltip != "t" ||
 			p.ControlSize != ControlSizeRegular || p.FocusCalls != 0 {
 			t.Errorf("a destroyed peer was called: %+v", p)
 		}
-		if l.Text() != "b" || l.Font().Size != 20 || !l.disabled || !l.node().Props().Hidden() {
-			t.Error("getters on a destroyed widget don't return the last set values")
+		if l.Text() != "a" || l.Font().Size != 20 || l.Tooltip() != "t" || l.disabled || l.node().Props().Hidden() {
+			t.Error("getters on a destroyed widget don't return the last values")
 		}
 		if h.n != 0 {
 			t.Errorf("destroyed widget invalidated its window %d times", h.n)
+		}
+	})
+}
+
+// TestDestroy is A1/D13 and B3/B4: Destroy takes a widget out of its
+// parent or window and destroys its subtree; destroyed widgets can't be
+// placed again, and nothing can be placed in them.
+func TestDestroy(t *testing.T) {
+	runApp(t, func(app *App) {
+		a, b := NewLabel("a"), NewButton("b")
+		inner := VStack(0, b)
+		s := VStack(0, a, inner)
+		win, _ := newTestWindow(app, WindowConfig{Size: Size{W: 100, H: 100}})
+		win.SetContent(s)
+
+		inner.Destroy()
+		wantChildren(t, "stack after Destroy", s, a)
+		if !stubBase(b).Destroyed || !b.dead || !inner.dead || inner.parent != nil {
+			t.Error("Destroy didn't destroy the subtree or detach it")
+		}
+		if _, live := app.live[&b.widget]; live {
+			t.Error("a destroyed widget stays in App.live (B4)")
+		}
+
+		// The window's content.
+		s.Destroy()
+		if win.Content() != nil || !a.dead || win.p.(*minCounter).Content != nil {
+			t.Error("destroying the content didn't take it out of the window")
+		}
+
+		// B3: no re-parenting of a destroyed widget, nothing into one.
+		c := NewLabel("c")
+		mustPanic(t, "Stack.Add with a destroyed widget", func() { VStack(0).Add(a) })
+		mustPanic(t, "VStack with a destroyed widget", func() { VStack(0, a) })
+		mustPanic(t, "Form with a destroyed widget", func() { Form(Row("x", a)) })
+		mustPanic(t, "Box.SetContent with a destroyed widget", func() { NewBox("").SetContent(a) })
+		mustPanic(t, "ScrollView.SetDocument with a destroyed widget", func() { NewScrollView(nil).SetDocument(a) })
+		mustPanic(t, "Window.SetContent with a destroyed widget", func() { win.SetContent(a) })
+		mustPanic(t, "Stack.Add on a destroyed widget", func() { s.Add(c) })
+		if c.parent != nil || c.dead {
+			t.Error("a failed Add changed the child")
+		}
+
+		// A form's control: its row and label go with it.
+		f := Form(Row("Name:", c))
+		lbl := f.rows[0].label
+		c.Destroy()
+		if len(f.rows) != 0 || !lbl.dead {
+			t.Error("destroying a form control left its row or label")
+		}
+	})
+}
+
+// TestStackRemoveClear: Remove and Clear take children out without
+// destroying them; they can be placed again.
+func TestStackRemoveClear(t *testing.T) {
+	runApp(t, func(*App) {
+		a, b, c := NewLabel("a"), NewLabel("b"), NewLabel("c")
+		s := VStack(0, a, b, c)
+		other := VStack(0)
+		if got := s.Remove(b, other, nil); got != s {
+			t.Fatal("Remove doesn't chain")
+		}
+		wantChildren(t, "after Remove", s, a, c)
+		if b.parent != nil || b.dead {
+			t.Error("Remove destroyed or kept the child")
+		}
+		s.Clear()
+		wantChildren(t, "after Clear", s)
+		if a.parent != nil || c.parent != nil || a.dead || len(s.Children()) != 0 {
+			t.Error("Clear destroyed or kept a child")
+		}
+		other.Add(a, b, c)
+		wantChildren(t, "placed again", other, a, b, c)
+		if ch := other.Children(); len(ch) != 3 || ch[0] != Widget(a) {
+			t.Errorf("Children = %v", ch)
 		}
 	})
 }
@@ -116,6 +209,7 @@ func TestInvalidate(t *testing.T) {
 		if h.n != 5 {
 			t.Errorf("setters that don't change the size invalidated (%d)", h.n)
 		}
+		l.parent = nil // the fake parents are not widgets Run could destroy
 	})
 }
 
@@ -224,4 +318,22 @@ func TestDefaultExpand(t *testing.T) {
 	if kind(numKinds).String() != "Widget" || kindPopUp.String() != "PopUpButton" {
 		t.Error("kind names")
 	}
+}
+
+// mustPanic runs fn and fails unless it panics with a message that
+// contains want.
+func mustPanic(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		t.Helper()
+		r := recover()
+		msg, _ := r.(string)
+		if err, ok := r.(error); ok {
+			msg = err.Error()
+		}
+		if r == nil || !strings.Contains(msg, want) {
+			t.Errorf("panic %v, want one containing %q", r, want)
+		}
+	}()
+	fn()
 }

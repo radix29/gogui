@@ -25,29 +25,45 @@ type target interface {
 // their shells one after another. It is used on the UI thread.
 var targets ffi.Handles[target]
 
-// className is the one window class of the package, for the listener and the
-// surfaces (CS_DBLCLKS, no CS_HREDRAW|CS_VREDRAW: a resize repaints through
-// the frame, not by invalidating the whole window). It is registered once
-// per process and never unregistered.
+// className is the window class of the listener and the surfaces
+// (CS_DBLCLKS, no CS_HREDRAW|CS_VREDRAW: a resize repaints through the
+// frame, not by invalidating the whole window). It is registered once per
+// process and never unregistered.
 const className = "gogui.win32"
 
+// popupClassName is the window class of the popups (popup.go, S5.5b):
+// CS_DROPSHADOW besides, the same window procedure. It is registered once
+// per process, with the first popup, and never unregistered.
+const popupClassName = "gogui.win32.popup"
+
+// wndprocPtr is the one window-procedure trampoline of the package, shared
+// by both classes.
+var wndprocPtr = sync.OnceValue(func() uintptr {
+	return ffi.RegisterCallback("win32.wndproc", wndproc)
+})
+
 var registerClass = sync.OnceValues(func() (windows.Handle, error) {
+	return register(className, w32.CS_DBLCLKS)
+})
+
+var registerPopupClass = sync.OnceValues(func() (windows.Handle, error) {
+	return register(popupClassName, w32.CS_DBLCLKS|w32.CS_DROPSHADOW)
+})
+
+// register registers a window class of the package with the trampoline.
+func register(name string, style uint32) (windows.Handle, error) {
 	inst, err := w32.GetModuleHandle()
 	if err != nil {
 		return 0, err
 	}
-	wc := w32.WndClassEx{
-		Style:       w32.CS_DBLCLKS,
-		LpfnWndProc: ffi.RegisterCallback("win32.wndproc", wndproc),
-		HInstance:   inst,
-	}
-	if _, err := w32.RegisterClassEx(&wc, className); err != nil {
+	wc := w32.WndClassEx{Style: style, LpfnWndProc: wndprocPtr(), HInstance: inst}
+	if _, err := w32.RegisterClassEx(&wc, name); err != nil {
 		return 0, err
 	}
 	return inst, nil
-})
+}
 
-// wndproc is the window procedure of every window of className.
+// wndproc is the window procedure of every window of both classes.
 func wndproc(h windows.HWND, msg uint32, wp, lp uintptr) uintptr {
 	if msg == w32.WM_NCCREATE {
 		cs := ffi.At[w32.CreateStruct](lp)

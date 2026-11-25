@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radix29/gogui/internal/aqua/a11y"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/layout"
 	"github.com/radix29/gogui/internal/render"
@@ -267,7 +268,7 @@ func TestLayoutLeaf(t *testing.T) {
 	e := newBox("e", 0, 0, 0, 0)
 	e.fitting = driver.Size{W: 40, H: 20}
 	r := layout.NewRoot(layout.NewVStack(0, layout.NewLeaf(e)))
-	r.Layout(driver.Size{W: 100, H: 50})
+	r.LayoutMin(driver.Size{W: 100, H: 50})
 	if e.Frame().W != 40 || e.Frame().H != 20 {
 		t.Fatalf("frame %v", e.Frame())
 	}
@@ -411,4 +412,11 @@ func TestHiddenSubtreeCleaned(t *testing.T) {
 	if len(rc.Ops()) != 0 || root.Dirty() {
 		t.Fatal("hidden root painted")
 	}
+}
+
+// countNodes returns the number of nodes in the tree under n.
+func countNodes(n *a11y.Node) int {
+	k := 0
+	n.Walk(func(*a11y.Node, int) bool { k++; return true })
+	return k
 }

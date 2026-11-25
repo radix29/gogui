@@ -596,3 +596,30 @@ func BenchmarkOnUIThread(b *testing.B) {
 		q.OnUIThread()
 	}
 }
+
+// TestDoSyncPanicOnUIThread is A7: on the UI goroutine DoSync re-raises a
+// panic as a *PanicError too, and a nested DoSync's *PanicError is not
+// wrapped again.
+func TestDoSyncPanicOnUIThread(t *testing.T) {
+	q := New()
+	startLoop(t, q)
+	var got, nested any
+	within(t, timeout, func() {
+		q.DoSync(func() {
+			func() {
+				defer func() { got = recover() }()
+				q.DoSync(func() { panic("boom") })
+			}()
+			func() {
+				defer func() { nested = recover() }()
+				q.DoSync(func() { q.DoSync(func() { panic("deep") }) })
+			}()
+		})
+	})
+	if pe, ok := got.(*PanicError); !ok || pe.Value != "boom" || len(pe.Stack) == 0 {
+		t.Errorf("on the UI thread: recovered %T %v, want *PanicError{boom}", got, got)
+	}
+	if pe, ok := nested.(*PanicError); !ok || pe.Value != "deep" {
+		t.Errorf("nested: recovered %T %v, want *PanicError{deep}", nested, nested)
+	}
+}

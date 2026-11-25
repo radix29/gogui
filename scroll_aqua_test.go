@@ -47,7 +47,7 @@ func runNotes(t *testing.T, body func(e *notesEnv)) {
 			e.boxes = append(e.boxes, c)
 			settings.Add(c)
 		}
-		e.sidebar = NewScrollView(settings.Padding(12)).SetHasVerticalScroller(true).SetMinWidth(180)
+		e.sidebar = NewScrollView(settings.SetPadding(12)).SetHasVerticalScroller(true).SetMinWidth(180)
 		e.sidebar.OnScroll(func(p Point) { e.scrolls = append(e.scrolls, p) })
 		editor := NewTextView().SetFont(SystemFont(13))
 		win := app.NewWindow(WindowConfig{
@@ -57,7 +57,7 @@ func runNotes(t *testing.T, body func(e *notesEnv)) {
 		win.SetContent(VStack(0,
 			HStack(0, e.sidebar, NewSeparator().SetVertical(true), editor),
 			NewSeparator(),
-			HStack(8, NewLabel("stats"), Spacer()).Padding(6),
+			HStack(8, NewLabel("stats"), Spacer()).SetPadding(6),
 		))
 		showExample(app, win)
 		e.aw = win.p.(*aqua.Window)

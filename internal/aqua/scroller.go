@@ -95,8 +95,8 @@ func newScroller(s *ScrollView, vertical bool) *scroller {
 	b.alpha = s.tl.NewValue(0, func(x float64) {
 		b.sync()
 		b.Invalidate()
-	})
-	b.wide = s.tl.NewValue(0, func(float64) { b.Invalidate() })
+	}).SetTolerance(anim.AlphaTolerance)
+	b.wide = s.tl.NewValue(0, func(float64) { b.Invalidate() }).SetTolerance(anim.AlphaTolerance)
 	b.SetHidden(true)
 	return b
 }
@@ -143,7 +143,7 @@ func (b *scroller) sync() {
 }
 
 // held reports whether the scroller stays shown: hovered or dragged.
-func (b *scroller) held() bool { return b.hovered || b.press.down }
+func (b *scroller) held() bool { return b.hovered || b.press.Down() }
 
 // flash shows an overlay scroller and arms its fade (nothing for a legacy
 // one or one whose axis cannot scroll).
@@ -183,7 +183,7 @@ func (b *scroller) setHover(on bool) {
 		}
 		return
 	}
-	if !b.press.down && b.alpha.Value() > 0 {
+	if !b.press.Down() && b.alpha.Value() > 0 {
 		b.armFade()
 	}
 }
@@ -199,7 +199,7 @@ func boolFloat(on bool) float64 {
 // once (the scroller went away, or the kind changed).
 func (b *scroller) reset() {
 	b.hovered, b.dragging = false, false
-	b.press.Reset(b)
+	b.press.Cancel(b)
 	b.wide.Set(0)
 	b.alpha.Set(0)
 	b.sync()
@@ -348,16 +348,15 @@ func (b *scroller) HandleEvent(ev Event) bool {
 	}
 	switch pe.Kind {
 	case PointerDown:
-		if pe.Button != shell.ButtonPrimary || b.press.down {
-			return b.press.down
+		if pe.Button != shell.ButtonPrimary || b.press.Down() {
+			return b.press.Down()
 		}
 		g := b.geometry()
 		if !g.ok {
 			return false
 		}
 		at := g.along(pe.Pos)
-		b.press.down = true
-		b.press.setPressed(b, true)
+		b.press.Begin(b)
 		b.alpha.Set(1)
 		b.armFade() // held: stays shown
 		switch {
@@ -375,10 +374,10 @@ func (b *scroller) HandleEvent(ev Event) bool {
 		if b.dragging {
 			b.follow(pe.Pos)
 		}
-		return b.press.down
+		return b.press.Down()
 	case PointerUp:
-		if !b.press.down || pe.Button != shell.ButtonPrimary {
-			return b.press.down
+		if !b.press.Down() || pe.Button != shell.ButtonPrimary {
+			return b.press.Down()
 		}
 		// The hover froze during the capture: it is where the release is.
 		b.hovered = b.hovered && pe.Over
@@ -395,11 +394,11 @@ func (b *scroller) HandleEvent(ev Event) bool {
 
 // endPress ends a drag or a track click and arms the fade.
 func (b *scroller) endPress() {
-	if !b.press.down {
+	if !b.press.Down() {
 		return
 	}
 	b.dragging = false
-	b.press.Reset(b)
+	b.press.Cancel(b)
 	if b.alpha.Value() > 0 {
 		b.armFade()
 	}

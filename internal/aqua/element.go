@@ -5,6 +5,7 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/layout"
 	"github.com/radix29/gogui/internal/render"
+	"github.com/radix29/gogui/internal/shell"
 )
 
 // Element is one drawn part of a window: a control, a container, or an
@@ -61,6 +62,11 @@ type Element interface {
 	// is not exposed and its children are hoisted.
 	AccessibleNode() a11y.Node
 
+	// Cursor returns the pointer shape shown while the element is the
+	// deepest element of the hover chain (Router). Base's Cursor returns
+	// shell.CursorArrow; text elements return shell.CursorIBeam.
+	Cursor() shell.Cursor
+
 	base() *Base
 }
 
@@ -72,18 +78,23 @@ type Base struct {
 	parent   *Base
 	children []Element
 
-	frame     driver.Rect
-	hidden    bool
-	disabled  bool
-	clips     bool
-	dirty     bool
-	focusable bool
-	focusKind FocusKind
+	frame      driver.Rect
+	hidden     bool
+	disabled   bool
+	clips      bool
+	dirty      bool
+	focusable  bool
+	focusKind  FocusKind
+	firstMouse bool // SetAcceptsFirstMouse (router.go)
 
 	defaultMark, cancelMark uint64 // SetDefaultButton, SetCancelButton (buttons.go)
 
+	tooltip string // SetTooltip (tooltip.go)
+
 	onInvalidate func()
 	router       *Router // set on the root of a window's tree by NewRouter
+
+	tc treeCache // the tree context memo (treecache.go)
 }
 
 func (b *Base) base() *Base { return b }
@@ -118,6 +129,7 @@ func (b *Base) SetFrame(r driver.Rect) {
 		return
 	}
 	b.frame = r
+	treeChange()
 	b.Invalidate()
 }
 
@@ -140,6 +152,9 @@ func (b *Base) Activate() bool { return false }
 // AccessibleNode returns a RoleNone node: the element is not exposed.
 func (b *Base) AccessibleNode() a11y.Node { return a11y.Node{} }
 
+// Cursor returns shell.CursorArrow.
+func (b *Base) Cursor() shell.Cursor { return shell.CursorArrow }
+
 // Hidden reports the element's own hidden flag.
 func (b *Base) Hidden() bool { return b.hidden }
 
@@ -152,6 +167,7 @@ func (b *Base) SetHidden(hidden bool) {
 		return
 	}
 	b.hidden = hidden
+	treeChange()
 	b.Invalidate()
 	if hidden {
 		b.treeChanged()
@@ -170,6 +186,7 @@ func (b *Base) SetEnabled(enabled bool) {
 		return
 	}
 	b.disabled = !enabled
+	treeChange()
 	b.Invalidate()
 	if !enabled {
 		b.treeChanged()
@@ -192,25 +209,11 @@ func (b *Base) SetClipsChildren(clips bool) {
 
 // VisibleInTree reports whether neither the element nor an ancestor is
 // hidden.
-func (b *Base) VisibleInTree() bool {
-	for e := b; e != nil; e = e.parent {
-		if e.hidden {
-			return false
-		}
-	}
-	return true
-}
+func (b *Base) VisibleInTree() bool { return b.tree().visible }
 
 // EnabledInTree reports whether neither the element nor an ancestor is
 // disabled.
-func (b *Base) EnabledInTree() bool {
-	for e := b; e != nil; e = e.parent {
-		if e.disabled {
-			return false
-		}
-	}
-	return true
-}
+func (b *Base) EnabledInTree() bool { return b.tree().enabled }
 
 // Dirty reports whether the element was invalidated since PaintTree last
 // visited it.

@@ -38,13 +38,18 @@
 //
 // The rules are d2d's: every interface embeds com.Ptr, returned interfaces
 // carry one reference, the slot constants follow dwrite.h's declaration
-// order and are checked by the tests against the full vtables, and the
-// float-path methods keep their bound func in a com.Method. Text is passed
-// as UTF-16 ([]uint16); the conversion from UTF-8 and the index map are the
-// shell's (S2.5d). Everything is used from the UI thread, although the
-// shared factory and its objects are thread-safe by themselves.
+// order and are checked by the tests against the full vtables. Text is
+// passed as UTF-16 ([]uint16); the conversion from UTF-8 and the index map
+// are the shell's (S2.5d). Everything is used from the UI thread, although
+// the shared factory and its objects are thread-safe by themselves.
 //
 // The structs are passed by pointer, so the integer path (com.Ptr.Call)
-// carries them; only FLOAT arguments and results take the float path. No
+// carries them; only FLOAT arguments and results take the float path. On
+// windows/amd64 (com.DirectFloats, review P2) that is the integer path too:
+// a FLOAT argument goes as its bits in the integer slot of its position
+// (com.Float; the runtime mirrors the first four into XMM0–3), and a FLOAT
+// result comes back with com.Ptr.CallFloat. On windows/arm64 the float-path
+// methods go through com.Bind (purego) and keep their bound func in a
+// com.Method; directFloats selects the path, and the tests run both. No
 // method returning a struct is bound.
 package dwrite

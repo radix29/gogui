@@ -65,8 +65,11 @@ func (b *Box) Peer() BoxPeer { return b.peer }
 func (b *Box) Props() *Props { return &b.props }
 
 // Expands implements Node: the own flag, or the visible content's.
-func (b *Box) Expands(a Axis) bool {
-	return b.props.expand[a] || (visible(b.content) && b.content.Expands(a))
+func (b *Box) Expands(a Axis) bool { return b.expandsIn(nil, a) }
+
+// expandsIn is Expands with the content asked through p (passExpander).
+func (b *Box) expandsIn(p *Pass, a Axis) bool {
+	return b.props.expand[a] || (visible(b.content) && p.Expands(b.content, a))
 }
 
 // Measure implements Node. The width is resolved first (content natural

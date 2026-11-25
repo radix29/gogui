@@ -6,6 +6,7 @@ import (
 	"errors"
 	"runtime"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/radix29/gogui/internal/driver"
@@ -18,8 +19,8 @@ import (
 
 // readBack copies the surface's back buffer into a staging texture and
 // returns the BGRA bytes of the pixels at pts. It runs between EndDraw and
-// Present (Shell.onDrawn), while buffer 0 holds the frame just drawn.
-func readBack(t *testing.T, sf *surface, pts [][2]int) [][4]byte {
+// Present (Shell.hooks.onDrawn), while buffer 0 holds the frame just drawn.
+func readBack(t *testing.T, sf *swapTarget, pts [][2]int) [][4]byte {
 	t.Helper()
 	w, h, pix := readAll(t, sf)
 	out := make([][4]byte, len(pts))
@@ -33,7 +34,7 @@ func readBack(t *testing.T, sf *surface, pts [][2]int) [][4]byte {
 
 // readAll returns the whole back buffer as tightly packed BGRA rows
 // (premultiplied), read back as readBack does.
-func readAll(t *testing.T, sf *surface) (w, h int, pix []byte) {
+func readAll(t *testing.T, sf *swapTarget) (w, h int, pix []byte) {
 	t.Helper()
 	g := sf.s.gpu
 	back, err := sf.backBuffer()
@@ -69,14 +70,15 @@ var corners = [][2]int{{0, 0}, {1 << 20, 0}, {0, 1 << 20}, {1 << 20, 1 << 20}, {
 
 // paintAndRead sends WM_PAINT and returns the frame's pixels at corners,
 // read back before Present; ok is false if the frame was not drawn.
-func paintAndRead(t *testing.T, sf *surface) (px [][4]byte, ok bool) {
+func paintAndRead(t *testing.T, win window) (px [][4]byte, ok bool) {
 	t.Helper()
-	sf.s.onDrawn = func(d *surface) {
+	sf := win.swap()
+	sf.s.hooks.onDrawn = func(d *swapTarget) {
 		if d == sf {
 			px, ok = readBack(t, sf, corners), true
 		}
 	}
-	defer func() { sf.s.onDrawn = nil }()
+	defer func() { sf.s.hooks.onDrawn = nil }()
 	w32.SendMessage(sf.hwnd, w32.WM_PAINT, 0, 0)
 	rethrow()
 	return px, ok
@@ -99,13 +101,14 @@ func checkPixels(t *testing.T, what string, px [][4]byte, want [4]byte) {
 
 // chainPx checks that the chain and the target bitmap match the window:
 // the client area's pixels and the window's DPI.
-func chainPx(t *testing.T, what string, sf *surface) {
+func chainPx(t *testing.T, what string, win window) {
 	t.Helper()
+	sf := win.swap()
 	d, err := sf.chain.Desc1()
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, h := clientPx(t, sf)
+	w, h := clientPx(t, win)
 	if d.Width != uint32(w) || d.Height != uint32(h) || sf.pxW != d.Width || sf.pxH != d.Height {
 		t.Errorf("%s: chain %d×%d (kept %d×%d), client %d×%d", what, d.Width, d.Height, sf.pxW, sf.pxH, w, h)
 	}
@@ -217,22 +220,22 @@ func TestSurfaceDeviceLoss(t *testing.T) {
 				defer a.Close()
 				b := newSurface(t, s, resizable, &recorder{})
 				defer b.Close()
-				gen := s.gpuGen
-				s.fault = fault{op: c.op, hr: c.hr}
+				gen := s.stats.gpuGen
+				s.hooks.faults = []fault{{op: c.op, hr: c.hr}}
 				if c.op == "ResizeBuffers" {
 					a.SetSize(driver.Size{W: 500, H: 350})
 				} else {
 					w32.SendMessage(a.hwnd, w32.WM_PAINT, 0, 0)
 					rethrow()
 				}
-				if s.fault.op != "" {
+				if len(s.hooks.faults) != 0 {
 					t.Fatal("the fault was not hit")
 				}
 				if !errors.Is(a.renderErr, c.hr) {
 					t.Errorf("renderErr %v, want %v", a.renderErr, c.hr)
 				}
-				if s.losses != 1 || s.gpuGen != gen+1 || s.gpu == nil {
-					t.Fatalf("losses %d, generation %d (was %d)", s.losses, s.gpuGen, gen)
+				if s.stats.losses != 1 || s.stats.gpuGen != gen+1 || s.gpu == nil {
+					t.Fatalf("losses %d, generation %d (was %d)", s.stats.losses, s.stats.gpuGen, gen)
 				}
 				if len(s.leaks) != 0 {
 					t.Errorf("references left by the recovery: %v", s.leaks)
@@ -259,6 +262,199 @@ func TestSurfaceDeviceLoss(t *testing.T) {
 	}
 }
 
+// TestSurfaceDeviceLossPolicy: the device-loss policy (review-plan B2). A
+// device lost while a new surface creates its chain or bitmap recovers and
+// the surface opens; a loss during the recovery rebuilds once more, and a
+// third gives up until the next paint; a lost Commit recovers; the
+// recovery does not re-enter; lossLimit losses within lossWindow switch
+// to WARP, older ones do not.
+func TestSurfaceDeviceLossPolicy(t *testing.T) {
+	const removed = com.DXGI_ERROR_DEVICE_REMOVED
+	// recreated checks that every injected fault was hit, nothing leaked,
+	// and that each surface has its chain and repaints.
+	recreated := func(t *testing.T, s *Shell, sfs ...*surface) {
+		t.Helper()
+		if len(s.hooks.faults) != 0 {
+			t.Fatalf("faults not hit: %v", s.hooks.faults)
+		}
+		if len(s.leaks) != 0 {
+			t.Errorf("references left by the recovery: %v", s.leaks)
+		}
+		for i, sf := range sfs {
+			if sf.chain.IsNil() || sf.bitmap.IsNil() {
+				t.Fatalf("surface %d: chain %v, bitmap %v", i, !sf.chain.IsNil(), !sf.bitmap.IsNil())
+			}
+			chainPx(t, "recreated", sf)
+			px, ok := paintAndRead(t, sf)
+			if !ok || sf.renderErr != nil {
+				t.Fatalf("surface %d: repaint drawn %v, error %v", i, ok, sf.renderErr)
+			}
+			checkPixels(t, "repaint", px, background(s))
+		}
+	}
+	paint := func(sf *surface) {
+		w32.SendMessage(sf.hwnd, w32.WM_PAINT, 0, 0)
+		rethrow()
+	}
+
+	for _, op := range []string{"createChain", "createBitmap"} {
+		t.Run("NewSurface/"+op, func(t *testing.T) {
+			inShell(t, func(s *Shell) {
+				a := newSurface(t, s, resizable, &recorder{})
+				defer a.Close()
+				gen := s.stats.gpuGen
+				s.hooks.faults = []fault{{op: op, hr: removed}}
+				b := newSurface(t, s, resizable, &recorder{})
+				defer b.Close()
+				if s.stats.losses != 1 || s.stats.gpuGen != gen+1 {
+					t.Fatalf("losses %d, generation %d (was %d)", s.stats.losses, s.stats.gpuGen, gen)
+				}
+				recreated(t, s, a, b)
+			})
+		})
+	}
+
+	t.Run("NewSurface/lost in the recovery", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			// b's chain, then a's in the recovery: rebuilt once more.
+			s.hooks.faults = []fault{{op: "createChain", hr: removed}, {op: "createChain", hr: removed}}
+			b := newSurface(t, s, resizable, &recorder{})
+			defer b.Close()
+			if s.stats.losses != 2 {
+				t.Fatalf("losses %d, want 2", s.stats.losses)
+			}
+			recreated(t, s, a, b)
+		})
+	})
+
+	t.Run("NewSurface/fails", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			// The chain, the recovery's two tries, newChain's retry.
+			f := fault{op: "createChain", hr: removed}
+			s.hooks.faults = []fault{f, f, f, f}
+			sf, err := s.NewSurface(resizable, &recorder{})
+			if sf != nil || !errors.Is(err, removed) {
+				t.Fatalf("NewSurface = %v, %v; want the lost device", sf, err)
+			}
+			if len(s.hooks.faults) != 0 || s.stats.losses != 2 || s.gpu != nil || len(s.surfaces) != 0 {
+				t.Fatalf("faults left %d, losses %d, devices %v, surfaces %d",
+					len(s.hooks.faults), s.stats.losses, s.gpu != nil, len(s.surfaces))
+			}
+			b := newSurface(t, s, resizable, &recorder{})
+			defer b.Close()
+			recreated(t, s, b)
+		})
+	})
+
+	t.Run("recovery/lost again", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			b := newSurface(t, s, resizable, &recorder{})
+			defer b.Close()
+			s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}, {op: "createChain", hr: removed}}
+			t.Logf("a %p", a)
+			paint(a)
+			if !errors.Is(a.renderErr, com.D2DERR_RECREATE_TARGET) || s.stats.losses != 2 {
+				t.Fatalf("renderErr %v, losses %d", a.renderErr, s.stats.losses)
+			}
+			recreated(t, s, a, b)
+		})
+	})
+
+	t.Run("recovery/gives up", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			b := newSurface(t, s, resizable, &recorder{})
+			defer b.Close()
+			// a's chain fails in both tries; b's is not tried after it.
+			s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET},
+				{op: "createChain", hr: removed}, {op: "createChain", hr: removed}}
+			paint(a)
+			if len(s.hooks.faults) != 0 || s.stats.losses != 2 || !a.chain.IsNil() || !b.chain.IsNil() ||
+				!a.invalid || !b.invalid || !errors.Is(b.renderErr, removed) {
+				t.Fatalf("faults %v, losses %d, chains a %v b %v, invalid a %v b %v, b's error %v", s.hooks.faults,
+					s.stats.losses, !a.chain.IsNil(), !b.chain.IsNil(), a.invalid, b.invalid, b.renderErr)
+			}
+			paint(a) // the next paint creates the chain
+			paint(b)
+			recreated(t, s, a, b)
+			if s.stats.losses != 2 || s.recovering || s.relost != nil {
+				t.Errorf("after the repaint: losses %d, recovering %v, relost %v", s.stats.losses, s.recovering, s.relost)
+			}
+		})
+	})
+
+	t.Run("Commit", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			gen := s.stats.gpuGen
+			s.hooks.faults = []fault{{op: "Commit", hr: removed}}
+			t.Logf("a %p", a)
+			paint(a)
+			if !errors.Is(a.renderErr, removed) || s.stats.losses != 1 || s.stats.gpuGen != gen+1 {
+				t.Fatalf("renderErr %v, losses %d, generation %d (was %d)", a.renderErr, s.stats.losses, s.stats.gpuGen, gen)
+			}
+			recreated(t, s, a)
+		})
+	})
+
+	t.Run("re-entry", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			g := s.gpu
+			s.recovering = true
+			s.deviceLost(errors.New("nested"))
+			if s.gpu != g || s.stats.losses != 0 || s.relost == nil {
+				t.Errorf("nested deviceLost: devices replaced %v, losses %d, relost %v", s.gpu != g, s.stats.losses, s.relost)
+			}
+			s.recovering, s.relost = false, nil
+		})
+	})
+
+	t.Run("WARP fallback", func(t *testing.T) {
+		inShell(t, func(s *Shell) {
+			a := newSurface(t, s, resizable, &recorder{})
+			defer a.Close()
+			if s.gpu.driver == d3d11.DRIVER_TYPE_WARP {
+				t.Skip("no hardware device on this machine")
+			}
+			for i := 1; i <= lossLimit; i++ {
+				if i == lossLimit-1 { // the losses before are too old to count
+					for j := range s.lossAt {
+						if !s.lossAt[j].IsZero() {
+							s.lossAt[j] = s.lossAt[j].Add(-lossWindow - time.Second)
+						}
+					}
+				}
+				s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}}
+				paint(a)
+				if s.fallback || s.gpu.driver == d3d11.DRIVER_TYPE_WARP {
+					t.Fatalf("loss %d: on WARP already", i)
+				}
+			}
+			s.hooks.faults = []fault{{op: "EndDraw", hr: com.D2DERR_RECREATE_TARGET}}
+			paint(a) // the lossLimit-th recent one
+			if !s.fallback || s.gpu.driver != d3d11.DRIVER_TYPE_WARP || s.stats.losses != lossLimit+1 {
+				t.Fatalf("after %d losses: fallback %v, driver %v", s.stats.losses, s.fallback, s.gpu.driver)
+			}
+			recreated(t, s, a)
+			// It stays on WARP, also for devices created after the last surface.
+			a.Close()
+			b := newSurface(t, s, resizable, &recorder{})
+			defer b.Close()
+			if s.gpu.driver != d3d11.DRIVER_TYPE_WARP {
+				t.Errorf("new devices on %v after the fallback", s.gpu.driver)
+			}
+		})
+	})
+}
+
 // TestSurfaceGPULifetime: the first surface creates the devices, the
 // others share them, the last Close releases them with every count at 0,
 // and the next surface creates them again.
@@ -270,8 +466,8 @@ func TestSurfaceGPULifetime(t *testing.T) {
 		a := newSurface(t, s, resizable, &recorder{})
 		g := s.gpu
 		b := newSurface(t, s, resizable, &recorder{})
-		if s.gpu != g || s.gpuGen != 1 {
-			t.Errorf("second surface: devices %p (want %p), generation %d", s.gpu, g, s.gpuGen)
+		if s.gpu != g || s.stats.gpuGen != 1 {
+			t.Errorf("second surface: devices %p (want %p), generation %d", s.gpu, g, s.stats.gpuGen)
 		}
 		a.Close()
 		if s.gpu != g || !a.chain.IsNil() || !a.bitmap.IsNil() || !a.visual.IsNil() || !a.ctarget.IsNil() {
@@ -282,8 +478,8 @@ func TestSurfaceGPULifetime(t *testing.T) {
 			t.Errorf("after the last Close: devices %v, leaks %v", s.gpu != nil, s.leaks)
 		}
 		c := newSurface(t, s, resizable, &recorder{})
-		if s.gpu == nil || s.gpuGen != 2 {
-			t.Errorf("new surface after the last: generation %d", s.gpuGen)
+		if s.gpu == nil || s.stats.gpuGen != 2 {
+			t.Errorf("new surface after the last: generation %d", s.stats.gpuGen)
 		}
 		c.Close()
 		if s.gpu != nil || len(s.leaks) != 0 {

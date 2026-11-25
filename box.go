@@ -38,7 +38,7 @@ func (b *Box) SetTitle(title string) *Box {
 }
 
 // Title returns the title.
-func (b *Box) Title() string { b.check("Title"); return b.title }
+func (b *Box) Title() string { b.get("Title"); return b.title }
 
 // SetContent sets the widget shown inside the box; nil removes it. A
 // widget that is in a stack, a form, another box or scroll view, or a
@@ -56,7 +56,7 @@ func (b *Box) SetContent(w Widget) *Box {
 }
 
 // Content returns the content widget, or nil.
-func (b *Box) Content() Widget { b.check("Content"); return b.content }
+func (b *Box) Content() Widget { b.get("Content"); return b.content }
 
 // setContent puts w (nil for none) in the layout node and the peer. The
 // caller has made b the parent of w.

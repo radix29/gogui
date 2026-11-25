@@ -243,4 +243,7 @@ func (s *Shell) stepMomentum(t time.Duration) {
 			sf.stepMomentum(t)
 		}
 	}
+	for _, p := range append([]*popup(nil), s.popups...) {
+		p.c.stepMomentum(t)
+	}
 }

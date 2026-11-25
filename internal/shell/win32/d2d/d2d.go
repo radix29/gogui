@@ -3,6 +3,7 @@
 package d2d
 
 import (
+	"syscall"
 	"unsafe"
 
 	"github.com/radix29/gogui/internal/shell/win32/com"
@@ -86,9 +87,8 @@ type Factory1 struct{ com.Ptr }
 // D3D11 device created with CREATE_DEVICE_BGRA_SUPPORT). The device holds
 // a reference to the factory.
 func (f Factory1) CreateDevice(dxgiDevice dxgi.Device) (Device, error) {
-	var out com.Ptr
-	err := f.CallHR("ID2D1Factory1::CreateDevice", slotFactoryCreateDevice,
-		uintptr(dxgiDevice.Ptr), uintptr(unsafe.Pointer(&out)))
+	out, err := f.CallOut("ID2D1Factory1::CreateDevice", slotFactoryCreateDevice,
+		uintptr(dxgiDevice.Ptr))
 	return Device{out}, err
 }
 
@@ -98,9 +98,8 @@ type Device struct{ com.Ptr }
 // CreateDeviceContext creates a device context with options
 // (DEVICE_CONTEXT_OPTIONS_*). It starts with no target and 96 DPI.
 func (d Device) CreateDeviceContext(options uint32) (DeviceContext, error) {
-	var out com.Ptr
-	err := d.CallHR("ID2D1Device::CreateDeviceContext", slotDeviceCreateDeviceContext,
-		uintptr(options), uintptr(unsafe.Pointer(&out)))
+	out, err := d.CallOut("ID2D1Device::CreateDeviceContext", slotDeviceCreateDeviceContext,
+		uintptr(options))
 	return DeviceContext{out}, err
 }
 
@@ -115,9 +114,8 @@ type DeviceContext struct{ com.Ptr }
 // bitmap holds a reference to the surface, so it must be released (and
 // cleared from SetTarget) before IDXGISwapChain::ResizeBuffers.
 func (c DeviceContext) CreateBitmapFromDxgiSurface(surface com.Ptr, props *BitmapProperties1) (Bitmap1, error) {
-	var out com.Ptr
-	err := c.CallHR("ID2D1DeviceContext::CreateBitmapFromDxgiSurface", slotDCCreateBitmapFromDxgiSurface,
-		uintptr(surface), uintptr(unsafe.Pointer(props)), uintptr(unsafe.Pointer(&out)))
+	out, err := c.CallOut("ID2D1DeviceContext::CreateBitmapFromDxgiSurface", slotDCCreateBitmapFromDxgiSurface,
+		uintptr(surface), uintptr(unsafe.Pointer(props)))
 	return Bitmap1{out}, err
 }
 
@@ -131,9 +129,7 @@ func (c DeviceContext) SetTarget(image com.Ptr) {
 // Target returns the current target with a reference of its own, or a nil
 // Ptr.
 func (c DeviceContext) Target() com.Ptr {
-	var out com.Ptr
-	c.Call(slotDCGetTarget, uintptr(unsafe.Pointer(&out)))
-	return out
+	return c.GetOut(slotDCGetTarget)
 }
 
 // BeginDraw starts drawing on the target.
@@ -151,7 +147,7 @@ func (c DeviceContext) EndDraw() error {
 // Clear sets every pixel of the target (inside the current clip) to color.
 // On a premultiplied target the color is stored premultiplied.
 func (c DeviceContext) Clear(color ColorF) {
-	c.Call(slotRTClear, uintptr(unsafe.Pointer(&color)))
+	syscall.SyscallN(c.Slot(slotRTClear), uintptr(c.Ptr), uintptr(unsafe.Pointer(&color)))
 }
 
 var methodSetDpi = com.Method[func(this com.Ptr, x, y float32)]{Slot: slotRTSetDpi}
@@ -159,6 +155,10 @@ var methodSetDpi = com.Method[func(this com.Ptr, x, y float32)]{Slot: slotRTSetD
 // SetDpi sets the context's DPI, the scale from DIPs to pixels (96 is 1:1).
 // It is the first call on the float path (two FLOATs by value).
 func (c DeviceContext) SetDpi(x, y float32) {
+	if directFloats {
+		syscall.SyscallN(c.Slot(slotRTSetDpi), uintptr(c.Ptr), com.Float(x), com.Float(y))
+		return
+	}
 	methodSetDpi.Fn(c.Ptr)(c.Ptr, x, y)
 }
 
@@ -171,11 +171,6 @@ func (c DeviceContext) Dpi() (x, y float32) {
 // Bitmap1 is ID2D1Bitmap1.
 type Bitmap1 struct{ com.Ptr }
 
-// Options returns the bitmap's BITMAP_OPTIONS_*.
-func (b Bitmap1) Options() BitmapOptions {
-	return BitmapOptions(uint32(b.Call(slotBitmap1GetOptions)))
-}
-
 // Dpi returns the bitmap's DPI.
 func (b Bitmap1) Dpi() (x, y float32) {
 	b.Call(slotBitmapGetDpi, uintptr(unsafe.Pointer(&x)), uintptr(unsafe.Pointer(&y)))
@@ -185,7 +180,5 @@ func (b Bitmap1) Dpi() (x, y float32) {
 // Surface returns the DXGI surface under the bitmap, with a reference of
 // its own.
 func (b Bitmap1) Surface() (com.Ptr, error) {
-	var out com.Ptr
-	err := b.CallHR("ID2D1Bitmap1::GetSurface", slotBitmap1GetSurface, uintptr(unsafe.Pointer(&out)))
-	return out, err
+	return b.CallOut("ID2D1Bitmap1::GetSurface", slotBitmap1GetSurface)
 }

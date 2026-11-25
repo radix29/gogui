@@ -164,3 +164,22 @@ type WindowPlacement struct {
 	PtMaxPosition    Point
 	RcNormalPosition Rect
 }
+
+// CompositionForm is COMPOSITIONFORM (imm.h), for ImmSetCompositionWindow.
+// The point and the rectangle are in client pixels.
+type CompositionForm struct {
+	DwStyle      uint32 // CFS_*
+	PtCurrentPos Point
+	RcArea       Rect
+}
+
+// CandidateForm is CANDIDATEFORM (imm.h), for ImmSetCandidateWindow.
+// DwIndex is the candidate list (0–3). The point and the rectangle are in
+// client pixels; with CFS_EXCLUDE, RcArea is the area the candidate window
+// keeps clear (the caret).
+type CandidateForm struct {
+	DwIndex      uint32
+	DwStyle      uint32 // CFS_CANDIDATEPOS or CFS_EXCLUDE
+	PtCurrentPos Point
+	RcArea       Rect
+}

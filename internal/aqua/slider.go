@@ -32,7 +32,8 @@ import (
 //     as the frame across and along.
 //   - Paint: the track in SliderTrack, its part from the minimum to the
 //     knob's centre in Theme.ValueFill (the accent; AccentInactive, grey,
-//     in an inactive window), the tick marks in SliderTickMark (each
+//     in an inactive window), with Increase Contrast the SliderTrackOutline
+//     around the whole track (S6.1e), the tick marks in SliderTickMark (each
 //     SliderTickWidth wide, with round ends), then the knob: its shadow
 //     (SliderKnobShadow*), its fill (SliderKnobFill; BezelPressedFill while
 //     dragged) and its SliderKnobBorder, SliderKnobBorderWidth wide, inside
@@ -333,7 +334,7 @@ func (e *sliderView) knob(g *sliderGeometry) driver.Rect {
 func (e *sliderView) HandleEvent(ev Event) bool {
 	e.ring.Track(e, ev)
 	if !e.EnabledInTree() {
-		e.press.Reset(e)
+		e.press.Cancel(e)
 		return false
 	}
 	switch ev := ev.(type) {
@@ -349,8 +350,8 @@ func (e *sliderView) HandleEvent(ev Event) bool {
 func (e *sliderView) pointer(ev PointerEvent) bool {
 	switch ev.Kind {
 	case PointerDown:
-		if ev.Button != shell.ButtonPrimary || e.press.down {
-			return e.press.down
+		if ev.Button != shell.ButtonPrimary || e.press.Down() {
+			return e.press.Down()
 		}
 		g := e.geometry()
 		e.grab, e.pressAt, e.still = 0, g.along(ev.Pos), false
@@ -362,28 +363,28 @@ func (e *sliderView) pointer(ev PointerEvent) bool {
 			e.still = true
 		} else {
 			// The track: the knob jumps there first.
+			r := e.routedBy()
 			e.follow(ev.Pos)
-			if !e.EnabledInTree() || !e.VisibleInTree() {
-				return false // the handler disabled or hid it: no drag
+			if !e.EnabledInTree() || !e.VisibleInTree() || e.routedBy() != r {
+				return false // the handler disabled, hid or removed it: no drag
 			}
 		}
-		e.press.down = true
-		e.press.setPressed(e, true)
+		e.press.Begin(e)
 		return true
 	case PointerMove:
-		if e.press.down && !(e.still && e.alongOf(ev.Pos) == e.pressAt) {
+		if e.press.Down() && !(e.still && e.alongOf(ev.Pos) == e.pressAt) {
 			e.still = false
 			e.follow(ev.Pos)
 		}
-		return e.press.down
+		return e.press.Down()
 	case PointerUp:
-		if !e.press.down || ev.Button != shell.ButtonPrimary {
-			return e.press.down
+		if !e.press.Down() || ev.Button != shell.ButtonPrimary {
+			return e.press.Down()
 		}
-		e.press.Reset(e)
+		e.press.End(e)
 		return true
 	case PointerCancel:
-		e.press.Reset(e)
+		e.press.Cancel(e)
 	}
 	return false
 }
@@ -454,12 +455,7 @@ func (e *sliderView) Paint(c render.Canvas) {
 	a := appearanceIn(&e.Base, e.d)
 	cs := e.p.ControlSize
 	scale := scaleIn(&e.Base)
-	dim := func(col driver.Color) driver.Color {
-		if st.Disabled {
-			col.A *= float32(tokens.Controls.ValueDisabledAlpha)
-		}
-		return col
-	}
+	dim := func(col driver.Color) driver.Color { return dimmed(col, st.Disabled) }
 
 	// The track and its filled part.
 	knob := pixelAlign(&e.Base, e.knob(&g), scale)
@@ -476,6 +472,7 @@ func (e *sliderView) Paint(c render.Canvas) {
 		if !fill.Empty() {
 			c.FillRoundedRect(fill, radii, render.Solid(tokens.ValueFill(a, st.Key, st.Disabled)))
 		}
+		paintOutline(c, track, g.trackR, scale, a, dim(tokens.Controls.SliderTrackOutline.Value(a)))
 	}
 
 	// The tick marks, unless they would leave the frame.

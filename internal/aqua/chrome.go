@@ -4,6 +4,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/radix29/gogui/internal/aqua/a11y"
+	"github.com/radix29/gogui/internal/aqua/menubar"
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/render"
 	"github.com/radix29/gogui/internal/shell"
@@ -34,8 +35,9 @@ func titleMargin() float64 {
 // titleFont returns the font of the drawn window title: the regular system
 // size in the WindowTitleWeight (13 pt semibold).
 func titleFont() driver.Font {
-	ty := &tokens.Typography
-	return driver.Font{Size: ty.FontSize.At(driver.ControlSizeRegular), Weight: ty.WindowTitleWeight}
+	f := systemFont(driver.ControlSizeRegular)
+	f.Weight = tokens.Typography.WindowTitleWeight
+	return f
 }
 
 // lightKind is the kind of a traffic light.
@@ -50,12 +52,14 @@ const (
 var lightLabels = [...]string{"Close", "Minimize", "Zoom"}
 
 // titleBar is the drawn title bar of a titled window: the background, the
-// bottom separator, the traffic-light group and the centered title.
+// bottom separator, the traffic-light group, the menu strip when the
+// driver has a menu bar (menustrip.go, S5.6c) and the centered title.
 type titleBar struct {
 	Base
 	w      *Window
 	group  *lightGroup
 	lights [3]*trafficLight
+	strip  *menuStrip // nil without a menu bar
 
 	title      render.TextLayout // the (possibly truncated) title, nil when hidden
 	titleFrame driver.Rect       // where it is drawn, in the bar's coordinates
@@ -64,6 +68,7 @@ type titleBar struct {
 func newTitleBar(w *Window) *titleBar {
 	tb := &titleBar{w: w}
 	tb.Init(tb)
+	tb.SetAcceptsFirstMouse(true) // the traffic lights and the strip act at once (S6.1b)
 	tb.group = &lightGroup{}
 	tb.group.Init(tb.group)
 	ch := &tokens.Chrome
@@ -81,18 +86,40 @@ func newTitleBar(w *Window) *titleBar {
 	return tb
 }
 
-// layout lays out the title for the current width: centered in the bar,
-// truncated with an ellipsis so it stays titleMargin() away from both edges
-// (symmetric, so it stays centered), and hidden when not even the ellipsis
-// fits.
+// setMenuBar replaces the menu strip with one of bar (nil: none) and lays
+// the bar out again.
+func (tb *titleBar) setMenuBar(bar *menubar.Bar) {
+	if tb.strip != nil {
+		tb.strip.leaveKeyboard() // S5.6i
+		tb.strip.CloseMenu()     // no report (S5.6f)
+
+		tb.strip.stopFlash()
+		tb.strip.RemoveFromParent()
+		tb.strip = nil
+	}
+	if bar != nil {
+		tb.strip = newMenuStrip(tb, bar)
+		tb.InsertChild(tb.IndexOf(tb.group), tb.strip)
+	}
+	tb.layout()
+}
+
+// layout lays out the menu strip and the title for the current width: the
+// title centered in the bar, truncated with an ellipsis so it stays
+// titleMargin() away from both edges, or further when the strip reaches
+// further (menubar.Strip.TitleRoom; symmetric, so it stays centered), and
+// hidden when not even the ellipsis fits.
 func (tb *titleBar) layout() {
 	tb.title, tb.titleFrame = nil, driver.Rect{}
 	defer tb.Invalidate()
 	avail := tb.Frame().W - 2*titleMargin()
+	if tb.strip != nil {
+		avail = tb.strip.layout(tb.Frame().W)
+	}
 	if tb.w.title == "" || avail <= 0 {
 		return
 	}
-	ts := tb.w.sh.TextSystem()
+	ts := tb.w.text
 	l := truncate(ts, tb.w.title, titleFont(), avail)
 	if l == nil {
 		return
@@ -104,6 +131,32 @@ func (tb *titleBar) layout() {
 		Y: (tokens.Chrome.TitleBarHeight - s.H) / 2,
 		W: s.W, H: s.H,
 	}
+}
+
+// truncMemo keeps an element's last truncation (S6.2e): a title too wide
+// for its control is truncated once, not laid out again (a binary search
+// of layouts, each one shaped on Win32 and gtk4) on every paint. The zero
+// value is empty; a change of text system, text, font or width truncates
+// again. It is used on the UI thread, like the element that holds it.
+type truncMemo struct {
+	ts    render.TextSystem
+	text  string
+	font  driver.Font
+	width float64
+	l     render.TextLayout
+	made  int // truncations made (tests)
+}
+
+// truncate is truncate(ts, text, font, width), from the memo when it holds
+// that truncation.
+func (m *truncMemo) truncate(ts render.TextSystem, text string, font driver.Font, width float64) render.TextLayout {
+	if m.ts != nil && m.ts == ts && m.text == text && m.font == font && m.width == width {
+		return m.l
+	}
+	m.ts, m.text, m.font, m.width = ts, text, font, width
+	m.l = truncate(ts, text, font, width)
+	m.made++
+	return m.l
 }
 
 // truncate lays out text in font on one line and, when it is wider than
@@ -166,12 +219,16 @@ func trimRight(s string) string {
 }
 
 // regions returns the chrome regions of the title bar in surface
-// coordinates: the bar as RegionCaption, then each enabled light as its
-// button region. A disabled light stays part of the caption, so it cannot
-// open Snap Layouts and dragging it moves the window.
+// coordinates: the bar as RegionCaption, then each shown menu title as
+// RegionClient (S5.6c), then each enabled light as its button region. A
+// disabled light stays part of the caption, so it cannot open Snap Layouts
+// and dragging it moves the window.
 func (tb *titleBar) regions() []shell.ChromeRegion {
 	kinds := [3]shell.RegionKind{shell.RegionClose, shell.RegionMinimize, shell.RegionMaximize}
 	rs := []shell.ChromeRegion{{Rect: tb.Frame(), Kind: shell.RegionCaption}}
+	if tb.strip != nil && !tb.strip.Hidden() {
+		rs = tb.strip.regions(rs)
+	}
 	for i, l := range tb.lights {
 		if l.Enabled() {
 			rs = append(rs, shell.ChromeRegion{Rect: driver.RectOf(ToRoot(l, driver.Point{}), l.Frame().Size()), Kind: kinds[i]})
@@ -189,12 +246,22 @@ func (w *Window) TitleFrame() (driver.Rect, string) {
 	return w.bar.titleFrame.Offset(w.bar.Frame().Origin()), w.bar.title.Text()
 }
 
+// separator returns the hairline at the bar's bottom: whole device pixels
+// (at least one) on the bar's pixel-aligned bottom edge, so it stays
+// sharp at fractional scales like every other hairline (B17).
+func (tb *titleBar) separator() driver.Rect {
+	s := scaleIn(&tb.Base)
+	t := pixelWidth(1, s)
+	b := pixelAlign(&tb.Base, tb.Bounds(), s)
+	return driver.Rect{X: b.X, Y: b.Y + b.H - t, W: b.W, H: t}
+}
+
 func (tb *titleBar) Paint(c render.Canvas) {
 	a := tb.w.appearance
 	b := tb.Bounds()
 	c.FillRoundedRect(b, render.Radii{}, render.Solid(titleBarColor(a, tb.w.key)))
 	sep := tokens.Chrome.TitleBarSeparator.Value(a)
-	c.FillRoundedRect(driver.Rect{Y: b.H - 1, W: b.W, H: 1}, render.Radii{}, render.Solid(sep))
+	c.FillRoundedRect(tb.separator(), render.Radii{}, render.Solid(sep))
 	if tb.title != nil {
 		col := driver.ColorLabel
 		if !tb.w.key {
@@ -233,12 +300,14 @@ func (g *lightGroup) setHovered(h bool) {
 }
 
 // trafficLight is one of the three window buttons. Its clicks go through
-// a pressTracker (control.go).
+// the clickControl core (control.go); it never takes the focus, so its
+// ring stays hidden. A light the window's style disables does nothing.
 type trafficLight struct {
 	Base
+	clickControl
 	bar   *titleBar
 	kind  lightKind
-	press pressTracker
+	glyph pathMemo[float64] // by the light's size
 }
 
 // HitSelf hits the circle only.
@@ -248,16 +317,13 @@ func (l *trafficLight) HitSelf(p driver.Point) bool {
 	return dx*dx+dy*dy <= r*r
 }
 
-func (l *trafficLight) HandleEvent(ev Event) bool {
-	handled, act := l.press.Track(l, ev)
-	if act {
-		l.perform()
-	}
-	return handled
-}
+func (l *trafficLight) HandleEvent(ev Event) bool { return l.handleClick(l, ev, nil) }
 
-// perform runs the light's action.
-func (l *trafficLight) perform() {
+// Activate performs the light's action, refused while it is disabled.
+func (l *trafficLight) Activate() bool { return l.activate(l) }
+
+// click runs the light's action.
+func (l *trafficLight) click() {
 	w := l.bar.w
 	switch l.kind {
 	case lightClose:
@@ -294,16 +360,16 @@ func (l *trafficLight) Paint(c render.Canvas) {
 	c.FillRoundedRect(b, radii, render.Solid(fill))
 	// The border is stroked just inside the circle.
 	bw := ch.LightBorderWidth
-	c.StrokeRoundedRect(insetRect(b, bw/2), render.UniformRadii((ch.LightSize-bw)/2), bw, render.Solid(border))
+	c.StrokeRoundedRect(b.Inset(driver.UniformInsets(bw/2)), render.UniformRadii((ch.LightSize-bw)/2), bw, render.Solid(border))
 	if l.Enabled() && (hovered || pressed) {
-		c.StrokePath(lightGlyph(l.kind, ch.LightSize), ch.LightGlyphStroke, render.Solid(glyph), render.StrokeStyle{Cap: render.CapRound})
+		g := l.glyph.get(ch.LightSize, func(p *render.Path) { lightGlyph(p, l.kind, ch.LightSize) })
+		c.StrokePath(g, ch.LightGlyphStroke, render.Solid(glyph), render.StrokeStyle{Cap: render.CapRound})
 	}
 }
 
-// lightGlyph returns the ×, − or + of a light of diameter size, in its
+// lightGlyph adds to p the ×, − or + of a light of diameter size, in its
 // coordinates: drawn on a 12 pt design grid and scaled by size/12.
-func lightGlyph(k lightKind, size float64) *render.Path {
-	p := &render.Path{}
+func lightGlyph(p *render.Path, k lightKind, size float64) {
 	f := size / 12
 	pt := func(x, y float64) driver.Point { return driver.Point{X: x * f, Y: y * f} }
 	switch k {
@@ -316,14 +382,8 @@ func lightGlyph(k lightKind, size float64) *render.Path {
 		p.MoveTo(pt(3, 6)).LineTo(pt(9, 6))
 		p.MoveTo(pt(6, 3)).LineTo(pt(6, 9))
 	}
-	return p
 }
 
 func (l *trafficLight) AccessibleNode() a11y.Node {
 	return a11y.Node{Role: a11y.RoleButton, Label: lightLabels[l.kind], Actions: a11y.ActionPress}
-}
-
-// insetRect shrinks r by d on every side.
-func insetRect(r driver.Rect, d float64) driver.Rect {
-	return driver.Rect{X: r.X + d, Y: r.Y + d, W: r.W - 2*d, H: r.H - 2*d}
 }

@@ -24,6 +24,7 @@ const (
 	nameSigUintUintUint     = "gtk4.signal void(guint, guint, guint)"
 	nameTick                = "gtk4.GtkTickCallback"
 	nameDestroyNotify       = "gtk4.GDestroyNotify"
+	nameAsyncReady          = "gtk4.GAsyncReadyCallback"
 )
 
 // numTrampolines is how many native callbacks the package creates. A
@@ -34,8 +35,9 @@ const (
 // motion controller's void() leave; S4.1j: 14, the scroll controller's
 // gboolean(gdouble, gdouble) scroll; S4.1k: 16, the key controller's
 // gboolean(guint, guint, guint) key-pressed and void(guint, guint, guint)
-// key-released).
-const numTrampolines = 16
+// key-released; S5.2b: 17, the clipboard read's one-shot
+// GAsyncReadyCallback).
+const numTrampolines = 17
 
 // tramp holds the C function pointers of the trampolines, zero until
 // registerTrampolines has run.
@@ -45,7 +47,7 @@ var tramp struct {
 	sigBool, sigIntDoubleDouble, sigPointer       uintptr
 	sigDoubleDouble, sigVoid, sigBoolDoubleDouble uintptr
 	sigBoolUintUintUint, sigUintUintUint          uintptr
-	tick, destroyNotify                           uintptr
+	tick, destroyNotify, asyncReady               uintptr
 }
 
 // trampoline is one native callback: its registry name, its Go function
@@ -75,5 +77,6 @@ func trampolines() []trampoline {
 		{nameSigUintUintUint, sigUintUintUint, &tramp.sigUintUintUint},
 		{nameTick, tickCallback, &tramp.tick},
 		{nameDestroyNotify, destroyNotify, &tramp.destroyNotify},
+		{nameAsyncReady, asyncReady, &tramp.asyncReady},
 	}
 }

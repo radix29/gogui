@@ -26,13 +26,17 @@ type layout struct {
 	size render.Size
 }
 
-func (l layout) Text() string                     { return l.text }
-func (l layout) Font() render.Font                { return l.font }
-func (l layout) Size() render.Size                { return l.size }
-func (l layout) Baseline() float64                { return 12 }
-func (l layout) LineCount() int                   { return 1 }
-func (l layout) HitTest(render.Point) (int, bool) { return 0, false }
-func (l layout) CaretRect(int) render.Rect        { return render.Rect{} }
+func (l layout) Text() string                      { return l.text }
+func (l layout) Font() render.Font                 { return l.font }
+func (l layout) Size() render.Size                 { return l.size }
+func (l layout) Baseline() float64                 { return 12 }
+func (l layout) LineCount() int                    { return 1 }
+func (l layout) HitTest(render.Point) (int, bool)  { return 0, false }
+func (l layout) CaretRect(int) render.Rect         { return render.Rect{} }
+func (l layout) CaretRectUpstream(int) render.Rect { return render.Rect{} }
+func (l layout) Line(int) render.LineMetrics {
+	return render.LineMetrics{End: len(l.text), Height: l.size.H, Baseline: 12}
+}
 func (l layout) SelectionRects(int, int) []render.Rect {
 	return nil
 }
@@ -229,7 +233,7 @@ func TestCurvePathBounds(t *testing.T) {
 func TestRotationPrintsTransform(t *testing.T) {
 	c := newCanvas()
 	c.Translate(50, 50)
-	c.Concat(render.Rotation(math.Pi / 2))
+	c.Concat(rotation(math.Pi / 2))
 	c.FillRoundedRect(rc(0, 0, 10, 4), render.Radii{}, render.Solid(blue))
 	c.ClipRoundedRect(rc(0, 0, 10, 4), render.UniformRadii(2))
 	c.DrawImage(image{1, 1}, rc(0, 0, 1, 1))
@@ -495,4 +499,94 @@ func TestKindString(t *testing.T) {
 			t.Errorf("kind %d has no name", k)
 		}
 	}
+}
+
+// TestInvalidGeometry is B8: geometry the backends drop (not finite, a
+// negative size) is reported and not recorded, so a NaN from layout fails
+// the recorder tests instead of passing them and drawing nothing on screen.
+func TestInvalidGeometry(t *testing.T) {
+	nan, inf := math.NaN(), math.Inf(1)
+	c := newCanvas()
+	solid := render.Solid(blue)
+	var bad render.Path
+	bad.MoveTo(pt(0, 0)).LineTo(pt(nan, 1))
+	c.FillRoundedRect(rc(nan, 0, 1, 1), render.Radii{}, solid)
+	c.StrokeRoundedRect(rc(0, 0, -1, 1), render.Radii{}, 1, solid)
+	c.FillPath(&bad, solid)
+	c.StrokePath(&bad, 1, solid, render.StrokeStyle{})
+	c.DrawShadow(rc(0, 0, inf, 1), render.Radii{}, render.Shadow{Color: blue})
+	c.DrawText(layout{text: "x"}, pt(0, inf), blue)
+	c.DrawImage(image{1, 1}, rc(0, 0, 1, nan))
+	c.Save()
+	c.ClipRoundedRect(rc(0, 0, -5, 5), render.Radii{})
+	c.FillRoundedRect(rc(0, 0, 1, 1), render.Radii{}, solid) // clipped away
+	c.Restore()
+	c.PushBackdropBlur(rc(nan, 0, 5, 5), render.Radii{}, 4)
+	c.Pop()
+	c.StrokeRoundedRect(rc(0, 0, 1, 1), render.Radii{}, inf, solid) // width 0
+	invalid := "invalid rect"
+	wantErrs(t, c,
+		"call 1 (FillRoundedRect): "+invalid,
+		"call 2 (StrokeRoundedRect): "+invalid,
+		"call 3 (FillPath): path with a non-finite point",
+		"call 4 (StrokePath): path with a non-finite point",
+		"call 5 (DrawShadow): "+invalid,
+		"call 6 (DrawText): non-finite origin",
+		"call 7 (DrawImage): "+invalid,
+		"call 9 (ClipRoundedRect): "+invalid,
+		"call 12 (PushBackdropBlur): "+invalid,
+	)
+	ops := c.Ops()
+	if len(ops) != 4 {
+		t.Fatalf("ops %v", c.Lines())
+	}
+	if b := ops[0].Clip; b.W != 0 || b.H != 0 {
+		t.Errorf("fill after an invalid clip: clip %v, want empty", b)
+	}
+	if ops[1].Kind != PushBackdropBlur || ops[1].Rect != (render.Rect{}) || ops[2].Kind != Pop {
+		t.Errorf("blur layer %v", c.Lines())
+	}
+	if ops[3].Width != 0 {
+		t.Errorf("+Inf stroke width recorded as %v, want 0", ops[3].Width)
+	}
+}
+
+// TestRecordKeepsItsOwnCopies (review P16): render.Paint.Normalized and
+// StrokeStyle.Normalized now return the caller's stops and dashes when they
+// are already normal, and a caller reuses its path; a recording still
+// keeps what was drawn. The arenas hand each op a capped slice, so a later
+// op never writes into an earlier one.
+func TestRecordKeepsItsOwnCopies(t *testing.T) {
+	c := New(render.Size{W: 100, H: 100})
+	stops := []render.GradientStop{{Offset: 0, Color: driver.RGBA(1, 0, 0, 1)}, {Offset: 1, Color: driver.RGBA(0, 0, 1, 1)}}
+	grad := render.Paint{Kind: render.PaintLinear, End: render.Point{X: 0, Y: 10}, Stops: stops}
+	dash := []float64{2, 1}
+	var p render.Path
+	p.MoveTo(render.Point{X: 1, Y: 1}).LineTo(render.Point{X: 9, Y: 1})
+	c.StrokePath(&p, 1, grad, render.StrokeStyle{Dash: dash})
+	stops[0].Offset, dash[0] = 0.5, 7
+	p.Reset()
+	p.MoveTo(render.Point{X: 50, Y: 50}).LineTo(render.Point{X: 60, Y: 60}).LineTo(render.Point{X: 70, Y: 50})
+	c.FillPath(&p, grad)
+	if err := c.End(); err != nil {
+		t.Fatal(err)
+	}
+	ops := c.Ops()
+	first := ops[0]
+	if first.Paint.Stops[0].Offset != 0 || first.Stroke.Dash[0] != 2 || len(first.Path) != 2 || first.Path[1].Pts[0] != (render.Point{X: 9, Y: 1}) {
+		t.Errorf("first op changed by later calls: %s", first)
+	}
+	if got := first.Bounds(); got != (render.Rect{X: 1, Y: 1, W: 8}) {
+		t.Errorf("first op bounds %v", got)
+	}
+	if got := ops[1].Bounds(); got != (render.Rect{X: 50, Y: 50, W: 20, H: 10}) {
+		t.Errorf("second op bounds %v", got)
+	}
+}
+
+// rotation turns by angle radians around the origin, clockwise on screen
+// (render has no Rotation; nothing but the tests rotates).
+func rotation(angle float64) render.Transform {
+	s, c := math.Sincos(angle)
+	return render.Transform{A: c, B: s, C: -s, D: c}
 }

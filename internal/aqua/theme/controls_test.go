@@ -210,8 +210,8 @@ func TestSequoiaValueControls(t *testing.T) {
 		t.Errorf("knob border width %v", c.SliderKnobBorderWidth)
 	}
 	for name, f := range map[string]float64{
-		"ProgressBandFraction": c.ProgressBandFraction, "SpinnerTailAlpha": c.SpinnerTailAlpha,
-		"ValueDisabledAlpha": c.ValueDisabledAlpha,
+		"ProgressBandFraction": c.ProgressBandFraction, "SpinnerTailAlpha": float64(c.SpinnerTailAlpha),
+		"ValueDisabledAlpha": float64(c.ValueDisabledAlpha),
 	} {
 		if !(f > 0 && f < 1) {
 			t.Errorf("%s = %v, want in (0, 1)", name, f)

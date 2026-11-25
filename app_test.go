@@ -208,6 +208,45 @@ func TestAppearance(t *testing.T) {
 	})
 }
 
+// TestAccentColor: SetAccentColor chains and replaces the OS accent of the
+// effective appearance (opaque); AccentColor follows the OS accent with no
+// override and keeps the override through an OS change; ColorControlAccent
+// and the zero Color clear it; OnAppearanceChange never fires for it
+// (S6.1g).
+func TestAccentColor(t *testing.T) {
+	appDriver(t, func(app *App, d *headless.Driver) {
+		var log []Appearance
+		app.OnAppearanceChange(func(a Appearance) { log = append(log, a) })
+		if got := app.AccentColor(); got != driver.DefaultAccent {
+			t.Fatalf("start accent %v, want the default", got)
+		}
+		purple := RGBA(0.6, 0.2, 0.6, 0.5)
+		var got *App = app.SetAccentColor(purple)
+		want := purple
+		want.A = 1
+		if got != app || app.AccentColor() != want || d.Accent != purple {
+			t.Errorf("override: accent %v (recorded %v), want %v", app.AccentColor(), d.Accent, want)
+		}
+		sys := d.System
+		sys.Accent = RGB8(255, 0, 0)
+		d.SetSystemAppearance(sys)
+		if app.AccentColor() != want {
+			t.Errorf("an OS accent change replaced the override: %v", app.AccentColor())
+		}
+		app.SetAccentColor(ColorControlAccent)
+		if app.AccentColor() != sys.Accent || d.Accent != (Color{}) {
+			t.Errorf("ColorControlAccent: accent %v (recorded %v), want the OS one", app.AccentColor(), d.Accent)
+		}
+		app.SetAccentColor(RGB8(255, 214, 10)).SetAccentColor(Color{})
+		if app.AccentColor() != sys.Accent {
+			t.Errorf("zero Color: accent %v, want the OS one", app.AccentColor())
+		}
+		if len(log) != 0 {
+			t.Errorf("OnAppearanceChange fired for the accent: %v", log)
+		}
+	})
+}
+
 func TestQuitRequested(t *testing.T) {
 	appDriver(t, func(app *App, d *headless.Driver) {
 		win := app.NewWindow(WindowConfig{Title: "W"})
@@ -231,4 +270,84 @@ func TestQuitRequested(t *testing.T) {
 		}
 		unsub()
 	})
+}
+
+// TestAlertCancel is A5: Cancel picks the Escape button explicitly; the
+// zero value keeps matching "Cancel".
+func TestAlertCancel(t *testing.T) {
+	for _, tc := range []struct {
+		buttons []string
+		cancel  int
+		want    int
+	}{
+		{[]string{"Löschen", "Abbrechen"}, 0, -1}, // no English "Cancel", no index
+		{[]string{"Löschen", "Abbrechen"}, 1, 1},  // a localized cancel button
+		{[]string{"Delete", "Cancel"}, 0, 1},      // the default match
+		{[]string{"Delete", "Cancel"}, AlertNoCancel, -1},
+		{[]string{"Delete", "Cancel"}, 2, -1}, // outside Buttons
+		{[]string{"Delete", "Cancel"}, -7, -1},
+		{nil, 0, -1}, // the default "OK"
+	} {
+		if got := (Alert{Buttons: tc.buttons, Cancel: tc.cancel}).spec().Cancel; got != tc.want {
+			t.Errorf("Buttons %q, Cancel %d: spec Cancel %d, want %d", tc.buttons, tc.cancel, got, tc.want)
+		}
+	}
+}
+
+// TestWindowAfterClose is A9 and A3: a closed window drops its content and
+// handlers, ignores new subscriptions, and Content reports nil.
+func TestWindowAfterClose(t *testing.T) {
+	runApp(t, func(app *App) {
+		win := app.NewWindow(WindowConfig{Size: Size{W: 100, H: 50}})
+		l := NewLabel("x")
+		win.SetContent(l)
+		if win.Content() != Widget(l) {
+			t.Fatal("Content")
+		}
+		closed := 0
+		win.OnClose(func() { closed++ })
+		win.OnShouldClose(func() bool { return true })
+		win.Close()
+		if closed != 1 || win.Content() != nil || win.root != nil || !l.dead {
+			t.Errorf("after close: %d OnClose calls, content %v, root %v", closed, win.Content(), win.root)
+		}
+		if len(win.onClose.list) != 0 || len(win.onShouldClose.list) != 0 {
+			t.Error("a closed window keeps its handlers")
+		}
+		win.OnClose(func() { closed++ })()
+		win.OnShouldClose(func() bool { return false })
+		if len(win.onClose.list) != 0 || len(win.onShouldClose.list) != 0 {
+			t.Error("a closed window stores new handlers")
+		}
+		win.SetContent(NewLabel("y")) // does nothing on a closed window
+		if win.Content() != nil {
+			t.Error("SetContent on a closed window")
+		}
+	})
+}
+
+// TestGettersA3: the symmetric getters return what the setters stored.
+func TestGettersA3(t *testing.T) {
+	runApp(t, func(*App) {
+		b := NewButton("a")
+		c := NewCheckbox("b")
+		f := NewTextField().SetPlaceholder("p")
+		if b.Title() != "a" || c.Title() != "b" || f.Placeholder() != "p" || b.Tooltip() != "" {
+			t.Error("getters after construction")
+		}
+		b.SetTitle("A").SetTooltip("tip")
+		c.SetTitle("B")
+		g := NewRadioGroup("x", "y").SetTooltip("group")
+		if b.Title() != "A" || c.Title() != "B" || b.Tooltip() != "tip" || g.Tooltip() != "group" {
+			t.Error("getters after the setters")
+		}
+	})
+}
+
+// TestNewWindowOutsideRun is A6: App.NewWindow panics outside Run like
+// every constructor, and the app is current only from Ready on.
+func TestNewWindowOutsideRun(t *testing.T) {
+	var app *App
+	runApp(t, func(a *App) { app = a })
+	mustPanic(t, "App.NewWindow called outside Run", func() { app.NewWindow(WindowConfig{}) })
 }

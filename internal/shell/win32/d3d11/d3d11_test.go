@@ -66,10 +66,6 @@ func TestSlots(t *testing.T) {
 	com.CheckSlots(t, "ID3D11Device", vtDevice, map[string]int{
 		"CreateTexture2D":        slotDeviceCreateTexture2D,
 		"CreateRenderTargetView": slotDeviceCreateRenderTargetView,
-		"GetFeatureLevel":        slotDeviceGetFeatureLevel,
-		"GetCreationFlags":       slotDeviceGetCreationFlags,
-		"GetDeviceRemovedReason": slotDeviceGetDeviceRemovedReason,
-		"GetImmediateContext":    slotDeviceGetImmediateContext,
 	})
 	com.CheckSlots(t, "ID3D11DeviceContext", vtContext, map[string]int{
 		"Map":                   slotContextMap,

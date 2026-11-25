@@ -11,7 +11,7 @@ import (
 	"github.com/radix29/gogui/internal/driver"
 	"github.com/radix29/gogui/internal/mainthread"
 	"github.com/radix29/gogui/internal/render"
-	"github.com/radix29/gogui/internal/shell/fake"
+	"github.com/radix29/gogui/internal/shell/shellkit"
 )
 
 // The text system (PLAN.md S4.2g, S4.2h): render.TextSystem on Pango.
@@ -45,7 +45,7 @@ import (
 //
 // Without Pango (the shell's tests on every host; open is nil there),
 // after release, or once opening Pango failed, layouts come from
-// shell/fake's fixed-width metrics, and the first failure is logged, so
+// shellkit.FixedText's fixed-width metrics, and the first failure is logged, so
 // text never takes the application down.
 
 const (
@@ -300,7 +300,7 @@ func (ts *textSystem) NewLayout(text string, font render.Font, maxWidth float64)
 			ts.logf("gtk4: text: Pango failed, using fixed-width metrics: %v", err)
 		}
 	}
-	return fake.NewTextSystem().NewLayout(text, font, maxWidth)
+	return shellkit.FixedText{}.NewLayout(text, font, maxWidth)
 }
 
 func (ts *textSystem) layout(text string, font render.Font, maxWidth float64) (*textLayout, error) {
@@ -375,6 +375,17 @@ func (l *textLayout) HitTest(p render.Point) (int, bool) { return l.geom.hitTest
 // CaretRect implements render.TextLayout.
 func (l *textLayout) CaretRect(index int) render.Rect {
 	return l.geom.caret(l.geom.clusterStart(index))
+}
+
+// CaretRectUpstream implements render.TextLayout.
+func (l *textLayout) CaretRectUpstream(index int) render.Rect {
+	return l.geom.caretUpstream(l.geom.clusterStart(index))
+}
+
+// Line implements render.TextLayout: its text ends before the line's break.
+func (l *textLayout) Line(i int) render.LineMetrics {
+	ln := l.geom.line(i)
+	return render.LineMetrics{Start: ln.start, End: ln.content, Top: ln.top, Height: ln.height, Baseline: ln.baseline}
 }
 
 // SelectionRects implements render.TextLayout.

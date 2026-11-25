@@ -28,9 +28,6 @@ var infSize = driver.Size{W: math.Inf(1), H: math.Inf(1)}
 func TestSeparatorIsReal(t *testing.T) {
 	d := startDriver(t)
 	s := d.NewSeparator().(*Separator)
-	if _, ok := Caption(s); ok {
-		t.Error("the separator is still a placeholder peer")
-	}
 	if e := ElementOf(s); e == nil || e != Element(s.view) || s.StubPeer() != s.Separator || s.Stub() != &s.Separator.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -102,7 +99,7 @@ func TestSeparatorPaint(t *testing.T) {
 
 func TestSeparatorInWindow(t *testing.T) {
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 200, H: 100}, Style: allStyles})
 	sep := d.NewSeparator().(*Separator)
 	w.SetContent(sep)
@@ -160,9 +157,6 @@ var titledInsets = driver.Insets{Top: 26, Left: 10, Bottom: 8, Right: 10}
 func TestBoxIsReal(t *testing.T) {
 	d := startDriver(t)
 	b := d.NewBox().(*Box)
-	if _, ok := Caption(b); ok {
-		t.Error("the box is still a placeholder peer")
-	}
 	if e := ElementOf(b); e == nil || e != Element(b.view) || b.StubPeer() != b.Box || b.Stub() != &b.Box.Base {
 		t.Error("ElementOf, StubPeer or Stub")
 	}
@@ -224,7 +218,7 @@ func TestBoxInsets(t *testing.T) {
 func TestBoxPaint(t *testing.T) {
 	d := startDriver(t)
 	box := d.NewBox().(*Box)
-	inner := d.NewPopUpButton(nil) // a placeholder
+	inner := d.NewPopUpButton(nil)
 	inner.SetItems([]string{"In"})
 	box.SetContent(inner)
 	box.SetFrame(driver.Rect{X: 10, Y: 10, W: 200, H: 60})
@@ -235,15 +229,18 @@ func TestBoxPaint(t *testing.T) {
 	if got := box.content.Frame(); got != (driver.Rect{X: 10, Y: 8, W: 180, H: 44}) {
 		t.Errorf("content host %v", got)
 	}
-	radio := []string{
-		"fillRRect (20,18,180,22) r=4 solid #ffffff",
-		"strokeRRect (20.5,18.5,179,21) r=4 w=1 solid #00000042",
-		`text (24,22.231,53.308,13.538) "PopUp: In" 11pt #000000d9`,
+	content := []string{
+		"shadow (20,19,180,20) r=5 off=(0,0.5) blur=1 #00000033",
+		"fillRRect (20,19,180,20) r=5 solid #ffffff",
+		"strokeRRect (20.5,19.5,179,19) r=4.5 w=1 solid #00000026",
+		`text (28,21,14,16) "In" 13pt #000000d9`,
+		"fillRRect (182,21,16,16) r=3 solid #007aff",
+		"strokePath [M(186.5,28) L(190,24.5) L(193.5,28) M(186.5,30) L(190,33.5) L(193.5,30)] w=1.5 cap=round join=round solid #ffffff",
 	}
 	checkDump(t, dump(t, ElementOf(box), driver.Size{W: 400, H: 300}), append([]string{
 		"fillRRect (10,10,200,60) r=6 solid #0000000a",
 		"strokeRRect (10.5,10.5,199,59) r=5.5 w=1 solid #00000014",
-	}, radio...)...)
+	}, content...)...)
 
 	// A title above the group moves the group down by the band and the
 	// content by the band as well.
@@ -251,16 +248,19 @@ func TestBoxPaint(t *testing.T) {
 	if got := box.content.Frame(); got != (driver.Rect{X: 10, Y: 26, W: 180, H: 26}) {
 		t.Errorf("titled content host %v", got)
 	}
-	radio = []string{
-		"fillRRect (20,36,180,22) r=4 solid #ffffff",
-		"strokeRRect (20.5,36.5,179,21) r=4 w=1 solid #00000042",
-		`text (24,40.231,53.308,13.538) "PopUp: In" 11pt #000000d9`,
+	content = []string{
+		"shadow (20,37,180,20) r=5 off=(0,0.5) blur=1 #00000033",
+		"fillRRect (20,37,180,20) r=5 solid #ffffff",
+		"strokeRRect (20.5,37.5,179,19) r=4.5 w=1 solid #00000026",
+		`text (28,39,14,16) "In" 13pt #000000d9`,
+		"fillRRect (182,39,16,16) r=3 solid #007aff",
+		"strokePath [M(186.5,46) L(190,42.5) L(193.5,46) M(186.5,48) L(190,51.5) L(193.5,48)] w=1.5 cap=round join=round solid #ffffff",
 	}
 	checkDump(t, dump(t, ElementOf(box), driver.Size{W: 400, H: 300}), append([]string{
 		`text (10,10,29.615,13.538) "Group" 11pt #000000d9`,
 		"fillRRect (10,28,200,42) r=6 solid #0000000a",
 		"strokeRRect (10.5,28.5,199,41) r=5.5 w=1 solid #00000014",
-	}, radio...)...)
+	}, content...)...)
 
 	// Without content: the title and group only.
 	box.SetContent(nil)
@@ -340,7 +340,7 @@ func TestBoxRedraws(t *testing.T) {
 
 func TestBoxInWindow(t *testing.T) {
 	s := startShell(t)
-	d := New(s)
+	d := newDriver(s)
 	w, sf, _ := openWindow(t, s, driver.WindowConfig{Size: driver.Size{W: 300, H: 200}, Style: allStyles})
 	w.SetAppearance(driver.Appearance{Dark: true, Accent: driver.DefaultAccent})
 	box := d.NewBox().(*Box)

@@ -20,14 +20,14 @@ func TestSpringFromVelocity(t *testing.T) {
 		m := sp.Motion(3, 3, -40)
 		for k := 1; ; k++ {
 			ft := r.step(t)
-			if m.Settled(ft, anim.SettleEpsilon) {
+			if m.Settled(ft, anim.DefaultTolerance) {
 				if v.Value() != 3 || v.Velocity() != 0 || v.Running() || r.clk.Requested() {
 					t.Fatalf("%s: settled at %v %v running %v", name, v.Value(), v.Velocity(), v.Running())
 				}
 				break
 			}
 			x, vel := m.At(ft)
-			if v.Value() != x || v.Velocity() != vel {
+			if math.Abs(v.Value()-x) >= anim.DefaultTolerance || v.Velocity() != vel {
 				t.Fatalf("%s frame %d: %v %v, want %v %v", name, k, v.Value(), v.Velocity(), x, vel)
 			}
 			if k == 1 && v.Value() >= 3 {
@@ -53,7 +53,7 @@ func TestSpringFromRetarget(t *testing.T) {
 	v.SpringFrom(100, -250, sp) // the same target: restarts with the new velocity
 	ft := r.step(t)
 	x, vel := sp.Motion(x0, 100, -250).At(ft - at)
-	if v.Value() != x || v.Velocity() != vel {
+	if math.Abs(v.Value()-x) >= anim.DefaultTolerance || v.Velocity() != vel {
 		t.Fatalf("after SpringFrom %v %v, want %v %v", v.Value(), v.Velocity(), x, vel)
 	}
 

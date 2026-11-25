@@ -104,48 +104,69 @@ func (m Motion) basis(t float64) (c, s float64) {
 }
 
 // Settled reports whether the motion is at rest at the time t within eps:
-// both the largest displacement from To and the largest speed the motion
-// can still reach from its state at t are at most eps. A damped spring's
-// energy never grows, so these bounds hold for every later time too: once
-// Settled is true it stays true, and an animation can jump to To.
+// the largest displacement from To the motion can still reach from its
+// state at t is at most eps. A damped spring's energy never grows, so the
+// bound holds for every later time too: once Settled is true it stays
+// true, and an animation can jump to To without a visible step (its speed
+// does not matter, only where it can still go).
 func (m Motion) Settled(t time.Duration, eps float64) bool {
 	x, v := m.At(t)
-	x -= m.To
-	// With the energy E = ½kx² + ½mv², the reachable displacement is
-	// √(2E/k) = √(x² + v²/ω₀²) and the reachable speed √(2E/m) = √(ω₀²x² + v²).
-	w2 := m.w0 * m.w0
-	return math.Sqrt(x*x+v*v/w2) <= eps && math.Sqrt(w2*x*x+v*v) <= eps
+	return m.settledAt(x, v, eps)
 }
 
-// MaxSettleTime bounds SettleTime's search; no spring token comes near it.
-const MaxSettleTime = time.Hour
+// settledAt is Settled for the state (x, v) the motion has at some time,
+// so a frame that has sampled it does not sample it again.
+func (m Motion) settledAt(x, v, eps float64) bool {
+	x -= m.To
+	// With the energy E = ½kx² + ½mv², the reachable displacement is
+	// √(2E/k) = √(x² + v²/ω₀²).
+	return math.Sqrt(x*x+v*v/(m.w0*m.w0)) <= eps
+}
 
-// SettleTime returns the first time, to the microsecond (rounded up), from
-// which the motion is Settled within eps: 0 when it starts at rest,
-// MaxSettleTime when it has not settled by then. It panics when eps is not
-// positive.
-func (m Motion) SettleTime(eps float64) time.Duration {
-	if !(eps > 0) {
-		panic("anim: SettleTime needs a positive eps")
+// Peak returns the largest distance from To the motion reaches at any
+// time t ≥ 0: |From − To|, or the displacement at its first turn (where
+// the velocity is 0) if that is farther. In every regime the later turns
+// of a damped spring are closer, so this is the overshoot bound.
+func (m Motion) Peak() float64 {
+	x0, v0 := m.From-m.To, m.V0
+	peak := math.Abs(x0)
+	if t, ok := m.firstTurn(); ok {
+		c, s := m.basis(t)
+		peak = math.Max(peak, math.Abs(x0*c+(v0+m.a*x0)*s))
 	}
-	if m.Settled(0, eps) {
-		return 0
-	}
-	lo, hi := time.Duration(0), time.Millisecond
-	for !m.Settled(hi, eps) {
-		if hi >= MaxSettleTime {
-			return MaxSettleTime
+	return peak
+}
+
+// firstTurn returns the first time t > 0 (in seconds) at which the
+// velocity v0·C − K·S, K = ω₀²·x0 + a·v0, is 0, and whether there is one.
+func (m Motion) firstTurn() (float64, bool) {
+	x0, v0 := m.From-m.To, m.V0
+	k := m.w0*m.w0*x0 + m.a*v0
+	switch {
+	case m.d > 0:
+		// v ∝ v0·cos(ωt) − (K/ω)·sin(ωt), zero at ωt = φ + nπ.
+		th := math.Mod(math.Atan2(v0*m.w, k), math.Pi)
+		if th <= 0 {
+			th += math.Pi
 		}
-		lo, hi = hi, min(2*hi, MaxSettleTime)
-	}
-	// Settled is monotonic in t, so bisection finds its first true time.
-	for hi-lo > time.Microsecond {
-		mid := lo + (hi-lo)/2
-		if m.Settled(mid, eps) {
-			hi = mid
-		} else {
-			lo = mid
+		return th / m.w, true
+	case m.d < 0:
+		// v ∝ v0·cosh(ωt) − (K/ω)·sinh(ωt): tanh(ωt) = v0·ω/K.
+		if k == 0 {
+			return 0, false
 		}
+		if r := v0 * m.w / k; r > 0 && r < 1 {
+			return math.Atanh(r) / m.w, true
+		}
+		return 0, false
+	default:
+		// v ∝ v0 − K·t.
+		if k == 0 {
+			return 0, false
+		}
+		if t := v0 / k; t > 0 {
+			return t, true
+		}
+		return 0, false
 	}
-	return hi
 }

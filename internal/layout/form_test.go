@@ -158,8 +158,8 @@ func TestFormInVStack(t *testing.T) {
 }
 
 func TestFormSettersAndPanics(t *testing.T) {
-	f := NewForm().SetDirection(RightToLeft)
-	if f.Direction() != RightToLeft || f.Peer() != nil || len(f.Rows()) != 0 || f.Expands(Horizontal) {
+	f := NewForm()
+	if f.Peer() != nil || len(f.Rows()) != 0 || f.Expands(Horizontal) {
 		t.Error("getters")
 	}
 	if f.Props().SetExpand(Vertical, true); !f.Expands(Vertical) {
@@ -167,7 +167,7 @@ func TestFormSettersAndPanics(t *testing.T) {
 	}
 	a, _ := pl(10, 10)
 	f.SetRows(Row{lbl("X:"), a})
-	wantSize(t, "rtl as ltr", f.Measure(nil, driver.Unbounded()), driver.Size{W: 32, H: 16})
+	wantSize(t, "one row", f.Measure(nil, driver.Unbounded()), driver.Size{W: 32, H: 16})
 	defer func() {
 		if recover() == nil {
 			t.Error("nil control did not panic")

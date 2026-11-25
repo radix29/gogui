@@ -129,7 +129,8 @@ func TestScrollKeysSpace(t *testing.T) {
 			t.Errorf("Shift-Space changed the checkbox: %v", cb.State())
 		}
 
-		// A focused element that is not a control lets Space page.
+		// A focused FocusText element keeps Space for its text (S5.2g):
+		// the key goes on unpaged, and a real field types it.
 		te := newTextElem()
 		e.doc.AddChild(te)
 		te.SetFrame(driver.Rect{X: 10, Y: 40, W: 100, H: 20})
@@ -137,6 +138,26 @@ func TestScrollKeysSpace(t *testing.T) {
 			t.Fatal("text element not focused")
 		}
 		e.settle()
+		if e.sf.Key(driver.KeySpace, 0) || e.sf.Key(driver.KeySpace, driver.ModShift) {
+			t.Error("Space taken with a text element focused")
+		}
+		e.wantY(t, "Space on a text element", 0)
+		tf := e.d.NewTextField(false, nil).(*TextField)
+		e.doc.AddChild(tf.view)
+		tf.SetFrame(driver.Rect{X: 10, Y: 70, W: 100, H: 22})
+		tf.view.Focus()
+		e.settle()
+		e.sf.Type("a b")
+		if tf.Text() != "a b" {
+			t.Errorf("the field typed %q", tf.Text())
+		}
+		e.wantY(t, "Space in a field", 0)
+
+		// The focused scroll view itself pages on Space.
+		e.sv.view.SetFocusable(true)
+		if !e.sv.view.Focus() {
+			t.Fatal("scroll view not focused")
+		}
 		if !e.sf.Key(driver.KeySpace, 0) {
 			t.Fatal("Space not taken")
 		}
